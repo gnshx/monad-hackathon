@@ -56,7 +56,16 @@ import {
 
 export default function SecurityConsoleDashboard() {
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
-  const [networkMode, setNetworkMode] = useState<'LOCAL_SIMULATION' | 'MONAD_TESTNET'>('MONAD_TESTNET');
+
+  // Persisted runtime mode (LOCAL_SIMULATION | MONAD_TESTNET)
+  const [networkMode, setNetworkMode] = useState<'LOCAL_SIMULATION' | 'MONAD_TESTNET'>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('agenttrust.networkMode') as 'LOCAL_SIMULATION' | 'MONAD_TESTNET' | null;
+      if (stored === 'LOCAL_SIMULATION' || stored === 'MONAD_TESTNET') return stored;
+    }
+    return 'MONAD_TESTNET';
+  });
+
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [connectedChainId, setConnectedChainId] = useState<number | null>(null);
   const [isContractDeployed, setIsContractDeployed] = useState<boolean | null>(null);
@@ -123,10 +132,10 @@ export default function SecurityConsoleDashboard() {
     },
   ]);
 
-  // Real Monad Testnet Mandates State (populated from on-chain reads or real confirmed txs)
+  // Real Monad Testnet Mandates State (populated strictly from on-chain reads or real confirmed txs)
   const [testnetMandates, setTestnetMandates] = useState<MandateItem[]>([]);
 
-  // Simulated Activities State
+  // Simulated Activities State (strictly isolated for presentation/sandbox mode)
   const [simulatedActivities, setSimulatedActivities] = useState<ActivityItem[]>([
     {
       id: 'sim-1',
@@ -204,6 +213,13 @@ export default function SecurityConsoleDashboard() {
     }
   }, []);
 
+  // Persist networkMode to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('agenttrust.networkMode', networkMode);
+    }
+  }, [networkMode]);
+
   // Sync wallet state and check network on mount / mode switch
   useEffect(() => {
     if (networkMode === 'MONAD_TESTNET') {
@@ -238,10 +254,9 @@ export default function SecurityConsoleDashboard() {
         };
       }
     } else {
-      // Local simulation defaults
-      if (!walletAddress) {
-        setWalletAddress('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
-      }
+      // Local simulation defaults - no hardcoded wallet
+      // Wallet must be explicitly connected by user
+      setWalletAddress(null);
       setConnectedChainId(31337);
       setIsContractDeployed(true);
     }
@@ -251,12 +266,9 @@ export default function SecurityConsoleDashboard() {
   const handleConnectWallet = async () => {
     setStatusAlert(null);
     if (networkMode === 'LOCAL_SIMULATION') {
-      if (walletAddress) {
-        setWalletAddress(null);
-      } else {
-        setWalletAddress('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
-        setConnectedChainId(31337);
-      }
+      // In LOCAL_SIMULATION, just toggle wallet connection (no hardcoded address)
+      setWalletAddress(walletAddress ? null : '0x0000000000000000000000000000000000000000');
+      setConnectedChainId(31337);
       return;
     }
 
@@ -315,11 +327,13 @@ export default function SecurityConsoleDashboard() {
 
   const handleToggleNetworkMode = (mode: 'LOCAL_SIMULATION' | 'MONAD_TESTNET') => {
     setNetworkMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('agenttrust.networkMode', mode);
+    }
     setStatusAlert(null);
     if (mode === 'LOCAL_SIMULATION') {
-      if (!walletAddress) {
-        setWalletAddress('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
-      }
+      // In LOCAL_SIMULATION, no auto-assigned wallet - user must explicitly connect
+      setWalletAddress(null);
       setConnectedChainId(31337);
     } else {
       if (typeof window !== 'undefined' && (window as any).ethereum?.selectedAddress) {
@@ -632,16 +646,20 @@ export default function SecurityConsoleDashboard() {
 
     if (scenario.expectedResult === 'Success') {
       const targetMandate = simulatedMandates.find((m) => !m.revoked) || simulatedMandates[0];
-      const newSpent = targetMandate.spentValue + parseEther('0.1');
-      setSimulatedMandates(
-        simulatedMandates.map((m) => (m.id === targetMandate.id ? { ...m, spentValue: newSpent } : m))
-      );
+      const agentId = targetMandate?.agentId ?? 42n;
+      const mandateId = targetMandate?.id ?? 1n;
+      if (targetMandate) {
+        const newSpent = targetMandate.spentValue + parseEther('0.1');
+        setSimulatedMandates(
+          simulatedMandates.map((m) => (m.id === targetMandate.id ? { ...m, spentValue: newSpent } : m))
+        );
+      }
       setSimulatedActivities([
         {
           id: `sim-${Date.now()}`,
           type: 'executed',
-          agentId: targetMandate.agentId,
-          mandateId: targetMandate.id,
+          agentId,
+          mandateId,
           target: scenario.target,
           selector: scenario.selector,
           value: parseEther(scenario.value),
