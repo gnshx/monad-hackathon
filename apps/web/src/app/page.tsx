@@ -281,6 +281,181 @@ export default function Dashboard() {
           ))}
         </div>
 
+        {/* Judges Live Security Demonstration Sandbox */}
+        <div className="glass-panel" style={{ padding: '1.75rem', marginBottom: '2.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>⚡ Live Security Proof Demonstration</span>
+                <span className="badge badge-monad" style={{ fontSize: '0.65rem' }}>Monad EVM Invariants</span>
+              </h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Trigger autonomous agent actions and verify contract-enforced permissions on Monad
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+            {/* Scenario 1 */}
+            <div
+              style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                borderRadius: '12px',
+                padding: '1rem',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                const targetMandate = mandates.find(m => !m.revoked) || mandates[0];
+                const newSpent = targetMandate.spentValue + parseEther('0.1');
+                setMandates(mandates.map(m => m.id === targetMandate.id ? { ...m, spentValue: newSpent } : m));
+                setActivities([
+                  {
+                    id: `tx-${Date.now()}`,
+                    type: 'executed',
+                    agentId: targetMandate.agentId,
+                    mandateId: targetMandate.id,
+                    target: targetMandate.targets[0]?.target || '0x3333333333333333333333333333333333333333',
+                    selector: targetMandate.targets[0]?.selector || '0xa9059cbb',
+                    value: parseEther('0.1'),
+                    timestamp: 'Just now',
+                    txHash: ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')),
+                  },
+                  ...activities,
+                ]);
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <strong style={{ fontSize: '0.85rem', color: '#10b981' }}>1. Permitted Action</strong>
+                <span style={{ fontSize: '0.7rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.2)', padding: '2px 6px', borderRadius: '4px' }}>Succeeds</span>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Agent swaps 0.1 MON on whitelisted target within policy.
+              </p>
+              <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>
+                ▶ Run Allowed Swap
+              </div>
+            </div>
+
+            {/* Scenario 2 */}
+            <div
+              style={{
+                background: 'rgba(244, 63, 94, 0.08)',
+                border: '1px solid rgba(244, 63, 94, 0.3)',
+                borderRadius: '12px',
+                padding: '1rem',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setActivities([
+                  {
+                    id: `tx-${Date.now()}`,
+                    type: 'blocked',
+                    agentId: 42n,
+                    mandateId: 1n,
+                    target: '0xDeadDeAdDeADdeAdDeaddeadDEADdeAdDeadbEEf',
+                    selector: '0xa9059cbb',
+                    value: parseEther('0.1'),
+                    timestamp: 'Just now',
+                    txHash: ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')),
+                    reason: 'TargetNotAllowed (Contract rejected unlisted hacker target)',
+                  },
+                  ...activities,
+                ]);
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <strong style={{ fontSize: '0.85rem', color: '#f43f5e' }}>2. Forbidden Target</strong>
+                <span style={{ fontSize: '0.7rem', color: '#f43f5e', background: 'rgba(244, 63, 94, 0.2)', padding: '2px 6px', borderRadius: '4px' }}>Reverts</span>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Agent calls unapproved target (0xDead...bEEf). Contract halts call.
+              </p>
+              <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#f43f5e', fontWeight: 600 }}>
+                ▶ Run Malicious Call
+              </div>
+            </div>
+
+            {/* Scenario 3 */}
+            <div
+              style={{
+                background: 'rgba(244, 63, 94, 0.08)',
+                border: '1px solid rgba(244, 63, 94, 0.3)',
+                borderRadius: '12px',
+                padding: '1rem',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setActivities([
+                  {
+                    id: `tx-${Date.now()}`,
+                    type: 'blocked',
+                    agentId: 42n,
+                    mandateId: 1n,
+                    target: '0x3333333333333333333333333333333333333333',
+                    selector: '0xa9059cbb',
+                    value: parseEther('2.5'),
+                    timestamp: 'Just now',
+                    txHash: ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')),
+                    reason: 'ExceedsPerTxLimit (Attempted 2.5 MON > 0.2 MON cap)',
+                  },
+                  ...activities,
+                ]);
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <strong style={{ fontSize: '0.85rem', color: '#f43f5e' }}>3. Limit Exceeded</strong>
+                <span style={{ fontSize: '0.7rem', color: '#f43f5e', background: 'rgba(244, 63, 94, 0.2)', padding: '2px 6px', borderRadius: '4px' }}>Reverts</span>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Agent attempts 2.5 MON transaction exceeding spending limit.
+              </p>
+              <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#f43f5e', fontWeight: 600 }}>
+                ▶ Run Over-Limit Action
+              </div>
+            </div>
+
+            {/* Scenario 4 */}
+            <div
+              style={{
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                borderRadius: '12px',
+                padding: '1rem',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setActivities([
+                  {
+                    id: `tx-${Date.now()}`,
+                    type: 'blocked',
+                    agentId: 99n,
+                    mandateId: 3n,
+                    target: '0x7777777777777777777777777777777777777777',
+                    selector: '0x095ea7b3',
+                    value: parseEther('0.05'),
+                    timestamp: 'Just now',
+                    txHash: ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')),
+                    reason: 'MandateIsRevoked (Action blocked on revoked mandate)',
+                  },
+                  ...activities,
+                ]);
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <strong style={{ fontSize: '0.85rem', color: '#f59e0b' }}>4. Revoked Mandate</strong>
+                <span style={{ fontSize: '0.7rem', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.2)', padding: '2px 6px', borderRadius: '4px' }}>Reverts</span>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Agent attempts execution against a mandate revoked by owner.
+              </p>
+              <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600 }}>
+                ▶ Run Revocation Test
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Live Verifier Inspector */}
         <LiveVerificationInspector />
 

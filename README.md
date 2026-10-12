@@ -1,6 +1,21 @@
 # AgentTrust — Passkey-Authorized, On-Chain Permissions for AI Agents
 
-> **Track:** Trust, Identity & AI Infrastructure  
+<p align="center">
+  <img src="./docs/assets/agenttrust_logo.jpg" alt="AgentTrust Logo" width="220" style="border-radius: 20px; box-shadow: 0 8px 32px rgba(131, 110, 249, 0.4);" />
+</p>
+
+<p align="center">
+  <strong>Passkey-Authorized Mandates · Monad Native P256 Precompile (RIP-7212) · ERC-8004 Trustless Agent Registry · Zero-Backend Portable Verification</strong>
+</p>
+
+<p align="center">
+  <a href="./docs/pitch.md">2-Min Pitch Video Script</a> •
+  <a href="./docs/demo-script.md">3-Min Demo Video Script</a> •
+  <a href="./docs/integration-guide.md">Integrator Guide</a> •
+  <a href="#quickstart">Quickstart</a>
+</p>
+
+> **Track:** Trust, Identity & AI Infrastructure (Metropolis Track)  
 > **Target Network:** Monad Blockchain (Testnet & Mainnet)
 
 ---
