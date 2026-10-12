@@ -13,7 +13,7 @@ export interface ActivityItem {
   selector?: string;
   value?: bigint;
   timestamp: string;
-  txHash: string;
+  txHash?: string;
   reason?: string;
 }
 
@@ -106,22 +106,28 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
               </div>
             </div>
 
-            <a
-              href={`https://testnet.monadexplorer.com/tx/${act.txHash}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.2rem',
-                color: 'var(--accent-cyan)',
-                textDecoration: 'none',
-                fontSize: '0.75rem',
-              }}
-            >
-              <span className="hash-pill">{act.txHash.slice(0, 8)}...</span>
-              <ArrowUpRight size={14} />
-            </a>
+            {act.txHash ? (
+              <a
+                href={`https://testnet.monadexplorer.com/tx/${act.txHash}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.2rem',
+                  color: 'var(--accent-cyan)',
+                  textDecoration: 'none',
+                  fontSize: '0.75rem',
+                }}
+              >
+                <span className="hash-pill">{act.txHash.slice(0, 8)}...</span>
+                <ArrowUpRight size={14} />
+              </a>
+            ) : (
+              <span className="badge badge-rose" style={{ fontSize: '0.68rem' }}>
+                Reverted
+              </span>
+            )}
           </div>
         ))}
       </div>

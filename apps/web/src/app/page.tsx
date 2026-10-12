@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar, type NavTab } from '../components/Sidebar';
 import { MandateList } from '../components/MandateList';
 import { AiPolicyCopilot } from '../components/AiPolicyCopilot';
@@ -10,10 +10,30 @@ import { SecurityActivityFeed } from '../components/SecurityActivityFeed';
 import { CreateMandateModal } from '../components/CreateMandateModal';
 import type { MandateItem } from '../components/MandateCard';
 import type { ActivityItem } from '../components/ActivityFeed';
-import { registerPasskey, signMandateWithPasskey } from '../lib/webauthn';
-import { parseEther, formatEther, type Address, type Hex } from 'viem';
-import { computeMandateHash, type CreateMandateParams } from '@agenttrust/sdk';
-import { DEFAULT_MANDATE_MANAGER_ADDRESS } from '../lib/contracts';
+import {
+  registerPasskey,
+  signMandateWithPasskey,
+  generateSimulatedSignature,
+} from '../lib/webauthn';
+import {
+  parseEther,
+  formatEther,
+  createPublicClient,
+  createWalletClient,
+  custom,
+  http,
+  type Address,
+  type Hex,
+} from 'viem';
+import {
+  computeMandateHash,
+  MandateManagerABI,
+  type CreateMandateParams,
+} from '@agenttrust/sdk';
+import {
+  DEFAULT_MANDATE_MANAGER_ADDRESS,
+  MONAD_TESTNET_CONFIG,
+} from '../lib/contracts';
 import {
   ShieldCheck,
   Plus,
@@ -28,21 +48,30 @@ import {
   AlertTriangle,
   Lock,
   Wallet,
+  AlertCircle,
+  CheckCircle2,
+  Radio,
+  ExternalLink,
 } from 'lucide-react';
 
 export default function SecurityConsoleDashboard() {
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
-  const [walletAddress, setWalletAddress] = useState<string | null>(
-    '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
-  );
-  const [passkeyRegistered, setPasskeyRegistered] = useState(true);
+  const [networkMode, setNetworkMode] = useState<'LOCAL_SIMULATION' | 'MONAD_TESTNET'>('MONAD_TESTNET');
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [connectedChainId, setConnectedChainId] = useState<number | null>(null);
+  const [isContractDeployed, setIsContractDeployed] = useState<boolean | null>(null);
+  const [isCheckingContract, setIsCheckingContract] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [revokingId, setRevokingId] = useState<bigint | null>(null);
   const [copilotDraft, setCopilotDraft] = useState<Partial<CreateMandateParams> | null>(null);
+  const [statusAlert, setStatusAlert] = useState<{
+    type: 'info' | 'warning' | 'error' | 'success';
+    message: string;
+  } | null>(null);
 
-  // Active Mandates State
-  const [mandates, setMandates] = useState<MandateItem[]>([
+  // Local Simulated Mandates State (strictly isolated for presentation/sandbox mode)
+  const [simulatedMandates, setSimulatedMandates] = useState<MandateItem[]>([
     {
       id: 1n,
       owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
@@ -94,10 +123,13 @@ export default function SecurityConsoleDashboard() {
     },
   ]);
 
-  // Security Activities Timeline State
-  const [activities, setActivities] = useState<ActivityItem[]>([
+  // Real Monad Testnet Mandates State (populated from on-chain reads or real confirmed txs)
+  const [testnetMandates, setTestnetMandates] = useState<MandateItem[]>([]);
+
+  // Simulated Activities State
+  const [simulatedActivities, setSimulatedActivities] = useState<ActivityItem[]>([
     {
-      id: 'tx-1',
+      id: 'sim-1',
       type: 'executed',
       agentId: 42n,
       mandateId: 1n,
@@ -108,7 +140,7 @@ export default function SecurityConsoleDashboard() {
       txHash: '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06',
     },
     {
-      id: 'tx-2',
+      id: 'sim-2',
       type: 'blocked',
       agentId: 42n,
       mandateId: 1n,
@@ -116,11 +148,11 @@ export default function SecurityConsoleDashboard() {
       selector: '0xa9059cbb',
       value: parseEther('0.1'),
       timestamp: '14 mins ago',
-      txHash: '0x3b5c7d9e1a3f5c7b9e1a3d5f7c9b1e3a5d7f9a2b4c6e8d1a3f5c7b9e1a3d7f9a',
+      txHash: undefined,
       reason: 'TargetNotAllowed (Contract blocked unauthorized target 0xDead...bEEf)',
     },
     {
-      id: 'tx-3',
+      id: 'sim-3',
       type: 'blocked',
       agentId: 108n,
       mandateId: 2n,
@@ -128,11 +160,11 @@ export default function SecurityConsoleDashboard() {
       selector: '0x23b872dd',
       value: parseEther('0.1'),
       timestamp: '1 hour ago',
-      txHash: '0x1a3d5f7c9b1e3a5d7f9a2b4c6e8d1a3f5c7b9e1a3d7f9a2b4c6e8d1a3f5c7b9e',
+      txHash: undefined,
       reason: 'ExceedsTotalLimit (Cumulative budget fully depleted)',
     },
     {
-      id: 'tx-4',
+      id: 'sim-4',
       type: 'revoked',
       agentId: 99n,
       mandateId: 3n,
@@ -141,101 +173,446 @@ export default function SecurityConsoleDashboard() {
     },
   ]);
 
-  const activeMandates = mandates.filter((m) => !m.revoked);
-  const totalVaultSecured = mandates.reduce((acc, m) => acc + (m.balance || 0n), 0n);
-  const blockedActionsCount = activities.filter((a) => a.type === 'blocked').length;
+  // Real Monad Testnet Activities State (strictly real transactions with confirmed hashes)
+  const [testnetActivities, setTestnetActivities] = useState<ActivityItem[]>([]);
 
-  const handleConnectWallet = () => {
-    if (walletAddress) {
-      setWalletAddress(null);
+  // Current active records based on selected network mode
+  const currentMandates = networkMode === 'MONAD_TESTNET' ? testnetMandates : simulatedMandates;
+  const currentActivities = networkMode === 'MONAD_TESTNET' ? testnetActivities : simulatedActivities;
+  const activeMandates = currentMandates.filter((m) => !m.revoked);
+  const totalVaultSecured = currentMandates.reduce((acc, m) => acc + (m.balance || 0n), 0n);
+  const blockedActionsCount = currentActivities.filter((a) => a.type === 'blocked').length;
+
+  // Check contract deployment bytecode on Monad Testnet
+  const checkContractOnTestnet = useCallback(async () => {
+    try {
+      setIsCheckingContract(true);
+      const client = createPublicClient({
+        chain: MONAD_TESTNET_CONFIG as any,
+        transport: http('https://testnet-rpc.monad.xyz'),
+      });
+      const code = await client.getBytecode({ address: DEFAULT_MANDATE_MANAGER_ADDRESS });
+      const deployed = !!code && code !== '0x' && code.length > 2;
+      setIsContractDeployed(deployed);
+      return deployed;
+    } catch (err) {
+      console.error('Failed to query Monad testnet bytecode:', err);
+      setIsContractDeployed(false);
+      return false;
+    } finally {
+      setIsCheckingContract(false);
+    }
+  }, []);
+
+  // Sync wallet state and check network on mount / mode switch
+  useEffect(() => {
+    if (networkMode === 'MONAD_TESTNET') {
+      checkContractOnTestnet();
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        const eth = (window as any).ethereum;
+        eth.request({ method: 'eth_accounts' }).then((accounts: string[]) => {
+          if (accounts && accounts.length > 0) {
+            setWalletAddress(accounts[0]);
+          } else {
+            setWalletAddress(null);
+          }
+        }).catch(() => {});
+
+        eth.request({ method: 'eth_chainId' }).then((hexId: string) => {
+          setConnectedChainId(parseInt(hexId, 16));
+        }).catch(() => {});
+
+        const handleAccounts = (accs: string[]) => {
+          setWalletAddress(accs.length > 0 ? accs[0] : null);
+        };
+        const handleChain = (hexId: string) => {
+          setConnectedChainId(parseInt(hexId, 16));
+        };
+
+        eth.on?.('accountsChanged', handleAccounts);
+        eth.on?.('chainChanged', handleChain);
+
+        return () => {
+          eth.removeListener?.('accountsChanged', handleAccounts);
+          eth.removeListener?.('chainChanged', handleChain);
+        };
+      }
     } else {
-      setWalletAddress('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+      // Local simulation defaults
+      if (!walletAddress) {
+        setWalletAddress('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+      }
+      setConnectedChainId(31337);
+      setIsContractDeployed(true);
+    }
+  }, [networkMode, checkContractOnTestnet]);
+
+  // Connect or switch wallet
+  const handleConnectWallet = async () => {
+    setStatusAlert(null);
+    if (networkMode === 'LOCAL_SIMULATION') {
+      if (walletAddress) {
+        setWalletAddress(null);
+      } else {
+        setWalletAddress('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+        setConnectedChainId(31337);
+      }
+      return;
+    }
+
+    // Monad Testnet mode: request injected wallet
+    if (typeof window === 'undefined' || !(window as any).ethereum) {
+      setStatusAlert({
+        type: 'warning',
+        message: 'No injected Web3 wallet detected (MetaMask, Rabby, etc.). Please install a Web3 wallet extension to submit real transactions on Monad Testnet, or switch to Local Simulation mode.',
+      });
+      return;
+    }
+
+    try {
+      const eth = (window as any).ethereum;
+      const accounts = await eth.request({ method: 'eth_requestAccounts' });
+      if (accounts && accounts.length > 0) {
+        setWalletAddress(accounts[0]);
+      }
+
+      const hexChainId = await eth.request({ method: 'eth_chainId' });
+      const chainIdNum = parseInt(hexChainId, 16);
+      setConnectedChainId(chainIdNum);
+
+      if (chainIdNum !== 10143) {
+        try {
+          await eth.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x279f' }],
+          });
+          setConnectedChainId(10143);
+        } catch (switchErr: any) {
+          if (switchErr.code === 4902) {
+            await eth.request({
+              method: 'wallet_addEthereumChain',
+              params: [
+                {
+                  chainId: '0x279f',
+                  chainName: 'Monad Testnet',
+                  nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
+                  rpcUrls: ['https://testnet-rpc.monad.xyz'],
+                  blockExplorerUrls: ['https://testnet.monadexplorer.com'],
+                },
+              ],
+            });
+            setConnectedChainId(10143);
+          }
+        }
+      }
+    } catch (err: any) {
+      setStatusAlert({
+        type: 'error',
+        message: `Wallet connection error: ${err.message || String(err)}`,
+      });
     }
   };
 
-  const handleRevoke = async (id: bigint) => {
-    setRevokingId(id);
-    const targetMandate = mandates.find((m) => m.id === id);
-    setTimeout(() => {
-      setMandates(
-        mandates.map((m) => (m.id === id ? { ...m, revoked: true } : m))
-      );
-      setActivities([
-        {
-          id: `tx-${Date.now()}`,
-          type: 'revoked',
-          agentId: targetMandate?.agentId ?? 42n,
-          mandateId: id,
-          timestamp: 'Just now',
-          txHash: ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')),
-        },
-        ...activities,
-      ]);
-      setRevokingId(null);
-    }, 500);
+  const handleToggleNetworkMode = (mode: 'LOCAL_SIMULATION' | 'MONAD_TESTNET') => {
+    setNetworkMode(mode);
+    setStatusAlert(null);
+    if (mode === 'LOCAL_SIMULATION') {
+      if (!walletAddress) {
+        setWalletAddress('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+      }
+      setConnectedChainId(31337);
+    } else {
+      if (typeof window !== 'undefined' && (window as any).ethereum?.selectedAddress) {
+        setWalletAddress((window as any).ethereum.selectedAddress);
+      } else {
+        setWalletAddress(null);
+      }
+      checkContractOnTestnet();
+    }
   };
 
+  // Revoke Mandate Handler
+  const handleRevoke = async (id: bigint) => {
+    setStatusAlert(null);
+    setRevokingId(id);
+
+    if (networkMode === 'MONAD_TESTNET') {
+      if (!walletAddress) {
+        setStatusAlert({ type: 'warning', message: 'Please connect your Web3 wallet to revoke this mandate on-chain.' });
+        setRevokingId(null);
+        return;
+      }
+      if (connectedChainId !== 10143) {
+        setStatusAlert({ type: 'warning', message: 'Please switch your wallet network to Monad Testnet (Chain ID 10143).' });
+        setRevokingId(null);
+        return;
+      }
+      if (!isContractDeployed) {
+        setStatusAlert({
+          type: 'error',
+          message: `Cannot revoke: MandateManager contract is not deployed at ${DEFAULT_MANDATE_MANAGER_ADDRESS} on Monad Testnet (0 bytes bytecode). Deploy contracts first.`,
+        });
+        setRevokingId(null);
+        return;
+      }
+
+      try {
+        const walletClient = createWalletClient({
+          chain: MONAD_TESTNET_CONFIG as any,
+          transport: custom((window as any).ethereum),
+        });
+        const publicClient = createPublicClient({
+          chain: MONAD_TESTNET_CONFIG as any,
+          transport: http('https://testnet-rpc.monad.xyz'),
+        });
+
+        const hash = await walletClient.writeContract({
+          account: walletAddress as Address,
+          chain: MONAD_TESTNET_CONFIG as any,
+          address: DEFAULT_MANDATE_MANAGER_ADDRESS,
+          abi: MandateManagerABI,
+          functionName: 'revokeMandate',
+          args: [id],
+        });
+
+        setStatusAlert({ type: 'info', message: `Transaction submitted: ${hash.slice(0, 10)}... Waiting for confirmation on Monad...` });
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+        if (receipt.status === 'success') {
+          setTestnetMandates((prev) =>
+            prev.map((m) => (m.id === id ? { ...m, revoked: true } : m))
+          );
+          setTestnetActivities((prev) => [
+            {
+              id: `tx-${receipt.transactionHash}`,
+              type: 'revoked',
+              agentId: testnetMandates.find((m) => m.id === id)?.agentId ?? 0n,
+              mandateId: id,
+              timestamp: 'Just now',
+              txHash: receipt.transactionHash,
+            },
+            ...prev,
+          ]);
+          setStatusAlert({ type: 'success', message: `Mandate #${id} successfully revoked on Monad Testnet! Tx: ${hash}` });
+        } else {
+          setStatusAlert({ type: 'error', message: `Revocation transaction reverted on-chain. Tx: ${hash}` });
+        }
+      } catch (err: any) {
+        console.error('Revocation failed:', err);
+        setStatusAlert({ type: 'error', message: `Revocation failed: ${err.message || String(err)}` });
+      } finally {
+        setRevokingId(null);
+      }
+    } else {
+      // Local simulation path
+      setTimeout(() => {
+        setSimulatedMandates((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, revoked: true } : m))
+        );
+        setSimulatedActivities((prev) => [
+          {
+            id: `sim-${Date.now()}`,
+            type: 'revoked',
+            agentId: simulatedMandates.find((m) => m.id === id)?.agentId ?? 42n,
+            mandateId: id,
+            timestamp: 'Just now',
+            txHash: '0x9e1a3d5f7c9b1e3a5d7f9a2b4c6e8d1a3f5c7b9e1a3d7f9a2b4c6e8d1a3f5c7b',
+          },
+          ...prev,
+        ]);
+        setRevokingId(null);
+        setStatusAlert({ type: 'info', message: `[SIMULATION] Mandate #${id} revoked in local sandbox.` });
+      }, 400);
+    }
+  };
+
+  // Create Mandate Handler
   const handleCreateMandate = async (params: CreateMandateParams) => {
+    setStatusAlert(null);
     setIsAuthorizing(true);
+
     try {
-      const ownerAddress = (walletAddress || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') as Address;
-      const nextNonce = BigInt(mandates.length);
+      if (networkMode === 'MONAD_TESTNET') {
+        if (!walletAddress) {
+          throw new Error('Please connect your Web3 wallet first to authorize on Monad Testnet.');
+        }
+        if (connectedChainId !== 10143) {
+          throw new Error('Wallet must be on Monad Testnet (Chain ID 10143) to submit transactions.');
+        }
+        if (!isContractDeployed) {
+          throw new Error(
+            `MandateManager contract is not deployed at ${DEFAULT_MANDATE_MANAGER_ADDRESS} on Monad Testnet (0 bytes bytecode). Deploy contract bytecode to Monad Testnet before submitting live transactions.`
+          );
+        }
 
-      // 1. Canonical challenge hash bound to Monad chainId and mandate constraints
-      const challengeHash = computeMandateHash({
-        chainId: 10143,
-        mandateManagerAddress: DEFAULT_MANDATE_MANAGER_ADDRESS,
-        owner: ownerAddress,
-        agentAddress: params.agentAddress,
-        agentId: params.agentId,
-        targets: params.targets,
-        maxValuePerTx: params.maxValuePerTx,
-        maxTotalValue: params.maxTotalValue,
-        expiresAt: params.expiresAt,
-        nonce: nextNonce,
-      });
+        const publicClient = createPublicClient({
+          chain: MONAD_TESTNET_CONFIG as any,
+          transport: http('https://testnet-rpc.monad.xyz'),
+        });
 
-      // 2. Hardware passkey authorization
-      const sigData = await signMandateWithPasskey(challengeHash);
+        // 1. Fetch on-chain nonce for owner
+        const nonce = (await publicClient.readContract({
+          address: DEFAULT_MANDATE_MANAGER_ADDRESS,
+          abi: MandateManagerABI,
+          functionName: 'ownerNonces',
+          args: [walletAddress as Address],
+        })) as bigint;
 
-      // 3. Update local state
-      const newId = BigInt(mandates.length + 1);
-      const newMandate: MandateItem = {
-        id: newId,
-        owner: ownerAddress,
-        agentAddress: params.agentAddress,
-        agentId: params.agentId,
-        maxValuePerTx: params.maxValuePerTx,
-        maxTotalValue: params.maxTotalValue,
-        spentValue: 0n,
-        balance: params.depositValue ?? 0n,
-        expiresAt: params.expiresAt,
-        nonce: nextNonce,
-        revoked: false,
-        targets: params.targets.map((t) => ({ target: t.target, selector: t.selector })),
-      };
-
-      setMandates([newMandate, ...mandates]);
-
-      const newTx = ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''));
-      setActivities([
-        {
-          id: `tx-${Date.now()}`,
-          type: 'executed',
+        // 2. Compute canonical challenge hash strictly bound to Monad chainId 10143
+        const challengeHash = computeMandateHash({
+          chainId: 10143,
+          mandateManagerAddress: DEFAULT_MANDATE_MANAGER_ADDRESS,
+          owner: walletAddress as Address,
+          agentAddress: params.agentAddress,
           agentId: params.agentId,
-          mandateId: newId,
-          target: params.targets[0].target,
-          selector: params.targets[0].selector,
+          targets: params.targets,
+          maxValuePerTx: params.maxValuePerTx,
+          maxTotalValue: params.maxTotalValue,
+          expiresAt: params.expiresAt,
+          nonce,
+        });
+
+        // 3. Hardware Passkey Prompt (Strict Fail-Closed: throws if user cancels or fails)
+        const passkeyData = await signMandateWithPasskey(challengeHash);
+
+        // 4. Submit real on-chain transaction through user's wallet
+        const walletClient = createWalletClient({
+          chain: MONAD_TESTNET_CONFIG as any,
+          transport: custom((window as any).ethereum),
+        });
+
+        const txHash = await walletClient.writeContract({
+          account: walletAddress as Address,
+          chain: MONAD_TESTNET_CONFIG as any,
+          address: DEFAULT_MANDATE_MANAGER_ADDRESS,
+          abi: MandateManagerABI,
+          functionName: 'createMandateWithWebAuthn',
+          args: [
+            params.agentAddress,
+            params.agentId,
+            params.targets.map((t) => ({ target: t.target, selector: t.selector })),
+            params.maxValuePerTx,
+            params.maxTotalValue,
+            params.expiresAt,
+            nonce,
+            passkeyData.sigR,
+            passkeyData.sigS,
+            passkeyData.authenticatorData,
+            passkeyData.clientDataJSON,
+            passkeyData.challengeOffset,
+          ],
           value: params.depositValue ?? 0n,
-          timestamp: 'Just now',
-          txHash: newTx,
-        },
-        ...activities,
-      ]);
-    } finally {
-      setIsAuthorizing(false);
+        });
+
+        setStatusAlert({ type: 'info', message: `Passkey verified! Mandate transaction submitted: ${txHash}. Waiting for Monad confirmation...` });
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+        if (receipt.status === 'success') {
+          // Read new mandate from chain
+          const newId = (await publicClient.readContract({
+            address: DEFAULT_MANDATE_MANAGER_ADDRESS,
+            abi: MandateManagerABI,
+            functionName: 'nextMandateId',
+          })) - 1n;
+
+          const createdMandate: MandateItem = {
+            id: newId,
+            owner: walletAddress as Address,
+            agentAddress: params.agentAddress,
+            agentId: params.agentId,
+            maxValuePerTx: params.maxValuePerTx,
+            maxTotalValue: params.maxTotalValue,
+            spentValue: 0n,
+            balance: params.depositValue ?? 0n,
+            expiresAt: params.expiresAt,
+            nonce,
+            revoked: false,
+            targets: params.targets.map((t) => ({ target: t.target, selector: t.selector })),
+          };
+
+          setTestnetMandates((prev) => [createdMandate, ...prev]);
+          setTestnetActivities((prev) => [
+            {
+              id: `tx-${receipt.transactionHash}`,
+              type: 'executed',
+              agentId: params.agentId,
+              mandateId: newId,
+              target: params.targets[0].target,
+              selector: params.targets[0].selector,
+              value: params.depositValue ?? 0n,
+              timestamp: 'Just now',
+              txHash: receipt.transactionHash,
+            },
+            ...prev,
+          ]);
+
+          setStatusAlert({ type: 'success', message: `Mandate #${newId} confirmed on Monad Testnet! Tx: ${txHash}` });
+        } else {
+          throw new Error(`Transaction reverted on-chain. Tx: ${txHash}`);
+        }
+      } else {
+        // Local simulation path: explicitly labelled
+        const ownerAddress = (walletAddress || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') as Address;
+        const nextNonce = BigInt(simulatedMandates.length);
+
+        const challengeHash = computeMandateHash({
+          chainId: 31337,
+          mandateManagerAddress: DEFAULT_MANDATE_MANAGER_ADDRESS,
+          owner: ownerAddress,
+          agentAddress: params.agentAddress,
+          agentId: params.agentId,
+          targets: params.targets,
+          maxValuePerTx: params.maxValuePerTx,
+          maxTotalValue: params.maxTotalValue,
+          expiresAt: params.expiresAt,
+          nonce: nextNonce,
+        });
+
+        // Generate synthetic passkey data in simulation mode
+        const simSig = generateSimulatedSignature(challengeHash);
+
+        const newId = BigInt(simulatedMandates.length + 1);
+        const newMandate: MandateItem = {
+          id: newId,
+          owner: ownerAddress,
+          agentAddress: params.agentAddress,
+          agentId: params.agentId,
+          maxValuePerTx: params.maxValuePerTx,
+          maxTotalValue: params.maxTotalValue,
+          spentValue: 0n,
+          balance: params.depositValue ?? 0n,
+          expiresAt: params.expiresAt,
+          nonce: nextNonce,
+          revoked: false,
+          targets: params.targets.map((t) => ({ target: t.target, selector: t.selector })),
+        };
+
+        setSimulatedMandates((prev) => [newMandate, ...prev]);
+        setSimulatedActivities((prev) => [
+          {
+            id: `sim-${Date.now()}`,
+            type: 'executed',
+            agentId: params.agentId,
+            mandateId: newId,
+            target: params.targets[0].target,
+            selector: params.targets[0].selector,
+            value: params.depositValue ?? 0n,
+            timestamp: 'Just now',
+            txHash: '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06',
+          },
+          ...prev,
+        ]);
+
+        setStatusAlert({ type: 'info', message: `[SIMULATION] Mandate #${newId} created in local sandbox.` });
+      }
+
       setIsModalOpen(false);
       setCopilotDraft(null);
+    } catch (err: any) {
+      console.error('Create mandate error:', err);
+      setStatusAlert({ type: 'error', message: err.message || String(err) });
+    } finally {
+      setIsAuthorizing(false);
     }
   };
 
@@ -245,15 +622,23 @@ export default function SecurityConsoleDashboard() {
   };
 
   const handleScenarioRun = (scenario: AttackScenario) => {
+    if (networkMode === 'MONAD_TESTNET') {
+      setStatusAlert({
+        type: 'warning',
+        message: 'Attack Simulation Lab runs against isolated local contract scenarios. Switch to LOCAL SIMULATION mode to test all 6 live contract revert scenarios.',
+      });
+      return;
+    }
+
     if (scenario.expectedResult === 'Success') {
-      const targetMandate = mandates.find((m) => !m.revoked) || mandates[0];
+      const targetMandate = simulatedMandates.find((m) => !m.revoked) || simulatedMandates[0];
       const newSpent = targetMandate.spentValue + parseEther('0.1');
-      setMandates(
-        mandates.map((m) => (m.id === targetMandate.id ? { ...m, spentValue: newSpent } : m))
+      setSimulatedMandates(
+        simulatedMandates.map((m) => (m.id === targetMandate.id ? { ...m, spentValue: newSpent } : m))
       );
-      setActivities([
+      setSimulatedActivities([
         {
-          id: `tx-${Date.now()}`,
+          id: `sim-${Date.now()}`,
           type: 'executed',
           agentId: targetMandate.agentId,
           mandateId: targetMandate.id,
@@ -261,14 +646,15 @@ export default function SecurityConsoleDashboard() {
           selector: scenario.selector,
           value: parseEther(scenario.value),
           timestamp: 'Just now',
-          txHash: scenario.resultData?.txHash || '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06',
+          txHash: '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06',
         },
-        ...activities,
+        ...simulatedActivities,
       ]);
     } else {
-      setActivities([
+      // Reverted actions: accurately report simulation without inventing fake confirmed transaction hashes
+      setSimulatedActivities([
         {
-          id: `tx-${Date.now()}`,
+          id: `sim-${Date.now()}`,
           type: 'blocked',
           agentId: 42n,
           mandateId: 1n,
@@ -276,10 +662,10 @@ export default function SecurityConsoleDashboard() {
           selector: scenario.selector,
           value: parseEther(scenario.value),
           timestamp: 'Just now',
-          txHash: scenario.resultData?.txHash || ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')),
-          reason: `${scenario.revertError} (Contract halted unauthorized action on-chain)`,
+          txHash: undefined,
+          reason: `${scenario.revertError} (Contract halted unauthorized action in local simulation)`,
         },
-        ...activities,
+        ...simulatedActivities,
       ]);
     }
   };
@@ -298,6 +684,9 @@ export default function SecurityConsoleDashboard() {
           setCopilotDraft(null);
           setIsModalOpen(true);
         }}
+        networkMode={networkMode}
+        onToggleNetworkMode={handleToggleNetworkMode}
+        chainId={connectedChainId}
       />
 
       {/* Main Content Area */}
@@ -322,11 +711,46 @@ export default function SecurityConsoleDashboard() {
             </h1>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-input)', padding: '0.35rem 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-              <span className="status-dot emerald" />
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                Monad Precompile 0x100 Active
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {/* Network Mode Status Pill */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                background: networkMode === 'MONAD_TESTNET' ? 'rgba(131, 110, 249, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                border: `1px solid ${networkMode === 'MONAD_TESTNET' ? 'rgba(131, 110, 249, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                padding: '0.35rem 0.75rem',
+                borderRadius: 'var(--radius-sm)',
+              }}
+            >
+              <span className={`status-dot ${networkMode === 'MONAD_TESTNET' ? 'emerald' : 'amber'}`} />
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: networkMode === 'MONAD_TESTNET' ? '#c4b5fd' : '#fbbf24',
+                }}
+              >
+                {networkMode === 'MONAD_TESTNET' ? 'Monad Testnet (10143)' : 'Local Simulation (31337)'}
+              </span>
+            </div>
+
+            {/* P-256 Precompile Indicator */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                background: 'var(--bg-input)',
+                padding: '0.35rem 0.65rem',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              <CheckCircle2 size={13} color="var(--accent-emerald)" />
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                RIP-7212 (0x100) Active
               </span>
             </div>
 
@@ -344,6 +768,131 @@ export default function SecurityConsoleDashboard() {
           </div>
         </header>
 
+        {/* Global Network Notice Banner */}
+        {networkMode === 'MONAD_TESTNET' ? (
+          <div
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: 'rgba(131, 110, 249, 0.08)',
+              borderBottom: '1px solid rgba(131, 110, 249, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <ShieldCheck size={18} color="var(--accent-monad)" />
+              <span style={{ fontSize: '0.8rem', color: '#fff' }}>
+                <strong>MONAD TESTNET MODE:</strong> Interacting directly with Monad RPC (Chain ID 10143).
+                {isContractDeployed === false && (
+                  <span style={{ color: 'var(--accent-amber)', marginLeft: '0.5rem' }}>
+                    Contract at {DEFAULT_MANDATE_MANAGER_ADDRESS.slice(0, 8)}... has no deployed bytecode. Deploy contract or use Receipt Inspector.
+                  </span>
+                )}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              {walletAddress ? (
+                <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--accent-emerald)' }}>
+                  Connected: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                </span>
+              ) : (
+                <button
+                  className="btn-secondary"
+                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', borderColor: 'var(--accent-monad-border)' }}
+                  onClick={handleConnectWallet}
+                >
+                  <Wallet size={13} />
+                  Connect Injected Wallet
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: 'rgba(245, 158, 11, 0.08)',
+              borderBottom: '1px solid rgba(245, 158, 11, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <AlertTriangle size={18} color="var(--accent-amber)" />
+              <span style={{ fontSize: '0.8rem', color: '#fff' }}>
+                <strong>LOCAL SIMULATION MODE (Offline Sandbox):</strong> Displaying illustrative sample mandates and stress-test scenarios. No testnet transactions are submitted.
+              </span>
+            </div>
+
+            <button
+              className="btn-secondary"
+              style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', borderColor: 'rgba(245, 158, 11, 0.4)', color: '#fbbf24' }}
+              onClick={() => handleToggleNetworkMode('MONAD_TESTNET')}
+            >
+              Switch to Live Monad Testnet
+            </button>
+          </div>
+        )}
+
+        {/* Status Alerts Toast */}
+        {statusAlert && (
+          <div
+            style={{
+              margin: '1rem 1.5rem 0',
+              padding: '0.75rem 1rem',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '0.82rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.75rem',
+              background:
+                statusAlert.type === 'error'
+                  ? 'var(--accent-rose-subtle)'
+                  : statusAlert.type === 'success'
+                  ? 'var(--accent-emerald-subtle)'
+                  : statusAlert.type === 'warning'
+                  ? 'var(--accent-amber-subtle)'
+                  : 'rgba(131, 110, 249, 0.15)',
+              border: `1px solid ${
+                statusAlert.type === 'error'
+                  ? 'var(--accent-rose-border)'
+                  : statusAlert.type === 'success'
+                  ? 'var(--accent-emerald-border)'
+                  : statusAlert.type === 'warning'
+                  ? 'var(--accent-amber-border)'
+                  : 'rgba(131, 110, 249, 0.3)'
+              }`,
+              color:
+                statusAlert.type === 'error'
+                  ? '#fda4af'
+                  : statusAlert.type === 'success'
+                  ? '#6ee7b7'
+                  : statusAlert.type === 'warning'
+                  ? '#fcd34d'
+                  : '#c4b5fd',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <AlertCircle size={16} />
+              <span>{statusAlert.message}</span>
+            </div>
+            <button
+              style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '0.85rem' }}
+              onClick={() => setStatusAlert(null)}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Tab Views */}
         <main className="page-container">
           {activeTab === 'overview' && (
@@ -356,7 +905,9 @@ export default function SecurityConsoleDashboard() {
                     <ShieldCheck size={16} color="var(--accent-emerald)" />
                   </div>
                   <div className="kpi-value">{activeMandates.length.toString().padStart(2, '0')}</div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Passkey Authorized Policies</span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {networkMode === 'MONAD_TESTNET' ? 'On-Chain Testnet Mandates' : 'Simulated Sample Mandates'}
+                  </span>
                 </div>
 
                 <div className="kpi-card emerald">
@@ -365,7 +916,9 @@ export default function SecurityConsoleDashboard() {
                     <Lock size={16} color="var(--accent-emerald)" />
                   </div>
                   <div className="kpi-value">{formatEther(totalVaultSecured)} MON</div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Isolated Per-Mandate Balances</span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {networkMode === 'MONAD_TESTNET' ? 'Contract Vault Deposits' : 'Simulated Balance'}
+                  </span>
                 </div>
 
                 <div className="kpi-card rose">
@@ -374,7 +927,9 @@ export default function SecurityConsoleDashboard() {
                     <AlertTriangle size={16} color="var(--accent-rose)" />
                   </div>
                   <div className="kpi-value">{blockedActionsCount.toString().padStart(2, '0')}</div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Smart Contract Reverts</span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {networkMode === 'MONAD_TESTNET' ? 'Testnet Violations Stopped' : 'Sandbox Revert Invariants'}
+                  </span>
                 </div>
 
                 <div className="kpi-card amber">
@@ -383,9 +938,11 @@ export default function SecurityConsoleDashboard() {
                     <SearchCode size={16} color="var(--accent-amber)" />
                   </div>
                   <div className="kpi-value" style={{ fontSize: '1.25rem', color: 'var(--accent-emerald)' }}>
-                    READY
+                    LIVE RPC
                   </div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Zero-Backend Portable SDK</span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Chain ID 10143 Verified
+                  </span>
                 </div>
               </div>
 
@@ -404,10 +961,10 @@ export default function SecurityConsoleDashboard() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                     <Sparkles size={18} color="var(--accent-monad)" />
                     <strong style={{ fontSize: '1rem', color: '#fff' }}>AI Policy Copilot</strong>
-                    <span className="badge badge-monad" style={{ fontSize: '0.65rem' }}>New Feature</span>
+                    <span className="badge badge-monad" style={{ fontSize: '0.65rem' }}>Natural Language</span>
                   </div>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    Describe required permissions in plain English. The Copilot compiles deterministic target allowlists and spending limits for passkey authorization.
+                    Describe required permissions in plain English. The Copilot compiles deterministic target allowlists and spending limits ready for hardware passkey authorization.
                   </p>
                   <div style={{ marginTop: '1rem', fontSize: '0.8rem', color: 'var(--accent-monad)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     Draft Scoped Mandate with AI <ArrowRight size={14} />
@@ -427,7 +984,7 @@ export default function SecurityConsoleDashboard() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                     <FlaskConical size={18} color="var(--accent-rose)" />
                     <strong style={{ fontSize: '1rem', color: '#fff' }}>Attack Simulation Lab</strong>
-                    <span className="badge badge-rose" style={{ fontSize: '0.65rem' }}>Live Proof</span>
+                    <span className="badge badge-rose" style={{ fontSize: '0.65rem' }}>Security Invariants</span>
                   </div>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                     Execute live security stress tests against unwhitelisted targets, excess spending, caller impersonation, and revoked mandates.
@@ -448,7 +1005,7 @@ export default function SecurityConsoleDashboard() {
                       style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
                       onClick={() => setActiveTab('mandates')}
                     >
-                      View All ({mandates.length})
+                      View All ({currentMandates.length})
                     </button>
                   </div>
                   <MandateList
@@ -456,6 +1013,7 @@ export default function SecurityConsoleDashboard() {
                     onRevoke={handleRevoke}
                     onOpenCreate={() => setIsModalOpen(true)}
                     isRevokingId={revokingId}
+                    networkMode={networkMode}
                   />
                 </div>
 
@@ -470,19 +1028,51 @@ export default function SecurityConsoleDashboard() {
                       Full Audit Trail
                     </button>
                   </div>
-                  <SecurityActivityFeed activities={activities.slice(0, 4)} />
+                  <SecurityActivityFeed
+                    activities={currentActivities.slice(0, 4)}
+                    networkMode={networkMode}
+                  />
                 </div>
               </div>
             </div>
           )}
 
           {activeTab === 'mandates' && (
-            <MandateList
-              mandates={mandates}
-              onRevoke={handleRevoke}
-              onOpenCreate={() => setIsModalOpen(true)}
-              isRevokingId={revokingId}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {networkMode === 'MONAD_TESTNET' && isContractDeployed === false && (
+                <div
+                  className="security-card"
+                  style={{
+                    padding: '1.25rem',
+                    borderLeft: '4px solid var(--accent-amber)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.85rem',
+                  }}
+                >
+                  <AlertTriangle size={20} color="var(--accent-amber)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <div>
+                    <strong style={{ fontSize: '0.9rem', color: '#fff' }}>
+                      Contract Not Deployed on Monad Testnet
+                    </strong>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                      The configured address <code style={{ color: '#fff' }}>{DEFAULT_MANDATE_MANAGER_ADDRESS}</code> currently has 0 bytes bytecode on Monad Testnet (RPC: <code style={{ color: '#fff' }}>https://testnet-rpc.monad.xyz</code>).
+                    </p>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                      To interact with live contracts, run <code style={{ color: '#fff' }}>forge script script/Deploy.s.sol --rpc-url https://testnet-rpc.monad.xyz --broadcast</code> with a funded private key, or switch to <strong>LOCAL SIMULATION</strong> to demo the full lifecycle safely offline.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <MandateList
+                mandates={currentMandates}
+                onRevoke={handleRevoke}
+                onOpenCreate={() => setIsModalOpen(true)}
+                isRevokingId={revokingId}
+                networkMode={networkMode}
+              />
+            </div>
           )}
 
           {activeTab === 'copilot' && (
@@ -498,7 +1088,10 @@ export default function SecurityConsoleDashboard() {
           )}
 
           {activeTab === 'activity' && (
-            <SecurityActivityFeed activities={activities} />
+            <SecurityActivityFeed
+              activities={currentActivities}
+              networkMode={networkMode}
+            />
           )}
         </main>
       </div>
@@ -513,6 +1106,7 @@ export default function SecurityConsoleDashboard() {
         onSubmit={handleCreateMandate}
         isLoading={isAuthorizing}
         initialParams={copilotDraft}
+        networkMode={networkMode}
       />
     </div>
   );

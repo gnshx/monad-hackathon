@@ -67,46 +67,37 @@ export async function registerPasskey(userName: string): Promise<PasskeyKeypair>
     const response = credential.response as AuthenticatorAttestationResponse;
     const publicKeyDer = (response as any).getPublicKey?.();
 
-    if (publicKeyDer) {
-      const pubBytes = new Uint8Array(publicKeyDer);
-      // The last 64 bytes of the SubjectPublicKeyInfo DER for P-256 are the uncompressed (X, Y) points
-      const xBytes = pubBytes.slice(pubBytes.length - 64, pubBytes.length - 32);
-      const yBytes = pubBytes.slice(pubBytes.length - 32);
-      return {
-        pubKeyX: toHex(xBytes),
-        pubKeyY: toHex(yBytes),
-        rawCredentialId: rawId,
-      };
+    if (!publicKeyDer) {
+      throw new Error(
+        'Authenticator did not return SPKI public key bytes (getPublicKey() unavailable). A WebAuthn compliant platform authenticator (e.g. TouchID, Windows Hello, YubiKey) is required.'
+      );
     }
 
-    // Deterministic fallback derivation from credential.rawId for simulation / test environments
-    const hashBuffer = await window.crypto.subtle.digest('SHA-256', credential.rawId);
-    const hashBytes = new Uint8Array(hashBuffer);
-    const x = toHex(hashBytes);
-    const yBuffer = await window.crypto.subtle.digest('SHA-256', hashBytes);
-    const y = toHex(new Uint8Array(yBuffer));
-
+    const pubBytes = new Uint8Array(publicKeyDer);
+    // The last 64 bytes of the SubjectPublicKeyInfo DER for P-256 are the uncompressed (X, Y) points
+    const xBytes = pubBytes.slice(pubBytes.length - 64, pubBytes.length - 32);
+    const yBytes = pubBytes.slice(pubBytes.length - 32);
     return {
-      pubKeyX: x,
-      pubKeyY: y,
+      pubKeyX: toHex(xBytes),
+      pubKeyY: toHex(yBytes),
       rawCredentialId: rawId,
     };
   } catch (err: any) {
-    // If running in automated browser/environment without platform authenticator:
-    console.warn('WebAuthn prompt dismissed or not supported, generating simulated test passkey:', err);
-    return generateSimulatedPasskey();
+    console.error('WebAuthn Passkey registration failed:', err);
+    throw new Error(`Passkey registration failed or cancelled: ${err.message || String(err)}`);
   }
 }
 
 /**
  * Signs the mandate challenge using the registered Passkey.
+ * Fails closed if the user dismisses the prompt or authenticator errors.
  */
 export async function signMandateWithPasskey(
   challengeHash: Hex,
   credentialId?: string
 ): Promise<PasskeySignatureData> {
   if (typeof window === 'undefined' || !window.navigator?.credentials) {
-    return generateSimulatedSignature(challengeHash);
+    throw new Error('WebAuthn hardware authentication is not supported in this browser environment');
   }
 
   try {
@@ -120,9 +111,11 @@ export async function signMandateWithPasskey(
       },
     })) as PublicKeyCredential;
 
-    if (!assertion) throw new Error('No assertion returned from passkey');
+    if (!assertion) throw new Error('No assertion returned from passkey authenticator');
 
     const response = assertion.response as AuthenticatorAssertionResponse;
+    if (!response.signature) throw new Error('Missing signature in WebAuthn assertion response');
+
     const signatureDer = new Uint8Array(response.signature);
 
     // Parse ASN.1 DER signature to extract 32-byte R and S
@@ -147,9 +140,9 @@ export async function signMandateWithPasskey(
       challengeOffset,
       isSimulated: false,
     };
-  } catch (err) {
-    console.warn('Passkey signature falling back to simulation:', err);
-    return generateSimulatedSignature(challengeHash);
+  } catch (err: any) {
+    console.error('WebAuthn signature verification failed:', err);
+    throw new Error(`Passkey hardware signature cancelled or failed: ${err.message || String(err)}`);
   }
 }
 

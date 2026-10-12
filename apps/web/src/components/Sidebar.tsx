@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Wallet,
   CheckCircle2,
+  Radio,
 } from 'lucide-react';
 
 export type NavTab = 'overview' | 'mandates' | 'copilot' | 'attack-lab' | 'inspector' | 'activity';
@@ -25,6 +26,9 @@ interface SidebarProps {
   walletAddress: string | null;
   onConnectWallet: () => void;
   onOpenCreateModal: () => void;
+  networkMode: 'LOCAL_SIMULATION' | 'MONAD_TESTNET';
+  onToggleNetworkMode: (mode: 'LOCAL_SIMULATION' | 'MONAD_TESTNET') => void;
+  chainId?: number | null;
 }
 
 export function Sidebar({
@@ -35,7 +39,12 @@ export function Sidebar({
   walletAddress,
   onConnectWallet,
   onOpenCreateModal,
+  networkMode,
+  onToggleNetworkMode,
+  chainId,
 }: SidebarProps) {
+  const isTestnet = networkMode === 'MONAD_TESTNET';
+
   const navItems = [
     {
       id: 'overview' as NavTab,
@@ -122,28 +131,65 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* Network Indicator */}
-        <div
-          style={{
-            marginTop: '1rem',
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '0.4rem 0.65rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="status-dot emerald" />
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Monad Testnet
-            </span>
+        {/* Network Mode Switcher */}
+        <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+            <span>Network Engine</span>
+            <span style={{ fontFamily: 'var(--font-mono)' }}>{isTestnet ? 'Chain 10143' : 'Chain 31337'}</span>
           </div>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            10143
-          </span>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '4px',
+              background: 'var(--bg-input)',
+              padding: '3px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <button
+              onClick={() => onToggleNetworkMode('LOCAL_SIMULATION')}
+              style={{
+                padding: '0.35rem 0.2rem',
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: !isTestnet ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
+                color: !isTestnet ? '#fbbf24' : 'var(--text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+              }}
+            >
+              <Radio size={11} color={!isTestnet ? '#fbbf24' : 'currentColor'} />
+              Simulation
+            </button>
+            <button
+              onClick={() => onToggleNetworkMode('MONAD_TESTNET')}
+              style={{
+                padding: '0.35rem 0.2rem',
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: isTestnet ? 'var(--accent-monad)' : 'transparent',
+                color: isTestnet ? '#fff' : 'var(--text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+              }}
+            >
+              <span className={`status-dot ${isTestnet ? 'emerald' : 'muted'}`} style={{ width: '6px', height: '6px' }} />
+              Testnet
+            </button>
+          </div>
         </div>
       </div>
 
@@ -232,10 +278,10 @@ export function Sidebar({
           onClick={onConnectWallet}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
-            <Wallet size={16} color="var(--accent-monad)" />
+            <Wallet size={16} color={walletAddress ? 'var(--accent-emerald)' : 'var(--text-muted)'} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#fff' }}>
-                {walletAddress ? 'Connected EOA' : 'Connect Wallet'}
+                {walletAddress ? (isTestnet ? 'Injected Wallet' : 'Simulated Wallet') : 'Connect Wallet'}
               </div>
               {walletAddress && (
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
@@ -244,7 +290,11 @@ export function Sidebar({
               )}
             </div>
           </div>
-          <CheckCircle2 size={14} color="var(--accent-emerald)" />
+          {walletAddress ? (
+            <CheckCircle2 size={14} color="var(--accent-emerald)" />
+          ) : (
+            <span style={{ fontSize: '0.68rem', color: 'var(--accent-monad)', fontWeight: 600 }}>Connect</span>
+          )}
         </div>
       </div>
     </aside>

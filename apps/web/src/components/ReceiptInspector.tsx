@@ -4,173 +4,273 @@ import React, { useState } from 'react';
 import {
   SearchCode,
   ShieldCheck,
+  ShieldAlert,
   CheckCircle2,
   XCircle,
-  FileText,
+  AlertTriangle,
   Copy,
   Check,
-  AlertCircle,
+  ExternalLink,
   Layers,
-  ArrowUpRight,
+  ArrowRight,
+  RotateCcw,
 } from 'lucide-react';
-import { type Hex, type Address, formatEther, createPublicClient, http } from 'viem';
+import {
+  type Hex,
+  type Address,
+  formatEther,
+  createPublicClient,
+  http,
+  isAddress,
+  isHex,
+} from 'viem';
 import { verifyReceipt } from '@agenttrust/sdk';
 
 interface VerificationCheck {
   title: string;
   description: string;
-  status: 'passed' | 'failed' | 'pending';
+  status: 'passed' | 'failed' | 'warning';
   evidence: string;
 }
 
+interface AuditResult {
+  verified: boolean;
+  networkName: string;
+  chainId: number;
+  txHash: string;
+  blockNumber: number;
+  contractAddress: string;
+  mandateId?: number;
+  agentId?: number;
+  target?: string;
+  selector?: string;
+  value?: string;
+  revertReason?: string;
+  checks: VerificationCheck[];
+}
+
 export function ReceiptInspector() {
-  const [txHash, setTxHash] = useState(
-    '0x50823d6cdb9ce7124050b5d7e6d8525ea43a07f0367b316855c21b28de7be681'
-  );
-  const [contractAddress, setContractAddress] = useState(
-    '0x7bc06c482dead17c0e297afbc32f6e63d3846650'
-  );
+  const [network, setNetwork] = useState<'monad_testnet' | 'local_sandbox'>('monad_testnet');
+  const [txHash, setTxHash] = useState('');
+  const [contractAddress, setContractAddress] = useState('');
+  const [expectedMandateId, setExpectedMandateId] = useState('');
+  const [expectedTarget, setExpectedTarget] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
 
-  const [auditResult, setAuditResult] = useState<{
-    verified: boolean;
-    txHash: string;
-    blockNumber: number;
-    contractAddress: string;
-    mandateId: number;
-    agentId: number;
-    target: string;
-    selector: string;
-    value: string;
-    checks: VerificationCheck[];
-  } | null>({
-    verified: true,
-    txHash: '0x50823d6cdb9ce7124050b5d7e6d8525ea43a07f0367b316855c21b28de7be681',
-    blockNumber: 46,
-    contractAddress: '0x7bc06c482dead17c0e297afbc32f6e63d3846650',
-    mandateId: 0,
-    agentId: 42,
-    target: '0x7969c5eD335650692Bc04293B07F5BF2e7A673C0',
-    selector: '0xa6b206bf',
-    value: '0.1 MON',
-    checks: [
-      {
-        title: 'Chain & Network Integrity',
-        description: 'Transaction receipt confirmed in Monad Local / Testnet Block #46',
-        status: 'passed',
-        evidence: 'Status: 0x1 (Transaction execution confirmed on-chain without EVM revert)',
-      },
-      {
-        title: 'MandateManager Contract Binding',
-        description: 'Emitted event origin matches authorized MandateManager contract',
-        status: 'passed',
-        evidence: 'Address: 0x7bc06c482dead17c0e297afbc32f6e63d3846650 (Verified emitter)',
-      },
-      {
-        title: 'Canonical Event Signature Match',
-        description: 'Matches topic ActionExecuted(uint256,address,bytes4,uint256,bytes)',
-        status: 'passed',
-        evidence: 'Topic0: 0x54b748e6e6c458a8d2a86481d6db8fd267b0cfe6e4757772b8950cf4aab56a4c',
-      },
-      {
-        title: 'Mandate ID & Parameter Consistency',
-        description: 'Execution parameters match Passkey mandate definition',
-        status: 'passed',
-        evidence: 'Mandate #0 · Agent #42 · Value: 0.1 MON · Vault Deducted: 0.1 MON',
-      },
-    ],
-  });
+  const rpcUrl =
+    network === 'monad_testnet'
+      ? 'https://testnet-rpc.monad.xyz'
+      : 'http://127.0.0.1:8545';
+
+  const expectedChainId = network === 'monad_testnet' ? 10143 : 31337;
+
+  const handleLoadSample = (sampleNetwork: 'monad_testnet' | 'local_sandbox') => {
+    setNetwork(sampleNetwork);
+    setValidationError(null);
+    if (sampleNetwork === 'local_sandbox') {
+      setTxHash('0x50823d6cdb9ce7124050b5d7e6d8525ea43a07f0367b316855c21b28de7be681');
+      setContractAddress('0x7bc06c482dead17c0e297afbc32f6e63d3846650');
+      setExpectedMandateId('0');
+      setExpectedTarget('0x7969c5eD335650692Bc04293B07F5BF2e7A673C0');
+    } else {
+      setTxHash('');
+      setContractAddress('');
+      setExpectedMandateId('');
+      setExpectedTarget('');
+    }
+  };
 
   const handleVerify = async () => {
+    setValidationError(null);
+    const cleanTx = txHash.trim();
+    const cleanContract = contractAddress.trim();
+
+    // 1. Strict input validation (Fail closed on malformed input)
+    if (!cleanTx) {
+      setValidationError('Transaction hash is required. Enter a 32-byte hash (0x...).');
+      return;
+    }
+    if (!isHex(cleanTx) || cleanTx.length !== 66) {
+      setValidationError('Invalid transaction hash format. Must be a 66-character hex string starting with 0x.');
+      return;
+    }
+    if (!cleanContract) {
+      setValidationError('MandateManager contract address is required.');
+      return;
+    }
+    if (!isAddress(cleanContract)) {
+      setValidationError('Invalid contract address format. Must be a 42-character Ethereum address (0x...).');
+      return;
+    }
+
     setIsVerifying(true);
+    const checks: VerificationCheck[] = [];
+
     try {
-      const cleanTx = (txHash.trim() || '0x50823d6cdb9ce7124050b5d7e6d8525ea43a07f0367b316855c21b28de7be681') as Hex;
-      const cleanContract = (contractAddress.trim() || '0x7bc06c482dead17c0e297afbc32f6e63d3846650') as Address;
-      
       const client = createPublicClient({
-        transport: http('http://127.0.0.1:8545'),
+        transport: http(rpcUrl),
       });
 
-      const res = await verifyReceipt(client, cleanContract, cleanTx);
-      if (res.verified) {
+      // 2. Network & Chain ID verification
+      let liveChainId = 0;
+      try {
+        liveChainId = await client.getChainId();
+        if (liveChainId === expectedChainId) {
+          checks.push({
+            title: 'RPC Network & Chain ID Consensus',
+            description: `Connected to ${network === 'monad_testnet' ? 'Monad Testnet' : 'Local Anvil Sandbox'}`,
+            status: 'passed',
+            evidence: `Chain ID: ${liveChainId} (Matches expected ${expectedChainId})`,
+          });
+        } else {
+          checks.push({
+            title: 'Chain ID Mismatch',
+            description: `RPC reported Chain ID ${liveChainId}, expected ${expectedChainId}`,
+            status: 'failed',
+            evidence: `Mismatched RPC target at ${rpcUrl}`,
+          });
+        }
+      } catch (err: any) {
+        checks.push({
+          title: 'RPC Endpoint Reachability',
+          description: `Failed to connect to RPC at ${rpcUrl}`,
+          status: 'failed',
+          evidence: err.message || String(err),
+        });
+        setAuditResult({
+          verified: false,
+          networkName: network,
+          chainId: expectedChainId,
+          txHash: cleanTx,
+          blockNumber: 0,
+          contractAddress: cleanContract,
+          checks,
+        });
+        setIsVerifying(false);
+        return;
+      }
+
+      // 3. Contract Bytecode Verification (Ensure target is actually deployed on this chain)
+      try {
+        const bytecode = await client.getBytecode({ address: cleanContract as Address });
+        if (!bytecode || bytecode === '0x') {
+          checks.push({
+            title: 'Contract Deployment Verification',
+            description: 'No bytecode found at specified contract address',
+            status: 'failed',
+            evidence: `Address ${cleanContract} is an empty account on Chain ID ${liveChainId}. Deploy contract first.`,
+          });
+          setAuditResult({
+            verified: false,
+            networkName: network,
+            chainId: liveChainId,
+            txHash: cleanTx,
+            blockNumber: 0,
+            contractAddress: cleanContract,
+            checks,
+          });
+          setIsVerifying(false);
+          return;
+        } else {
+          checks.push({
+            title: 'Contract Deployment Verification',
+            description: 'Target address contains deployed MandateManager bytecode',
+            status: 'passed',
+            evidence: `Bytecode verified (${(bytecode.length - 2) / 2} bytes) at ${cleanContract}`,
+          });
+        }
+      } catch (err: any) {
+        checks.push({
+          title: 'Contract Bytecode Query Error',
+          description: 'Failed to inspect contract bytecode',
+          status: 'failed',
+          evidence: err.message || String(err),
+        });
+      }
+
+      // 4. Query Receipt and Parse Verification Logs
+      const verifyOpts = {
+        expectedMandateId: expectedMandateId ? BigInt(expectedMandateId) : undefined,
+        expectedTarget: expectedTarget ? (expectedTarget as Address) : undefined,
+      };
+
+      const res = await verifyReceipt(client, cleanContract as Address, cleanTx as Hex, verifyOpts);
+
+      if (res.status === 'success' && res.verified) {
+        checks.push({
+          title: 'Transaction On-Chain Inclusion',
+          description: `Confirmed on-chain in Block #${res.blockNumber.toString()}`,
+          status: 'passed',
+          evidence: `Status: 0x1 (Success) · Block Number: ${res.blockNumber.toString()}`,
+        });
+
+        checks.push({
+          title: 'Canonical ActionExecuted Event Signature',
+          description: 'Event emitted strictly by configured MandateManager contract',
+          status: 'passed',
+          evidence: `Topic0: ActionExecuted(uint256,address,bytes4,uint256,bytes) verified`,
+        });
+
+        checks.push({
+          title: 'Mandate Constraints & Spending Audit',
+          description: 'Execution parameters decoded and matched against policy',
+          status: 'passed',
+          evidence: `Mandate #${res.mandateId?.toString()} · Target: ${res.target} · Selector: ${res.selector} · Value: ${res.value ? formatEther(res.value) : '0'} MON`,
+        });
+
         setAuditResult({
           verified: true,
+          networkName: network === 'monad_testnet' ? 'Monad Testnet' : 'Local Anvil Sandbox',
+          chainId: liveChainId,
           txHash: cleanTx,
           blockNumber: Number(res.blockNumber),
           contractAddress: cleanContract,
           mandateId: Number(res.mandateId ?? 0n),
           agentId: 42,
-          target: res.target ?? '0x7969c5eD335650692Bc04293B07F5BF2e7A673C0',
-          selector: res.selector ?? '0xa6b206bf',
-          value: res.value ? `${formatEther(res.value)} MON` : '0.1 MON',
-          checks: [
-            {
-              title: 'Chain & Network Integrity',
-              description: `Transaction receipt confirmed in Block #${res.blockNumber.toString()}`,
-              status: 'passed',
-              evidence: 'Status: 0x1 (Confirmed on-chain without EVM revert)',
-            },
-            {
-              title: 'MandateManager Contract Binding',
-              description: 'Emitted event origin matches registered MandateManager contract',
-              status: 'passed',
-              evidence: `Address: ${cleanContract} (Validated on-chain source)`,
-            },
-            {
-              title: 'Canonical Event Signature Match',
-              description: 'Matches topic ActionExecuted(uint256,address,bytes4,uint256,bytes)',
-              status: 'passed',
-              evidence: 'Topic0: 0x54b748e6e6c458a8d2a86481d6db8fd267b0cfe6e4757772b8950cf4aab56a4c',
-            },
-            {
-              title: 'Mandate ID & Parameter Consistency',
-              description: 'Verified parameter constraints against mandate event',
-              status: 'passed',
-              evidence: `Mandate #${res.mandateId?.toString()} · Target: ${res.target} · Value: ${res.value ? formatEther(res.value) : '0.1'} MON`,
-            },
-          ],
+          target: res.target,
+          selector: res.selector,
+          value: res.value ? `${formatEther(res.value)} MON` : '0 MON',
+          checks,
         });
       } else {
+        checks.push({
+          title: 'Transaction Verification Status',
+          description: res.revertReason || (res.status === 'reverted' ? 'Transaction reverted on-chain' : 'ActionExecuted event not found in logs'),
+          status: 'failed',
+          evidence: `Status: ${res.status} · Revert reason: ${res.revertReason || 'Policy rejected or not found'}`,
+        });
+
         setAuditResult({
           verified: false,
+          networkName: network === 'monad_testnet' ? 'Monad Testnet' : 'Local Anvil Sandbox',
+          chainId: liveChainId,
           txHash: cleanTx,
           blockNumber: Number(res.blockNumber),
           contractAddress: cleanContract,
-          mandateId: 0,
-          agentId: 0,
-          target: 'N/A',
-          selector: '0x',
-          value: '0 MON',
-          checks: [
-            {
-              title: 'Receipt Verification Failed',
-              description: res.revertReason || 'Transaction unverified or missing ActionExecuted event',
-              status: 'failed',
-              evidence: `Status: ${res.status} · ${res.revertReason || 'Contract rejected execution'}`,
-            },
-          ],
+          revertReason: res.revertReason,
+          checks,
         });
       }
     } catch (err: any) {
+      checks.push({
+        title: 'Receipt Query Failure',
+        description: 'Transaction was not found or could not be queried on RPC',
+        status: 'failed',
+        evidence: err.message || String(err),
+      });
+
       setAuditResult({
         verified: false,
-        txHash,
+        networkName: network === 'monad_testnet' ? 'Monad Testnet' : 'Local Anvil Sandbox',
+        chainId: expectedChainId,
+        txHash: cleanTx,
         blockNumber: 0,
-        contractAddress,
-        mandateId: 0,
-        agentId: 0,
-        target: 'N/A',
-        selector: '0x',
-        value: '0 MON',
-        checks: [
-          {
-            title: 'RPC Verification Note',
-            description: 'Could not query live RPC for this transaction hash',
-            status: 'failed',
-            evidence: err.message || 'Transaction hash not found in current block range',
-          },
-        ],
+        contractAddress: cleanContract,
+        revertReason: err.message || 'Transaction not found on chain',
+        checks,
       });
     } finally {
       setIsVerifying(false);
@@ -185,78 +285,196 @@ export function ReceiptInspector() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Header */}
+      {/* Header Card */}
       <div className="security-card" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(131, 110, 249, 0.04))' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
               <span className="badge badge-emerald">
                 <SearchCode size={12} />
-                Independent Verifier
+                Independent Proof Auditor
               </span>
-              <span className="badge badge-monad">Zero-Backend Portable SDK</span>
+              <span className="badge badge-monad">Zero-Backend SDK</span>
             </div>
             <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>
               Trust & Receipt Explorer
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '680px', marginTop: '0.25rem' }}>
-              Any external protocol, counterparty, or auditor can independently audit agent execution receipts. The verifier validates the transaction receipt directly against Monad raw event logs and mandate constraints.
+              Independently audit execution receipts directly against raw blockchain event logs and contract bytecode. Fails closed on unconfirmed or mismatched evidence.
             </p>
+          </div>
+
+          {/* Network Switcher */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--bg-input)', padding: '4px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+            <button
+              onClick={() => { setNetwork('monad_testnet'); setAuditResult(null); }}
+              style={{
+                padding: '0.35rem 0.75rem',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: network === 'monad_testnet' ? 'var(--accent-monad)' : 'transparent',
+                color: network === 'monad_testnet' ? '#fff' : 'var(--text-muted)',
+              }}
+            >
+              Monad Testnet (10143)
+            </button>
+            <button
+              onClick={() => { setNetwork('local_sandbox'); setAuditResult(null); }}
+              style={{
+                padding: '0.35rem 0.75rem',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+                background: network === 'local_sandbox' ? 'var(--accent-emerald)' : 'transparent',
+                color: network === 'local_sandbox' ? '#000' : 'var(--text-muted)',
+              }}
+            >
+              Local Sandbox (31337)
+            </button>
           </div>
         </div>
 
-        {/* Query Input */}
-        <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        {/* Input Form */}
+        <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem' }}>
             <div>
-              <label className="input-label">MandateManager Contract Address</label>
+              <label className="input-label">MandateManager Contract Address *</label>
               <input
                 type="text"
                 className="input-field mono"
                 style={{ width: '100%' }}
                 value={contractAddress}
-                onChange={(e) => setContractAddress(e.target.value)}
+                onChange={(e) => { setContractAddress(e.target.value); setValidationError(null); }}
                 placeholder="0x..."
               />
             </div>
             <div>
-              <label className="input-label">Monad Transaction Hash to Audit</label>
+              <label className="input-label">Transaction Hash to Audit *</label>
               <input
                 type="text"
                 className="input-field mono"
                 style={{ width: '100%' }}
                 value={txHash}
-                onChange={(e) => setTxHash(e.target.value)}
+                onChange={(e) => { setTxHash(e.target.value); setValidationError(null); }}
                 placeholder="0x..."
               />
             </div>
           </div>
-          <div>
-            <button className="btn-primary" onClick={handleVerify} disabled={isVerifying}>
-              <SearchCode size={15} />
-              {isVerifying ? 'Auditing On-Chain Logs...' : 'Audit On-Chain Receipt Proof'}
-            </button>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+            <div>
+              <label className="input-label">Expected Mandate ID (Optional)</label>
+              <input
+                type="text"
+                className="input-field mono"
+                style={{ width: '100%' }}
+                value={expectedMandateId}
+                onChange={(e) => setExpectedMandateId(e.target.value)}
+                placeholder="e.g. 0"
+              />
+            </div>
+            <div>
+              <label className="input-label">Expected Target Address (Optional)</label>
+              <input
+                type="text"
+                className="input-field mono"
+                style={{ width: '100%' }}
+                value={expectedTarget}
+                onChange={(e) => setExpectedTarget(e.target.value)}
+                placeholder="0x..."
+              />
+            </div>
+          </div>
+
+          {validationError && (
+            <div style={{ padding: '0.6rem 0.85rem', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid var(--accent-rose-border)', borderRadius: 'var(--radius-sm)', color: 'var(--accent-rose)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <AlertTriangle size={15} />
+              <span>{validationError}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                className="btn-primary"
+                onClick={handleVerify}
+                disabled={isVerifying}
+              >
+                <SearchCode size={15} />
+                {isVerifying ? 'Auditing On-Chain Evidence...' : 'Audit On-Chain Evidence'}
+              </button>
+
+              <button
+                className="btn-secondary"
+                onClick={() => handleLoadSample('local_sandbox')}
+                title="Fill with recent reproducible local demo transaction"
+              >
+                Load Local Demo Sample
+              </button>
+            </div>
+
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              Active RPC: {rpcUrl}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Audit Report */}
-      {auditResult && (
-        <div className="security-card-elevated" style={{ border: '1px solid var(--accent-emerald-border)' }}>
+      {/* Audit Report Result */}
+      {auditResult ? (
+        <div
+          className="security-card-elevated"
+          style={{
+            border: auditResult.verified
+              ? '1px solid var(--accent-emerald-border)'
+              : '1px solid var(--accent-rose-border)',
+          }}
+        >
+          {/* Header Status */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'var(--accent-emerald-subtle)', border: '1px solid var(--accent-emerald-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ShieldCheck size={20} color="var(--accent-emerald)" />
+              <div
+                style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '8px',
+                  background: auditResult.verified
+                    ? 'var(--accent-emerald-subtle)'
+                    : 'var(--accent-rose-subtle)',
+                  border: auditResult.verified
+                    ? '1px solid var(--accent-emerald-border)'
+                    : '1px solid var(--accent-rose-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {auditResult.verified ? (
+                  <ShieldCheck size={22} color="var(--accent-emerald)" />
+                ) : (
+                  <ShieldAlert size={22} color="var(--accent-rose)" />
+                )}
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>
-                    Receipt Audit: Verified Authenticity
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff' }}>
+                    {auditResult.verified
+                      ? 'Receipt Audit: Cryptographically Verified'
+                      : 'Receipt Audit: Verification Failed'}
                   </h3>
-                  <span className="badge badge-emerald">On-Chain Verified</span>
+                  <span className={auditResult.verified ? 'badge badge-emerald' : 'badge badge-rose'}>
+                    {auditResult.verified ? 'Consensus Verified' : 'Unverified / Reverted'}
+                  </span>
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  Confirmed in Monad Block #{auditResult.blockNumber}
+                  {auditResult.verified
+                    ? `Confirmed in ${auditResult.networkName} Block #${auditResult.blockNumber}`
+                    : `Network: ${auditResult.networkName} (Chain ID: ${auditResult.chainId})`}
                 </div>
               </div>
             </div>
@@ -271,14 +489,19 @@ export function ReceiptInspector() {
             </button>
           </div>
 
-          {/* Verification Checklist */}
+          {/* Detailed Verification Checks */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {auditResult.checks.map((check, idx) => (
               <div
                 key={idx}
                 style={{
                   background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
+                  border:
+                    check.status === 'passed'
+                      ? '1px solid rgba(16, 185, 129, 0.25)'
+                      : check.status === 'warning'
+                      ? '1px solid rgba(245, 158, 11, 0.25)'
+                      : '1px solid rgba(244, 63, 94, 0.25)',
                   borderRadius: 'var(--radius-md)',
                   padding: '0.85rem 1rem',
                   display: 'flex',
@@ -286,11 +509,28 @@ export function ReceiptInspector() {
                   gap: '0.75rem',
                 }}
               >
-                <CheckCircle2 size={18} color="var(--accent-emerald)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                {check.status === 'passed' ? (
+                  <CheckCircle2 size={18} color="var(--accent-emerald)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                ) : check.status === 'warning' ? (
+                  <AlertTriangle size={18} color="var(--accent-amber)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                ) : (
+                  <XCircle size={18} color="var(--accent-rose)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                )}
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <strong style={{ fontSize: '0.85rem', color: '#fff' }}>{check.title}</strong>
-                    <span className="badge badge-emerald" style={{ fontSize: '0.68rem' }}>Passed</span>
+                    <span
+                      className={
+                        check.status === 'passed'
+                          ? 'badge badge-emerald'
+                          : check.status === 'warning'
+                          ? 'badge badge-amber'
+                          : 'badge badge-rose'
+                      }
+                      style={{ fontSize: '0.68rem' }}
+                    >
+                      {check.status === 'passed' ? 'Passed' : check.status === 'warning' ? 'Notice' : 'Failed'}
+                    </span>
                   </div>
                   <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
                     {check.description}
@@ -303,10 +543,24 @@ export function ReceiptInspector() {
             ))}
           </div>
 
-          {/* Disclaimer & Context Box */}
+          {/* Technical Context Footer */}
           <div style={{ marginTop: '1.25rem', padding: '0.85rem', borderRadius: 'var(--radius-sm)', background: 'rgba(131, 110, 249, 0.05)', border: '1px solid var(--border-subtle)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            <strong style={{ color: '#c4b5fd' }}>Notice for Auditors & Judges:</strong> This inspector verifies that the transaction was recorded and executed by the <code>MandateManager</code> contract with matching event signatures and isolated vault accounting. It independently proves execution compliance without requiring off-chain trust.
+            <strong style={{ color: '#c4b5fd' }}>Independent Verification Proof:</strong> Receipts are decoded against the canonical ABI without trusting web frontend state. If an event origin does not match the target contract address or has been tampered with, the audit fails closed.
           </div>
+        </div>
+      ) : (
+        /* Empty Actionable State Before Audit */
+        <div className="security-card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', border: '1px dashed var(--border-default)' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem' }}>
+            <SearchCode size={22} color="var(--text-muted)" />
+          </div>
+          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff' }}>No Active Receipt Audit</h3>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '480px', margin: '0.35rem auto 1rem auto' }}>
+            Provide a Monad transaction hash and MandateManager contract address above to independently verify on-chain consensus, event topics, and spending constraints.
+          </p>
+          <button className="btn-secondary" onClick={() => handleLoadSample('local_sandbox')} style={{ fontSize: '0.78rem' }}>
+            Load Verified Local Demo Hash
+          </button>
         </div>
       )}
     </div>

@@ -23,6 +23,7 @@ interface MandateListProps {
   onRevoke: (id: bigint) => void;
   onOpenCreate: () => void;
   isRevokingId: bigint | null;
+  networkMode?: 'LOCAL_SIMULATION' | 'MONAD_TESTNET';
 }
 
 export function MandateList({
@@ -30,6 +31,7 @@ export function MandateList({
   onRevoke,
   onOpenCreate,
   isRevokingId,
+  networkMode = 'MONAD_TESTNET',
 }: MandateListProps) {
   const [filter, setFilter] = useState<'all' | 'active' | 'revoked'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -92,45 +94,67 @@ export function MandateList({
       </div>
 
       {/* Mandate Ledger Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
-        {filtered.map((mandate) => {
-          const spentRatio =
-            mandate.maxTotalValue > 0n
-              ? Number((mandate.spentValue * 100n) / mandate.maxTotalValue)
-              : 0;
+      {filtered.length === 0 ? (
+        <div className="security-card" style={{ textAlign: 'center', padding: '3rem 1.5rem', border: '1px dashed var(--border-default)' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem' }}>
+            <FileKey2 size={22} color="var(--text-muted)" />
+          </div>
+          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff' }}>No Mandates Found</h3>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '420px', margin: '0.35rem auto 1.25rem auto' }}>
+            {networkMode === 'MONAD_TESTNET'
+              ? 'No on-chain mandates found for this wallet on Monad Testnet.'
+              : 'No simulated mandates found matching the active filter.'}
+          </p>
+          <button className="btn-primary" onClick={onOpenCreate} style={{ margin: '0 auto' }}>
+            <Plus size={15} />
+            Create Passkey Mandate
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
+          {filtered.map((mandate) => {
+            const spentRatio =
+              mandate.maxTotalValue > 0n
+                ? Number((mandate.spentValue * 100n) / mandate.maxTotalValue)
+                : 0;
 
-          const isRevoking = isRevokingId === mandate.id;
+            const isRevoking = isRevokingId === mandate.id;
 
-          return (
-            <div
-              key={mandate.id.toString()}
-              className="security-card-elevated"
-              style={{
-                borderLeft: `4px solid ${
-                  mandate.revoked ? 'var(--accent-rose)' : 'var(--accent-emerald)'
-                }`,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: '1rem',
-              }}
-            >
-              <div>
-                {/* Card Header */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fff', fontFamily: 'var(--font-mono)' }}>
-                        Mandate #{mandate.id.toString()}
-                      </span>
-                      <span className={`badge ${mandate.revoked ? 'badge-rose' : 'badge-emerald'}`}>
-                        {mandate.revoked ? 'Revoked' : 'Active'}
-                      </span>
+            return (
+              <div
+                key={mandate.id.toString()}
+                className="security-card-elevated"
+                style={{
+                  borderLeft: `4px solid ${
+                    mandate.revoked ? 'var(--accent-rose)' : 'var(--accent-emerald)'
+                  }`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: '1rem',
+                }}
+              >
+                <div>
+                  {/* Card Header */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fff', fontFamily: 'var(--font-mono)' }}>
+                          Mandate #{mandate.id.toString()}
+                        </span>
+                        <span className={`badge ${mandate.revoked ? 'badge-rose' : 'badge-emerald'}`}>
+                          {mandate.revoked ? 'Revoked' : 'Active'}
+                        </span>
+                        {networkMode === 'LOCAL_SIMULATION' && (
+                          <span className="badge badge-amber" style={{ fontSize: '0.65rem' }}>
+                            Simulated
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        Owner: {mandate.owner.slice(0, 6)}...{mandate.owner.slice(-4)}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                      Owner: {mandate.owner.slice(0, 6)}...{mandate.owner.slice(-4)}
-                    </div>
-                  </div>
 
                   {!mandate.revoked && (
                     <button
@@ -256,7 +280,8 @@ export function MandateList({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

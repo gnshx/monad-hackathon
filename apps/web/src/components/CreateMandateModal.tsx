@@ -11,6 +11,7 @@ interface CreateMandateModalProps {
   onSubmit: (params: CreateMandateParams) => Promise<void>;
   isLoading: boolean;
   initialParams?: Partial<CreateMandateParams> | null;
+  networkMode?: 'LOCAL_SIMULATION' | 'MONAD_TESTNET';
 }
 
 export function CreateMandateModal({
@@ -19,6 +20,7 @@ export function CreateMandateModal({
   onSubmit,
   isLoading,
   initialParams,
+  networkMode = 'MONAD_TESTNET',
 }: CreateMandateModalProps) {
   const [agentAddress, setAgentAddress] = useState('0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
   const [agentId, setAgentId] = useState('42');
@@ -300,7 +302,11 @@ export function CreateMandateModal({
             style={{ width: '100%', padding: '0.85rem' }}
           >
             <KeyRound size={18} />
-            {isLoading ? 'Authorizing with Passkey...' : 'Sign with Passkey & Submit to Monad'}
+            {isLoading
+              ? 'Authorizing with Hardware Passkey...'
+              : networkMode === 'MONAD_TESTNET'
+              ? 'Authorize with Hardware Passkey (P-256)'
+              : 'Authorize in Local Simulation Sandbox'}
           </button>
         </form>
       </div>

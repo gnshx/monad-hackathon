@@ -17,9 +17,10 @@ import type { ActivityItem } from './ActivityFeed';
 
 interface SecurityActivityFeedProps {
   activities: ActivityItem[];
+  networkMode?: 'LOCAL_SIMULATION' | 'MONAD_TESTNET';
 }
 
-export function SecurityActivityFeed({ activities }: SecurityActivityFeedProps) {
+export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET' }: SecurityActivityFeedProps) {
   const [filter, setFilter] = useState<'all' | 'executed' | 'blocked' | 'revoked'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -75,95 +76,121 @@ export function SecurityActivityFeed({ activities }: SecurityActivityFeedProps) 
       </div>
 
       {/* Activity Timeline List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        {filtered.map((item) => {
-          const isExecuted = item.type === 'executed';
-          const isBlocked = item.type === 'blocked';
-          const isRevoked = item.type === 'revoked';
-          const isCopied = copiedId === item.id;
+      {filtered.length === 0 ? (
+        <div
+          className="security-card"
+          style={{
+            textAlign: 'center',
+            padding: '2.5rem 1.5rem',
+            border: '1px dashed var(--border-subtle)',
+          }}
+        >
+          <Activity size={32} color="var(--text-muted)" style={{ margin: '0 auto 0.75rem', opacity: 0.5 }} />
+          <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#fff', marginBottom: '0.25rem' }}>
+            No Activity Recorded
+          </h3>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            {networkMode === 'MONAD_TESTNET'
+              ? 'No live on-chain Monad Testnet events recorded for this filter in the current session.'
+              : 'No matching activities found for this filter.'}
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {filtered.map((item) => {
+            const isExecuted = item.type === 'executed';
+            const isBlocked = item.type === 'blocked';
+            const isRevoked = item.type === 'revoked';
+            const isCopied = copiedId === item.id;
+            const isRealOnChain = networkMode === 'MONAD_TESTNET' && !item.id.startsWith('sim-');
 
-          return (
-            <div
-              key={item.id}
-              className="security-card"
-              style={{
-                padding: '1rem 1.25rem',
-                borderLeft: `4px solid ${
-                  isExecuted
-                    ? 'var(--accent-emerald)'
-                    : isBlocked
-                    ? 'var(--accent-rose)'
-                    : 'var(--accent-amber)'
-                }`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '1rem',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', minWidth: '280px' }}>
-                <div
-                  style={{
-                    width: '34px',
-                    height: '34px',
-                    borderRadius: '8px',
-                    background: isExecuted
-                      ? 'var(--accent-emerald-subtle)'
+            return (
+              <div
+                key={item.id}
+                className="security-card"
+                style={{
+                  padding: '1rem 1.25rem',
+                  borderLeft: `4px solid ${
+                    isExecuted
+                      ? 'var(--accent-emerald)'
                       : isBlocked
-                      ? 'var(--accent-rose-subtle)'
-                      : 'var(--accent-amber-subtle)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    marginTop: '2px',
-                  }}
-                >
-                  {isExecuted && <CheckCircle2 size={18} color="var(--accent-emerald)" />}
-                  {isBlocked && <XCircle size={18} color="var(--accent-rose)" />}
-                  {isRevoked && <Ban size={18} color="var(--accent-amber)" />}
-                </div>
-
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <strong style={{ fontSize: '0.9rem', color: '#fff' }}>
-                      {isExecuted
-                        ? `Approved Action · Mandate #${item.mandateId?.toString() || '0'}`
+                      ? 'var(--accent-rose)'
+                      : 'var(--accent-amber)'
+                  }`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '1rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem', minWidth: '280px' }}>
+                  <div
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '8px',
+                      background: isExecuted
+                        ? 'var(--accent-emerald-subtle)'
                         : isBlocked
-                        ? `Security Revert · Mandate #${item.mandateId?.toString() || '0'}`
-                        : `Mandate Revoked · #${item.mandateId?.toString() || '0'}`}
-                    </strong>
-
-                    <span
-                      className={`badge ${
-                        isExecuted ? 'badge-emerald' : isBlocked ? 'badge-rose' : 'badge-amber'
-                      }`}
-                      style={{ fontSize: '0.68rem' }}
-                    >
-                      {isExecuted ? 'Allowed' : isBlocked ? 'Policy Blocked' : 'Revoked'}
-                    </span>
-
-                    <span className="badge badge-neutral" style={{ fontSize: '0.65rem' }}>
-                      {item.txHash?.startsWith('0x414') || item.txHash?.startsWith('0xc1ae')
-                        ? 'On-Chain Block'
-                        : 'Sandbox Proof'}
-                    </span>
+                        ? 'var(--accent-rose-subtle)'
+                        : 'var(--accent-amber-subtle)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      marginTop: '2px',
+                    }}
+                  >
+                    {isExecuted && <CheckCircle2 size={18} color="var(--accent-emerald)" />}
+                    {isBlocked && <XCircle size={18} color="var(--accent-rose)" />}
+                    {isRevoked && <Ban size={18} color="var(--accent-amber)" />}
                   </div>
 
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                    {isExecuted && item.value && (
-                      <>Transferred {formatEther(item.value)} MON to target {item.target?.slice(0, 8)}... within budget</>
-                    )}
-                    {isBlocked && (
-                      <span style={{ color: 'var(--accent-rose)' }}>{item.reason || 'Contract policy violation blocked on-chain'}</span>
-                    )}
-                    {isRevoked && (
-                      <>Human owner revoked passkey mandate on Monad contract</>
-                    )}
-                  </p>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#fff' }}>
+                        {isExecuted
+                          ? `Approved Action · Mandate #${item.mandateId?.toString() || '0'}`
+                          : isBlocked
+                          ? `Security Revert · Mandate #${item.mandateId?.toString() || '0'}`
+                          : `Mandate Revoked · #${item.mandateId?.toString() || '0'}`}
+                      </strong>
+
+                      <span
+                        className={`badge ${
+                          isExecuted ? 'badge-emerald' : isBlocked ? 'badge-rose' : 'badge-amber'
+                        }`}
+                        style={{ fontSize: '0.68rem' }}
+                      >
+                        {isExecuted ? 'Allowed' : isBlocked ? 'Policy Blocked' : 'Revoked'}
+                      </span>
+
+                      <span
+                        className={`badge ${isRealOnChain ? 'badge-monad' : 'badge-neutral'}`}
+                        style={{ fontSize: '0.65rem' }}
+                      >
+                        {isRealOnChain
+                          ? 'Monad Testnet'
+                          : networkMode === 'LOCAL_SIMULATION'
+                          ? 'Simulation'
+                          : 'Reference Sample'}
+                      </span>
+                    </div>
+
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                      {isExecuted && item.value && (
+                        <>Transferred {formatEther(item.value)} MON to target {item.target?.slice(0, 8)}... within budget</>
+                      )}
+                      {isBlocked && (
+                        <span style={{ color: 'var(--accent-rose)' }}>{item.reason || 'Contract policy violation blocked on-chain'}</span>
+                      )}
+                      {isRevoked && (
+                        <>Human owner revoked passkey mandate on contract</>
+                      )}
+                    </p>
+                  </div>
                 </div>
-              </div>
 
               {/* Tx Hash & Timestamp */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -201,7 +228,8 @@ export function SecurityActivityFeed({ activities }: SecurityActivityFeedProps) 
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
