@@ -85,7 +85,7 @@ contract MandateManagerTest is Test {
     // ─────────────────────────────────────────────────────────────────────────
 
     function test_registerCredential() public {
-        (bytes32 x, bytes32 y) = (mm.credentials(owner).pubKeyX, mm.credentials(owner).pubKeyY);
+        (bytes32 x, bytes32 y) = mm.credentials(owner);
         assertEq(x, PUB_X);
         assertEq(y, PUB_Y);
     }
@@ -285,7 +285,7 @@ contract MandateManagerTest is Test {
     function test_revoke_onlyOwner() public {
         uint256 id = _createMandate(EXPIRES_NEVER);
 
-        vm.prank(address(0xSTRANGER));
+        vm.prank(address(0xDEAD));
         vm.expectRevert(MandateManager.NotOwner.selector);
         mm.revokeMandate(id);
     }
@@ -301,17 +301,27 @@ contract MandateManagerTest is Test {
     // Fuzz: spending never exceeds max
     // ─────────────────────────────────────────────────────────────────────────
 
-    function testFuzz_spendingCap(uint96 v1, uint96 v2) public {
-        vm.assume(uint256(v1) + uint256(v2) > MAX_TOTAL);
-        vm.assume(v1 <= MAX_PER_TX);
-        vm.assume(v2 <= MAX_PER_TX);
+    function testFuzz_spendingCap(uint256 spend) public {
+        spend = bound(spend, MAX_PER_TX + 1, 100 ether);
 
         uint256 id = _createMandate(EXPIRES_NEVER);
         vm.deal(address(mm), 100 ether);
 
-        mm.execute(id, agentId, address(target), MockTarget.doSomething.selector, _execCalldata(1), v1, 0);
+        vm.expectRevert(MandateManager.ExceedsPerTxLimit.selector);
+        mm.execute(id, agentId, address(target), MockTarget.doSomething.selector, _execCalldata(1), spend, 0);
+    }
 
+    function testFuzz_totalCapExceeded() public {
+        uint256 id = _createMandate(EXPIRES_NEVER);
+        vm.deal(address(mm), 100 ether);
+
+        // Spend 5 times 1 ether to reach MAX_TOTAL (5 ether)
+        for (uint256 i = 0; i < 5; i++) {
+            mm.execute(id, agentId, address(target), MockTarget.doSomething.selector, _execCalldata(1), 1 ether, i);
+        }
+
+        // Next execution of even 1 wei must revert with ExceedsTotalLimit
         vm.expectRevert(MandateManager.ExceedsTotalLimit.selector);
-        mm.execute(id, agentId, address(target), MockTarget.doSomething.selector, _execCalldata(1), v2, 1);
+        mm.execute(id, agentId, address(target), MockTarget.doSomething.selector, _execCalldata(1), 1, 5);
     }
 }
