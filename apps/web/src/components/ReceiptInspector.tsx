@@ -13,7 +13,8 @@ import {
   Layers,
   ArrowUpRight,
 } from 'lucide-react';
-import { type Hex, formatEther } from 'viem';
+import { type Hex, type Address, formatEther, createPublicClient, http } from 'viem';
+import { verifyReceipt } from '@agenttrust/sdk';
 
 interface VerificationCheck {
   title: string;
@@ -24,7 +25,10 @@ interface VerificationCheck {
 
 export function ReceiptInspector() {
   const [txHash, setTxHash] = useState(
-    '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06'
+    '0x50823d6cdb9ce7124050b5d7e6d8525ea43a07f0367b316855c21b28de7be681'
+  );
+  const [contractAddress, setContractAddress] = useState(
+    '0x7bc06c482dead17c0e297afbc32f6e63d3846650'
   );
   const [isVerifying, setIsVerifying] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -42,32 +46,32 @@ export function ReceiptInspector() {
     checks: VerificationCheck[];
   } | null>({
     verified: true,
-    txHash: '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06',
-    blockNumber: 16,
-    contractAddress: '0x59b670e9fA9D0A427751Af201D676719a970857b',
+    txHash: '0x50823d6cdb9ce7124050b5d7e6d8525ea43a07f0367b316855c21b28de7be681',
+    blockNumber: 46,
+    contractAddress: '0x7bc06c482dead17c0e297afbc32f6e63d3846650',
     mandateId: 0,
     agentId: 42,
-    target: '0xc6e7DF5E7b4f2A278906862b61205850344D4e7d',
+    target: '0x7969c5eD335650692Bc04293B07F5BF2e7A673C0',
     selector: '0xa6b206bf',
     value: '0.1 MON',
     checks: [
       {
         title: 'Chain & Network Integrity',
-        description: 'Transaction receipt confirmed in Monad Testnet Block #16',
+        description: 'Transaction receipt confirmed in Monad Local / Testnet Block #46',
         status: 'passed',
-        evidence: 'Status: 0x1 (Transaction execution succeeded without EVM revert)',
+        evidence: 'Status: 0x1 (Transaction execution confirmed on-chain without EVM revert)',
       },
       {
         title: 'MandateManager Contract Binding',
         description: 'Emitted event origin matches authorized MandateManager contract',
         status: 'passed',
-        evidence: 'Address: 0x59b670e9fA9D0A427751Af201D676719a970857b (Rejecting third-party spoofing)',
+        evidence: 'Address: 0x7bc06c482dead17c0e297afbc32f6e63d3846650 (Verified emitter)',
       },
       {
         title: 'Canonical Event Signature Match',
-        description: 'Matches topic ActionExecuted(uint256,address,bytes4,bytes,uint256)',
+        description: 'Matches topic ActionExecuted(uint256,address,bytes4,uint256,bytes)',
         status: 'passed',
-        evidence: 'Topic0: 0x1818274a44131df95e925bf0e50fbf19694e9d565457ef0c58a36d9361ad2ea1',
+        evidence: 'Topic0: 0x54b748e6e6c458a8d2a86481d6db8fd267b0cfe6e4757772b8950cf4aab56a4c',
       },
       {
         title: 'Mandate ID & Parameter Consistency',
@@ -78,48 +82,99 @@ export function ReceiptInspector() {
     ],
   });
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     setIsVerifying(true);
-    setTimeout(() => {
+    try {
+      const cleanTx = (txHash.trim() || '0x50823d6cdb9ce7124050b5d7e6d8525ea43a07f0367b316855c21b28de7be681') as Hex;
+      const cleanContract = (contractAddress.trim() || '0x7bc06c482dead17c0e297afbc32f6e63d3846650') as Address;
+      
+      const client = createPublicClient({
+        transport: http('http://127.0.0.1:8545'),
+      });
+
+      const res = await verifyReceipt(client, cleanContract, cleanTx);
+      if (res.verified) {
+        setAuditResult({
+          verified: true,
+          txHash: cleanTx,
+          blockNumber: Number(res.blockNumber),
+          contractAddress: cleanContract,
+          mandateId: Number(res.mandateId ?? 0n),
+          agentId: 42,
+          target: res.target ?? '0x7969c5eD335650692Bc04293B07F5BF2e7A673C0',
+          selector: res.selector ?? '0xa6b206bf',
+          value: res.value ? `${formatEther(res.value)} MON` : '0.1 MON',
+          checks: [
+            {
+              title: 'Chain & Network Integrity',
+              description: `Transaction receipt confirmed in Block #${res.blockNumber.toString()}`,
+              status: 'passed',
+              evidence: 'Status: 0x1 (Confirmed on-chain without EVM revert)',
+            },
+            {
+              title: 'MandateManager Contract Binding',
+              description: 'Emitted event origin matches registered MandateManager contract',
+              status: 'passed',
+              evidence: `Address: ${cleanContract} (Validated on-chain source)`,
+            },
+            {
+              title: 'Canonical Event Signature Match',
+              description: 'Matches topic ActionExecuted(uint256,address,bytes4,uint256,bytes)',
+              status: 'passed',
+              evidence: 'Topic0: 0x54b748e6e6c458a8d2a86481d6db8fd267b0cfe6e4757772b8950cf4aab56a4c',
+            },
+            {
+              title: 'Mandate ID & Parameter Consistency',
+              description: 'Verified parameter constraints against mandate event',
+              status: 'passed',
+              evidence: `Mandate #${res.mandateId?.toString()} · Target: ${res.target} · Value: ${res.value ? formatEther(res.value) : '0.1'} MON`,
+            },
+          ],
+        });
+      } else {
+        setAuditResult({
+          verified: false,
+          txHash: cleanTx,
+          blockNumber: Number(res.blockNumber),
+          contractAddress: cleanContract,
+          mandateId: 0,
+          agentId: 0,
+          target: 'N/A',
+          selector: '0x',
+          value: '0 MON',
+          checks: [
+            {
+              title: 'Receipt Verification Failed',
+              description: res.revertReason || 'Transaction unverified or missing ActionExecuted event',
+              status: 'failed',
+              evidence: `Status: ${res.status} · ${res.revertReason || 'Contract rejected execution'}`,
+            },
+          ],
+        });
+      }
+    } catch (err: any) {
       setAuditResult({
-        verified: true,
+        verified: false,
         txHash,
-        blockNumber: Math.floor(Math.random() * 20) + 10,
-        contractAddress: '0x59b670e9fA9D0A427751Af201D676719a970857b',
+        blockNumber: 0,
+        contractAddress,
         mandateId: 0,
-        agentId: 42,
-        target: '0xc6e7DF5E7b4f2A278906862b61205850344D4e7d',
-        selector: '0xa6b206bf',
-        value: '0.1 MON',
+        agentId: 0,
+        target: 'N/A',
+        selector: '0x',
+        value: '0 MON',
         checks: [
           {
-            title: 'Chain & Network Integrity',
-            description: 'Transaction receipt confirmed on Monad',
-            status: 'passed',
-            evidence: 'Status: 0x1 (Confirmed in block)',
-          },
-          {
-            title: 'MandateManager Contract Binding',
-            description: 'Event origin matches registered MandateManager',
-            status: 'passed',
-            evidence: '0x59b670e9fA9D0A427751Af201D676719a970857b',
-          },
-          {
-            title: 'Canonical Event Signature Match',
-            description: 'Matches topic ActionExecuted(...)',
-            status: 'passed',
-            evidence: '0x1818274a44131df95e925bf0e50fbf19694e9d565457ef0c58a36d9361ad2ea1',
-          },
-          {
-            title: 'Mandate ID & Parameter Consistency',
-            description: 'Verified parameter constraints against mandate #0',
-            status: 'passed',
-            evidence: 'Mandate #0 · Target & Spending within policy',
+            title: 'RPC Verification Note',
+            description: 'Could not query live RPC for this transaction hash',
+            status: 'failed',
+            evidence: err.message || 'Transaction hash not found in current block range',
           },
         ],
       });
+    } finally {
       setIsVerifying(false);
-    }, 600);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -151,20 +206,35 @@ export function ReceiptInspector() {
         </div>
 
         {/* Query Input */}
-        <div style={{ marginTop: '1.25rem' }}>
-          <label className="input-label">Monad Transaction Hash to Audit</label>
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              className="input-field mono"
-              style={{ flex: 1, minWidth: '280px' }}
-              value={txHash}
-              onChange={(e) => setTxHash(e.target.value)}
-              placeholder="0x..."
-            />
+        <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem' }}>
+            <div>
+              <label className="input-label">MandateManager Contract Address</label>
+              <input
+                type="text"
+                className="input-field mono"
+                style={{ width: '100%' }}
+                value={contractAddress}
+                onChange={(e) => setContractAddress(e.target.value)}
+                placeholder="0x..."
+              />
+            </div>
+            <div>
+              <label className="input-label">Monad Transaction Hash to Audit</label>
+              <input
+                type="text"
+                className="input-field mono"
+                style={{ width: '100%' }}
+                value={txHash}
+                onChange={(e) => setTxHash(e.target.value)}
+                placeholder="0x..."
+              />
+            </div>
+          </div>
+          <div>
             <button className="btn-primary" onClick={handleVerify} disabled={isVerifying}>
               <SearchCode size={15} />
-              {isVerifying ? 'Auditing Receipt...' : 'Audit On-Chain Receipt'}
+              {isVerifying ? 'Auditing On-Chain Logs...' : 'Audit On-Chain Receipt Proof'}
             </button>
           </div>
         </div>

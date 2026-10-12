@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://f0d7cf322f0c05.lhr.life"><img src="https://img.shields.io/badge/Live_Console-f0d7cf322f0c05.lhr.life-10b981?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Live Console" /></a>
+  <a href="https://b2acaa88b16722.lhr.life"><img src="https://img.shields.io/badge/Live_Console-b2acaa88b16722.lhr.life-10b981?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Live Console" /></a>
   <a href="https://github.com/gnshx/monad-hackathon"><img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Repo" /></a>
   <img src="https://img.shields.io/badge/Monad_Testnet-Chain_10143-836ef9?style=for-the-badge&logo=ethereum&logoColor=white" alt="Monad Network" />
 </p>
@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://f0d7cf322f0c05.lhr.life">🌐 Live Web Console</a> •
+  <a href="https://b2acaa88b16722.lhr.life">🌐 Live Web Console</a> •
   <a href="#-1-minute-reproducible-security-proof">⚡ 1-Minute Live Demo</a> •
   <a href="docs/final-audit.md">🔒 30-Hour Security Audit</a> •
   <a href="docs/pitch.md">🎙️ 2-Min Pitch Script</a> •
