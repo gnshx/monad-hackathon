@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Plus,
   Radio,
+  AlertTriangle,
 } from 'lucide-react';
 
 export type NavTab = 'overview' | 'mandates' | 'copilot' | 'attack-lab' | 'inspector' | 'activity';
@@ -89,6 +90,65 @@ export function Sidebar({
 
   return (
     <aside className="sidebar" aria-label="Security Console Navigation">
+      {/* Persistent Mode Indicator - Top Bar */}
+      <div
+        style={{
+          padding: '0.5rem 1.25rem',
+          background: isTestnet ? 'rgba(131, 110, 249, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+          borderBottom: `1px solid ${isTestnet ? 'rgba(131, 110, 249, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+        role="status"
+        aria-live="polite"
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span className={`status-dot ${isTestnet ? 'emerald' : 'amber'}`} style={{ width: '7px', height: '7px' }} />
+          <span
+            style={{
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              color: isTestnet ? '#c4b5fd' : '#fbbf24',
+              fontFamily: 'var(--font-mono)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+            }}
+          >
+            {isTestnet ? 'MONAD TESTNET (10143)' : 'LOCAL SIMULATION (31337)'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          {isTestnet ? (
+            <span
+              style={{
+                fontSize: '0.65rem',
+                color: 'var(--accent-emerald)',
+                fontWeight: 600,
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              Chain 10143
+            </span>
+          ) : (
+            <span
+              style={{
+                fontSize: '0.65rem',
+                color: 'var(--accent-amber)',
+                fontWeight: 600,
+                fontFamily: 'var(--font-mono)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              <AlertTriangle size={11} />
+              Offline Sandbox
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Brand Header */}
       <div style={{ padding: '1.25rem 1.25rem 1rem', borderBottom: '1px solid var(--border-subtle)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>

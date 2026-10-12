@@ -49,8 +49,10 @@ interface AuditResult {
   checks: VerificationCheck[];
 }
 
+const MONAD_TESTNET_RPC = 'https://testnet-rpc.monad.xyz';
+const MONAD_TESTNET_CHAIN_ID = 10143;
+
 export function ReceiptInspector() {
-  const [network, setNetwork] = useState<'monad_testnet' | 'local_sandbox'>('monad_testnet');
   const [txHash, setTxHash] = useState('');
   const [contractAddress, setContractAddress] = useState('');
   const [expectedMandateId, setExpectedMandateId] = useState('');
@@ -60,35 +62,11 @@ export function ReceiptInspector() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
 
-  const rpcUrl =
-    network === 'monad_testnet'
-      ? 'https://testnet-rpc.monad.xyz'
-      : 'http://127.0.0.1:8545';
-
-  const expectedChainId = network === 'monad_testnet' ? 10143 : 31337;
-
-  const handleLoadSample = (sampleNetwork: 'monad_testnet' | 'local_sandbox') => {
-    setNetwork(sampleNetwork);
-    setValidationError(null);
-    if (sampleNetwork === 'local_sandbox') {
-      setTxHash('0x50823d6cdb9ce7124050b5d7e6d8525ea43a07f0367b316855c21b28de7be681');
-      setContractAddress('0x7bc06c482dead17c0e297afbc32f6e63d3846650');
-      setExpectedMandateId('0');
-      setExpectedTarget('0x7969c5eD335650692Bc04293B07F5BF2e7A673C0');
-    } else {
-      setTxHash('');
-      setContractAddress('');
-      setExpectedMandateId('');
-      setExpectedTarget('');
-    }
-  };
-
   const handleVerify = async () => {
     setValidationError(null);
     const cleanTx = txHash.trim();
     const cleanContract = contractAddress.trim();
 
-    // 1. Strict input validation (Fail closed on malformed input)
     if (!cleanTx) {
       setValidationError('Transaction hash is required. Enter a 32-byte hash (0x...).');
       return;
@@ -111,39 +89,38 @@ export function ReceiptInspector() {
 
     try {
       const client = createPublicClient({
-        transport: http(rpcUrl),
+        transport: http(MONAD_TESTNET_RPC),
       });
 
-      // 2. Network & Chain ID verification
       let liveChainId = 0;
       try {
         liveChainId = await client.getChainId();
-        if (liveChainId === expectedChainId) {
+        if (liveChainId === MONAD_TESTNET_CHAIN_ID) {
           checks.push({
             title: 'RPC Network & Chain ID Consensus',
-            description: `Connected to ${network === 'monad_testnet' ? 'Monad Testnet' : 'Local Anvil Sandbox'}`,
+            description: 'Connected to Monad Testnet',
             status: 'passed',
-            evidence: `Chain ID: ${liveChainId} (Matches expected ${expectedChainId})`,
+            evidence: `Chain ID: ${liveChainId} (Matches expected ${MONAD_TESTNET_CHAIN_ID})`,
           });
         } else {
           checks.push({
             title: 'Chain ID Mismatch',
-            description: `RPC reported Chain ID ${liveChainId}, expected ${expectedChainId}`,
+            description: `RPC reported Chain ID ${liveChainId}, expected ${MONAD_TESTNET_CHAIN_ID}`,
             status: 'failed',
-            evidence: `Mismatched RPC target at ${rpcUrl}`,
+            evidence: `Mismatched RPC target at ${MONAD_TESTNET_RPC}`,
           });
         }
       } catch (err: any) {
         checks.push({
           title: 'RPC Endpoint Reachability',
-          description: `Failed to connect to RPC at ${rpcUrl}`,
+          description: `Failed to connect to RPC at ${MONAD_TESTNET_RPC}`,
           status: 'failed',
           evidence: err.message || String(err),
         });
         setAuditResult({
           verified: false,
-          networkName: network,
-          chainId: expectedChainId,
+          networkName: 'Monad Testnet',
+          chainId: MONAD_TESTNET_CHAIN_ID,
           txHash: cleanTx,
           blockNumber: 0,
           contractAddress: cleanContract,
@@ -153,7 +130,6 @@ export function ReceiptInspector() {
         return;
       }
 
-      // 3. Contract Bytecode Verification (Ensure target is actually deployed on this chain)
       try {
         const bytecode = await client.getBytecode({ address: cleanContract as Address });
         if (!bytecode || bytecode === '0x') {
@@ -165,7 +141,7 @@ export function ReceiptInspector() {
           });
           setAuditResult({
             verified: false,
-            networkName: network,
+            networkName: 'Monad Testnet',
             chainId: liveChainId,
             txHash: cleanTx,
             blockNumber: 0,
@@ -191,7 +167,6 @@ export function ReceiptInspector() {
         });
       }
 
-      // 4. Query Receipt and Parse Verification Logs
       const verifyOpts = {
         expectedMandateId: expectedMandateId ? BigInt(expectedMandateId) : undefined,
         expectedTarget: expectedTarget ? (expectedTarget as Address) : undefined,
@@ -223,7 +198,7 @@ export function ReceiptInspector() {
 
         setAuditResult({
           verified: true,
-          networkName: network === 'monad_testnet' ? 'Monad Testnet' : 'Local Anvil Sandbox',
+          networkName: 'Monad Testnet',
           chainId: liveChainId,
           txHash: cleanTx,
           blockNumber: Number(res.blockNumber),
@@ -245,7 +220,7 @@ export function ReceiptInspector() {
 
         setAuditResult({
           verified: false,
-          networkName: network === 'monad_testnet' ? 'Monad Testnet' : 'Local Anvil Sandbox',
+          networkName: 'Monad Testnet',
           chainId: liveChainId,
           txHash: cleanTx,
           blockNumber: Number(res.blockNumber),
@@ -264,8 +239,8 @@ export function ReceiptInspector() {
 
       setAuditResult({
         verified: false,
-        networkName: network === 'monad_testnet' ? 'Monad Testnet' : 'Local Anvil Sandbox',
-        chainId: expectedChainId,
+        networkName: 'Monad Testnet',
+        chainId: MONAD_TESTNET_CHAIN_ID,
         txHash: cleanTx,
         blockNumber: 0,
         contractAddress: cleanContract,
@@ -304,38 +279,10 @@ export function ReceiptInspector() {
             </p>
           </div>
 
-          {/* Network Switcher */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--bg-input)', padding: '4px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-            <button
-              onClick={() => { setNetwork('monad_testnet'); setAuditResult(null); }}
-              style={{
-                padding: '0.35rem 0.75rem',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                borderRadius: '4px',
-                border: 'none',
-                cursor: 'pointer',
-                background: network === 'monad_testnet' ? 'var(--accent-monad)' : 'transparent',
-                color: network === 'monad_testnet' ? '#fff' : 'var(--text-muted)',
-              }}
-            >
-              Monad Testnet (10143)
-            </button>
-            <button
-              onClick={() => { setNetwork('local_sandbox'); setAuditResult(null); }}
-              style={{
-                padding: '0.35rem 0.75rem',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                borderRadius: '4px',
-                border: 'none',
-                cursor: 'pointer',
-                background: network === 'local_sandbox' ? 'var(--accent-emerald)' : 'transparent',
-                color: network === 'local_sandbox' ? '#000' : 'var(--text-muted)',
-              }}
-            >
-              Local Sandbox (31337)
-            </button>
+          {/* Network Badge */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.75rem', background: 'var(--accent-monad)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', fontWeight: 600, color: '#fff' }}>
+            <span>Monad Testnet</span>
+            <span style={{ fontFamily: 'var(--font-mono)', background: 'rgba(255,255,255,0.2)', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>Chain ID: 10143</span>
           </div>
         </div>
 
@@ -408,21 +355,10 @@ export function ReceiptInspector() {
                 <SearchCode size={15} />
                 {isVerifying ? 'Auditing On-Chain Evidence...' : 'Audit On-Chain Evidence'}
               </button>
-
-              {network === 'local_sandbox' && (
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => handleLoadSample('local_sandbox')}
-                  title="Fill with reproducible local Anvil demo transaction"
-                >
-                  Load Local Demo Sample
-                </button>
-              )}
             </div>
 
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              Active RPC: {rpcUrl}
+              Active RPC: https://testnet-rpc.monad.xyz
             </span>
           </div>
         </div>
