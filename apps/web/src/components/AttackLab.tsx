@@ -124,12 +124,10 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
       prev.map((s) => (s.id === id ? { ...s, status: 'running' } : s))
     );
 
+    // Local preflight only: this evaluates the scenario against the policy rules
+    // in the browser. It does not broadcast a transaction and mines no receipt.
     setTimeout(() => {
       const isAllowed = id === 'scenario-1';
-      // For permitted execution, use verified local demo transaction hash; reverted transactions do not mine a receipt hash
-      const confirmedTx = isAllowed
-        ? '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06'
-        : undefined;
 
       setScenarios((prev) =>
         prev.map((s) => {
@@ -138,11 +136,11 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
               ...s,
               status: 'completed',
               resultData: {
-                txHash: confirmedTx,
-                blockNumber: isAllowed ? 142 : undefined,
+                txHash: undefined,
+                blockNumber: undefined,
                 reverted: !isAllowed,
                 errorName: !isAllowed ? s.revertError : undefined,
-                vaultRemaining: isAllowed ? '0.40 MON' : '0.50 MON (Vault Untouched)',
+                vaultRemaining: 'No value moved (local preflight)',
               },
             };
             onScenarioExecuted(updated);
@@ -165,13 +163,13 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                 <FlaskConical size={12} />
                 Adversarial Lab
               </span>
-              <span className="badge badge-simulation">Execution Mode: Testnet / Local Sandbox</span>
+              <span className="badge badge-simulation">Execution Mode: Local Preflight</span>
             </div>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>
               Attack Simulation Lab
             </h2>
             <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', maxWidth: '720px', marginTop: '0.2rem' }}>
-              Verify mathematical guarantees of the <code>MandateManager</code> smart contract. Trigger simulated attack vectors and verify that rogue destinations, over-limit transactions, caller impersonations, and revoked actions reliably revert on-chain.
+              Exercise the policy rules the <code>MandateManager</code> contract enforces. Each scenario is evaluated locally in your browser as a preflight: rogue destinations, over-limit transactions, caller impersonations, and revoked mandates fail the policy check. To prove enforcement with real on-chain evidence, deploy the contract and verify receipts in the Receipt Explorer.
             </p>
           </div>
 
@@ -235,7 +233,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                   >
                     <Play size={12} />
                     {scenario.status === 'running'
-                      ? 'Simulating On-Chain...'
+                      ? 'Running Preflight Check...'
                       : isAllowed
                       ? 'Run Permitted Action'
                       : 'Trigger Attack Vector'}
@@ -282,8 +280,8 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                       }}
                     >
                       {isAllowed
-                        ? 'Confirmed on-chain: Permitted action executed within budget'
-                        : `Contract Reverted on-chain: ${scenario.resultData.errorName}`}
+                        ? 'Local preflight: action complies with the mandate policy bounds'
+                        : `Local preflight: contract would revert with ${scenario.resultData.errorName}`}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
@@ -293,7 +291,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                       </span>
                     ) : (
                       <span style={{ color: 'var(--text-muted)' }}>
-                        [Simulated EVM Revert · No Receipt Mined]
+                        [Browser preflight only · nothing broadcast · no receipt mined]
                       </span>
                     )}
                     <span>Vault: {scenario.resultData.vaultRemaining}</span>
@@ -356,7 +354,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                       Browser Preflight: Validated
                     </span>
                     <span className="badge badge-simulation" style={{ fontSize: '0.65rem' }}>
-                      Local Simulation / Monad Testnet: Enforced by Contract
+                      Contract Enforcement: verify live receipts in Receipt Explorer
                     </span>
                   </div>
                 </div>

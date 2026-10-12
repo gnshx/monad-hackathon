@@ -79,108 +79,14 @@ export default function SecurityConsoleDashboard() {
     message: string;
   } | null>(null);
 
-  // Local Simulated Mandates State (strictly isolated for presentation/sandbox mode)
-  const [simulatedMandates, setSimulatedMandates] = useState<MandateItem[]>([
-    {
-      id: 1n,
-      owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
-      agentAddress: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
-      agentId: 42n,
-      maxValuePerTx: parseEther('0.25'),
-      maxTotalValue: parseEther('2.5'),
-      spentValue: parseEther('0.625'),
-      balance: parseEther('1.875'),
-      expiresAt: BigInt(Math.floor(Date.now() / 1000) + 86400 * 5),
-      nonce: 0n,
-      revoked: false,
-      targets: [
-        { target: '0x3333333333333333333333333333333333333333', selector: '0xa9059cbb' },
-        { target: '0x4444444444444444444444444444444444444444', selector: '0x00000000' },
-      ],
-    },
-    {
-      id: 2n,
-      owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
-      agentAddress: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC',
-      agentId: 108n,
-      maxValuePerTx: parseEther('0.05'),
-      maxTotalValue: parseEther('0.5'),
-      spentValue: parseEther('0.5'),
-      balance: 0n,
-      expiresAt: BigInt(Math.floor(Date.now() / 1000) + 86400 * 1),
-      nonce: 1n,
-      revoked: false,
-      targets: [
-        { target: '0x5555555555555555555555555555555555555555', selector: '0x23b872dd' },
-      ],
-    },
-    {
-      id: 3n,
-      owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
-      agentAddress: '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
-      agentId: 99n,
-      maxValuePerTx: parseEther('1.0'),
-      maxTotalValue: parseEther('5.0'),
-      spentValue: parseEther('0.1'),
-      balance: parseEther('0.9'),
-      expiresAt: 0n,
-      nonce: 2n,
-      revoked: true,
-      targets: [
-        { target: '0x7777777777777777777777777777777777777777', selector: '0x095ea7b3' },
-      ],
-    },
-  ]);
+  // Local Simulated Mandates State (starts empty; populated only by real user actions in sandbox mode)
+  const [simulatedMandates, setSimulatedMandates] = useState<MandateItem[]>([]);
 
   // Real Monad Testnet Mandates State (populated strictly from on-chain reads or real confirmed txs)
   const [testnetMandates, setTestnetMandates] = useState<MandateItem[]>([]);
 
-  // Simulated Activities State (strictly isolated for presentation/sandbox mode)
-  const [simulatedActivities, setSimulatedActivities] = useState<ActivityItem[]>([
-    {
-      id: 'sim-1',
-      type: 'executed',
-      agentId: 42n,
-      mandateId: 1n,
-      target: '0x3333333333333333333333333333333333333333',
-      selector: '0xa9059cbb',
-      value: parseEther('0.15'),
-      timestamp: '2 mins ago',
-      txHash: '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06',
-    },
-    {
-      id: 'sim-2',
-      type: 'blocked',
-      agentId: 42n,
-      mandateId: 1n,
-      target: '0xDeadDeAdDeADdeAdDeaddeadDEADdeAdDeadbEEf',
-      selector: '0xa9059cbb',
-      value: parseEther('0.1'),
-      timestamp: '14 mins ago',
-      txHash: undefined,
-      reason: 'TargetNotAllowed (Contract blocked unauthorized target 0xDead...bEEf)',
-    },
-    {
-      id: 'sim-3',
-      type: 'blocked',
-      agentId: 108n,
-      mandateId: 2n,
-      target: '0x5555555555555555555555555555555555555555',
-      selector: '0x23b872dd',
-      value: parseEther('0.1'),
-      timestamp: '1 hour ago',
-      txHash: undefined,
-      reason: 'ExceedsTotalLimit (Cumulative budget fully depleted)',
-    },
-    {
-      id: 'sim-4',
-      type: 'revoked',
-      agentId: 99n,
-      mandateId: 3n,
-      timestamp: '3 hours ago',
-      txHash: '0x9e1a3d5f7c9b1e3a5d7f9a2b4c6e8d1a3f5c7b9e1a3d7f9a2b4c6e8d1a3f5c7b',
-    },
-  ]);
+  // Simulated Activities State (starts empty; populated only by real user actions in sandbox mode)
+  const [simulatedActivities, setSimulatedActivities] = useState<ActivityItem[]>([]);
 
   // Real Monad Testnet Activities State (strictly real transactions with confirmed hashes)
   const [testnetActivities, setTestnetActivities] = useState<ActivityItem[]>([]);
@@ -266,8 +172,19 @@ export default function SecurityConsoleDashboard() {
   const handleConnectWallet = async () => {
     setStatusAlert(null);
     if (networkMode === 'LOCAL_SIMULATION') {
-      // In LOCAL_SIMULATION, just toggle wallet connection (no hardcoded address)
-      setWalletAddress(walletAddress ? null : '0x0000000000000000000000000000000000000000');
+      // In LOCAL_SIMULATION, generate a clearly-labelled random sandbox address (not a real account)
+      if (walletAddress) {
+        setWalletAddress(null);
+      } else {
+        const bytes = new Uint8Array(20);
+        window.crypto.getRandomValues(bytes);
+        const generated = `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+        setWalletAddress(generated);
+        setStatusAlert({
+          type: 'info',
+          message: `[SIMULATION] Generated random sandbox wallet ${generated.slice(0, 6)}...${generated.slice(-4)} for local testing. This address does not exist on-chain and holds no funds.`,
+        });
+      }
       setConnectedChainId(31337);
       return;
     }
@@ -430,7 +347,7 @@ export default function SecurityConsoleDashboard() {
             agentId: simulatedMandates.find((m) => m.id === id)?.agentId ?? 42n,
             mandateId: id,
             timestamp: 'Just now',
-            txHash: '0x9e1a3d5f7c9b1e3a5d7f9a2b4c6e8d1a3f5c7b9e1a3d7f9a2b4c6e8d1a3f5c7b',
+            txHash: undefined,
           },
           ...prev,
         ]);
@@ -566,7 +483,10 @@ export default function SecurityConsoleDashboard() {
         }
       } else {
         // Local simulation path: explicitly labelled
-        const ownerAddress = (walletAddress || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') as Address;
+        if (!walletAddress) {
+          throw new Error('Connect a wallet first (a simulated sandbox wallet is fine).');
+        }
+        const ownerAddress = walletAddress as Address;
         const nextNonce = BigInt(simulatedMandates.length);
 
         const challengeHash = computeMandateHash({
@@ -610,9 +530,9 @@ export default function SecurityConsoleDashboard() {
             mandateId: newId,
             target: params.targets[0].target,
             selector: params.targets[0].selector,
-            value: params.depositValue ?? 0n,
-            timestamp: 'Just now',
-            txHash: '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06',
+              value: params.depositValue ?? 0n,
+              timestamp: 'Just now',
+              txHash: undefined,
           },
           ...prev,
         ]);
@@ -639,15 +559,25 @@ export default function SecurityConsoleDashboard() {
     if (networkMode === 'MONAD_TESTNET') {
       setStatusAlert({
         type: 'warning',
-        message: 'Attack Simulation Lab runs against isolated local contract scenarios. Switch to LOCAL SIMULATION mode to test all 6 live contract revert scenarios.',
+        message: 'Attack Simulation Lab runs against isolated local contract scenarios. Switch to LOCAL SIMULATION mode to exercise the 5 local attack scenarios.',
       });
       return;
     }
 
+    // Scenarios execute against a mandate that actually exists in this sandbox session
+    const targetMandate = simulatedMandates.find((m) => !m.revoked) || simulatedMandates[0];
+    if (!targetMandate) {
+      setStatusAlert({
+        type: 'warning',
+        message: 'No sandbox mandate exists yet. Create a mandate in LOCAL SIMULATION mode first, then run attack scenarios against it.',
+      });
+      return;
+    }
+
+    const agentId = targetMandate.agentId;
+    const mandateId = targetMandate.id;
+
     if (scenario.expectedResult === 'Success') {
-      const targetMandate = simulatedMandates.find((m) => !m.revoked) || simulatedMandates[0];
-      const agentId = targetMandate?.agentId ?? 42n;
-      const mandateId = targetMandate?.id ?? 1n;
       if (targetMandate) {
         const newSpent = targetMandate.spentValue + parseEther('0.1');
         setSimulatedMandates(
@@ -664,7 +594,7 @@ export default function SecurityConsoleDashboard() {
           selector: scenario.selector,
           value: parseEther(scenario.value),
           timestamp: 'Just now',
-          txHash: '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06',
+          txHash: undefined,
         },
         ...simulatedActivities,
       ]);
@@ -845,7 +775,7 @@ export default function SecurityConsoleDashboard() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
               <AlertTriangle size={18} color="var(--accent-amber)" />
               <span style={{ fontSize: '0.8rem', color: '#fff' }}>
-                <strong>LOCAL SIMULATION MODE (Offline Sandbox):</strong> Displaying illustrative sample mandates and stress-test scenarios. No testnet transactions are submitted.
+                <strong>LOCAL SIMULATION MODE (Offline Sandbox):</strong> No transactions are submitted on-chain. Mandates and events shown here were created locally in this session only.
               </span>
             </div>
 
@@ -976,7 +906,7 @@ export default function SecurityConsoleDashboard() {
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                     {networkMode === 'MONAD_TESTNET'
                       ? (walletAddress ? `${activeMandates.length} on-chain policies` : 'Connect wallet to query')
-                      : 'Simulated Sample Mandates'}
+                      : 'Sandbox mandates created this session'}
                   </span>
                 </div>
 
@@ -993,7 +923,7 @@ export default function SecurityConsoleDashboard() {
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                     {networkMode === 'MONAD_TESTNET'
                       ? (walletAddress ? 'Contract Vault Deposits' : 'Connect to load balance')
-                      : 'Simulated Balance'}
+                      : 'Sandbox only — not on-chain'}
                   </span>
                 </div>
 

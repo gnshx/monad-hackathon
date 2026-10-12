@@ -40,45 +40,24 @@ interface DraftPolicy {
 }
 
 export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
-  const [prompt, setPrompt] = useState(
-    'Allow trading agent 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 to execute automated swaps on Uniswap router 0x3333333333333333333333333333333333333333 up to 0.2 MON per transaction with a 1.0 MON total budget expiring in 48 hours.'
-  );
+  const [prompt, setPrompt] = useState('');
   const [isCompiling, setIsCompiling] = useState(false);
-  const [draft, setDraft] = useState<DraftPolicy | null>({
-    summary: 'Automated DEX Liquidity & Swap Policy',
-    agentAddress: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
-    agentId: '42',
-    targetAddress: '0x3333333333333333333333333333333333333333',
-    selector: '0xa9059cbb',
-    selectorName: 'transfer(address,uint256)',
-    maxPerTx: '0.2',
-    maxTotal: '1.0',
-    depositAmount: '0.5',
-    durationHours: '48',
-    isWildcard: false,
-    isUnresolved: false,
-    unresolvedFields: [],
-    riskScore: 'Strict',
-    securityGuarantees: [
-      'Single target contract allowlist (halts calls to rogue addresses)',
-      'Exact 4-byte selector restriction (disallows arbitrary external execution)',
-      'Per-transaction spending cap enforced by smart contract',
-      'Time-bounded authorization with automatic expiry',
-    ],
-  });
+  // No draft is shown until the user explicitly compiles their prompt
+  const [draft, setDraft] = useState<DraftPolicy | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   const promptPresets = [
     {
-      title: 'DeFi Swaps (DEX Allowlist)',
-      text: 'Allow trading agent 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 to execute automated swaps on Uniswap router 0x3333333333333333333333333333333333333333 up to 0.2 MON per transaction with a 1.0 MON total budget expiring in 48 hours.',
+      title: 'Token Transfers (Exact Selector)',
+      text: 'Allow trading agent 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 to call treasury 0x3333333333333333333333333333333333333333 with selector 0xa9059cbb up to 0.2 MON per transaction with a 1.0 MON total budget expiring in 48 hours.',
     },
     {
       title: 'Micro-relayer (Wildcard Warning)',
-      text: 'Grant gas relayer agent 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC permission to call treasury 0x4444444444444444444444444444444444444444 with selector 0x00000000 up to 0.05 MON per action and 0.3 MON total.',
+      text: 'Grant gas relayer agent 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC permission to call treasury 0x4444444444444444444444444444444444444444 with wildcard selector 0x00000000 up to 0.05 MON per action and 0.3 MON total expiring in 168 hours.',
     },
     {
       title: 'NFT Minting (Specific Selector)',
-      text: 'Authorize minting agent 0x90F79bf6EB2c4f870365E785982E1f101E93b906 on NFT contract 0x7777777777777777777777777777777777777777 selector 0xa0712d68 up to 0.25 MON per mint, max 1.0 MON total for 24 hours.',
+      text: 'Authorize minting agent 0x90F79bf6EB2c4f870365E785982E1f101E93b906 on NFT contract 0x7777777777777777777777777777777777777777 with selector 0xa0712d68 up to 0.25 MON per mint, max 1.0 MON total for 24 hours.',
     },
   ];
 
@@ -86,69 +65,75 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
     setIsCompiling(true);
     setTimeout(() => {
       const lower = prompt.toLowerCase();
-      let target = '0x3333333333333333333333333333333333333333';
-      let agent = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
-      let selector = '0xa9059cbb';
-      let selectorName = 'transfer(address,uint256)';
-      let maxPerTx = '0.2';
-      let maxTotal = '1.0';
-      let duration = '48';
-      let isWildcard = false;
       const unresolvedFields: string[] = [];
       const guarantees: string[] = [];
 
-      // Extract hex addresses
-      const addrMatches = prompt.match(/0x[a-fA-F0-9]{40}/g);
-      if (addrMatches && addrMatches.length > 0) {
-        agent = addrMatches[0];
-        if (addrMatches.length > 1) {
-          target = addrMatches[1];
+      // 1. Extract hex addresses from the prompt (agent first, target second)
+      const addrMatches = prompt.match(/0x[a-fA-F0-9]{40}/g) ?? [];
+      const agent = addrMatches[0] ?? '';
+      const target = addrMatches[1] ?? '';
+      if (!agent) unresolvedFields.push('Agent address missing from prompt');
+      if (!target) unresolvedFields.push('Target contract missing from prompt');
+
+      // 2. Extract an explicit 4-byte selector if present, else infer from keywords
+      const selectorMatch = prompt.match(/0x[0-9a-fA-F]{8}(?![0-9a-fA-F])/);
+      let selector = selectorMatch ? selectorMatch[0].toLowerCase() : '';
+      let selectorName = selector ? 'User-specified selector' : '';
+      let isWildcard = selector === '0x00000000';
+      if (!selector) {
+        if (/relayer|native call|wildcard/.test(lower)) {
+          selector = '0x00000000';
+          selectorName = '0x00000000 (Wildcard / Native Call)';
+          isWildcard = true;
+        } else if (/mint/.test(lower)) {
+          selector = '0xa0712d68';
+          selectorName = 'mint(uint256)';
+        } else if (/transfer/.test(lower)) {
+          selector = '0xa9059cbb';
+          selectorName = 'transfer(address,uint256)';
         } else {
-          unresolvedFields.push('Target address not explicitly identified in prompt');
+          unresolvedFields.push('Method selector not stated (write a 4-byte selector like 0xa9059cbb, or say "wildcard")');
         }
-      } else {
-        unresolvedFields.push('Agent address missing');
-        unresolvedFields.push('Target contract missing');
       }
 
-      if (lower.includes('nft') || lower.includes('mint')) {
-        selector = '0xa0712d68';
-        selectorName = 'mint(uint256)';
-        maxPerTx = '0.25';
-        maxTotal = '1.0';
-        duration = '24';
-      } else if (lower.includes('relayer') || lower.includes('0x00000000') || lower.includes('wildcard')) {
-        selector = '0x00000000';
-        selectorName = '0x00000000 (Wildcard / Native Call)';
-        maxPerTx = '0.05';
-        maxTotal = '0.3';
-        duration = '168';
-        isWildcard = true;
-      }
+      // 3. Extract spending limits and duration actually written in the prompt
+      const perTxMatch = prompt.match(/(\d+(?:\.\d+)?)\s*MON\s*(?:per|each|max(?:imum)?)?\s*(?:tx|transaction|action|transfer|call|mint)/i);
+      const totalMatch = prompt.match(/(\d+(?:\.\d+)?)\s*MON\s*(?:total|budget|cumulative|overall)/i);
+      const hoursMatch = prompt.match(/(\d+)\s*hours?/i);
+      const depositMatch = prompt.match(/deposit\w*\s*(\d+(?:\.\d+)?)\s*MON/i);
 
-      guarantees.push(`Contract allowlist bounds destination strictly to ${target.slice(0, 8)}...`);
-      guarantees.push(`Per-transaction execution cap enforced at ${maxPerTx} MON`);
-      guarantees.push(`Cumulative budget limit capped at ${maxTotal} MON`);
+      const maxPerTx = perTxMatch ? perTxMatch[1] : '';
+      const maxTotal = totalMatch ? totalMatch[1] : '';
+      const duration = hoursMatch ? hoursMatch[1] : '';
+      if (!maxPerTx) unresolvedFields.push('Per-transaction limit not stated (e.g. "0.2 MON per transaction")');
+      if (!maxTotal) unresolvedFields.push('Total budget not stated (e.g. "1.0 MON total")');
+      if (!duration) unresolvedFields.push('Expiry not stated (e.g. "expiring in 48 hours")');
+
+      // 4. Invariant guarantees reflect only what was actually parsed
+      if (target) guarantees.push(`Contract allowlist bounds destination strictly to ${target.slice(0, 8)}...`);
+      if (maxPerTx) guarantees.push(`Per-transaction execution cap enforced at ${maxPerTx} MON`);
+      if (maxTotal) guarantees.push(`Cumulative budget limit capped at ${maxTotal} MON`);
       if (isWildcard) {
         guarantees.push('Caution: Selector is wildcard 0x00000000 (allows any method on target)');
-      } else {
+      } else if (selector) {
         guarantees.push(`Selector locked to ${selector} (${selectorName})`);
       }
+      if (duration) guarantees.push(`Time-bounded authorization expiring after ${duration} hours`);
 
       setDraft({
-        summary: lower.includes('nft')
+        summary: /mint/.test(lower)
           ? 'NFT Autonomous Minting Policy'
           : isWildcard
           ? 'Native Relayer Execution Policy'
-          : 'DEX Automated Swap Policy',
+          : 'Scoped Delegation Policy',
         agentAddress: agent,
-        agentId: '42',
+        agentId: '',
         targetAddress: target,
         selector,
         selectorName,
         maxPerTx,
         maxTotal,
-        depositAmount: (parseFloat(maxTotal) * 0.5).toFixed(2),
+        depositAmount: depositMatch ? depositMatch[1] : '0',
         durationHours: duration,
         isWildcard,
         isUnresolved: unresolvedFields.length > 0,
@@ -162,6 +147,20 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
 
   const handleApproveDraft = () => {
     if (!draft || draft.isUnresolved) return;
+
+    if (!draft.agentId.trim() || isNaN(Number(draft.agentId)) || Number(draft.agentId) < 0) {
+      setApprovalError('Enter a valid ERC-8004 Registry Agent ID before authorizing.');
+      return;
+    }
+    if (isNaN(Number(draft.maxPerTx)) || isNaN(Number(draft.maxTotal)) || Number(draft.maxPerTx) <= 0) {
+      setApprovalError('Parsed spending limits are not valid positive numbers.');
+      return;
+    }
+    if (Number(draft.maxTotal) < Number(draft.maxPerTx)) {
+      setApprovalError('Total budget must be greater than or equal to the per-transaction limit.');
+      return;
+    }
+    setApprovalError(null);
 
     const expiresAt =
       draft.durationHours === '0'
@@ -377,19 +376,33 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
             {/* Bound Agent Address */}
             <div className="mono-box">
               <span className="kpi-label">BOUND AGENT</span>
-              <div style={{ color: '#fff', marginTop: '0.25rem' }}>
-                {draft.agentAddress}
+              <div style={{ color: '#fff', marginTop: '0.25rem', wordBreak: 'break-all' }}>
+                {draft.agentAddress || (
+                  <span style={{ color: 'var(--accent-rose)' }}>Not provided in prompt</span>
+                )}
               </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                ERC-8004 Registry ID #{draft.agentId}
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                ERC-8004 Registry ID:{' '}
+                <input
+                  type="number"
+                  min="0"
+                  className="input-field mono"
+                  style={{ fontSize: '0.72rem', padding: '0.15rem 0.4rem', width: '90px', display: 'inline-block' }}
+                  value={draft.agentId}
+                  onChange={(e) => setDraft({ ...draft, agentId: e.target.value })}
+                  placeholder="42"
+                  aria-label="ERC-8004 Registry Agent ID"
+                />
               </div>
             </div>
 
             {/* Target Address */}
             <div className="mono-box">
               <span className="kpi-label">TARGET CONTRACT</span>
-              <div style={{ color: '#fff', marginTop: '0.25rem' }}>
-                {draft.targetAddress}
+              <div style={{ color: '#fff', marginTop: '0.25rem', wordBreak: 'break-all' }}>
+                {draft.targetAddress || (
+                  <span style={{ color: 'var(--accent-rose)' }}>Not provided in prompt</span>
+                )}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                 Allowlisted Execution Destination
@@ -399,13 +412,21 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
             {/* Selector */}
             <div className="mono-box">
               <span className="kpi-label">METHOD & SELECTOR</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.25rem' }}>
-                <span className={`badge ${draft.isWildcard ? 'badge-amber' : 'badge-neutral'}`}>
-                  {draft.selector}
-                </span>
-                <span style={{ color: '#fff', fontSize: '0.75rem' }}>
-                  {draft.selectorName}
-                </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                {draft.selector ? (
+                  <>
+                    <span className={`badge ${draft.isWildcard ? 'badge-amber' : 'badge-neutral'}`}>
+                      {draft.selector}
+                    </span>
+                    <span style={{ color: '#fff', fontSize: '0.75rem' }}>
+                      {draft.selectorName}
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ color: 'var(--accent-rose)', fontSize: '0.75rem' }}>
+                    Not resolved — state a selector or "wildcard"
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                 {draft.isWildcard ? 'Permits all target methods' : 'Strict 4-byte signature'}
@@ -415,19 +436,43 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
             {/* Caps & Deposit */}
             <div className="mono-box">
               <span className="kpi-label">SPENDING BOUNDS & DURATION</span>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', marginTop: '0.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--accent-emerald)', fontWeight: 700 }}>
-                  {draft.maxPerTx} MON
+                  {draft.maxPerTx || '—'} MON
                 </span>
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-                  / tx (max {draft.maxTotal} MON)
+                  / tx (max {draft.maxTotal || '—'} MON)
                 </span>
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                Deposit: {draft.depositAmount} MON · Expiry: {draft.durationHours}h
+                Deposit: {draft.depositAmount} MON · Expiry: {draft.durationHours ? `${draft.durationHours}h` : '—'}
               </div>
             </div>
           </div>
+
+          {/* Approval validation error */}
+          {approvalError && (
+            <div
+              style={{
+                background: 'var(--accent-rose-subtle)',
+                border: '1px solid var(--accent-rose-border)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.65rem 0.85rem',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.5rem',
+                fontSize: '0.75rem',
+                color: 'var(--accent-rose)',
+              }}
+            >
+              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <strong>Cannot authorize: </strong>
+                {approvalError}
+              </div>
+            </div>
+          )}
 
           {/* Invariant Guarantees */}
           <div
@@ -462,6 +507,19 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
               ))}
             </ul>
           </div>
+        </div>
+      )}
+
+      {/* Helpful Empty State when no draft is compiled yet */}
+      {!draft && (
+        <div className="security-card" style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
+          <Sparkles size={28} color="var(--text-muted)" style={{ margin: '0 auto 0.75rem', opacity: 0.6 }} />
+          <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            No Mandate Policy Compiled Yet
+          </h4>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '440px', margin: '0.25rem auto 0' }}>
+            Enter a natural-language permission request above or click a preset to compile on-chain spending bounds, targets, and selectors into a verifiable mandate.
+          </p>
         </div>
       )}
     </div>

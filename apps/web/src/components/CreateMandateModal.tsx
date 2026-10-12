@@ -34,17 +34,14 @@ export function CreateMandateModal({
   initialParams,
   networkMode = 'MONAD_TESTNET',
 }: CreateMandateModalProps) {
-  const [agentAddress, setAgentAddress] = useState('0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
-  const [agentId, setAgentId] = useState('42');
-  const [maxPerTx, setMaxPerTx] = useState('0.1');
-  const [maxTotal, setMaxTotal] = useState('1.0');
-  const [depositAmount, setDepositAmount] = useState('0.5');
-  const [durationHours, setDurationHours] = useState('168'); // 7 days default
+  const [agentAddress, setAgentAddress] = useState('');
+  const [agentId, setAgentId] = useState('');
+  const [maxPerTx, setMaxPerTx] = useState('');
+  const [maxTotal, setMaxTotal] = useState('');
+  const [depositAmount, setDepositAmount] = useState('');
+  const [durationHours, setDurationHours] = useState('24');
   const [targets, setTargets] = useState<Array<{ target: string; selector: string }>>([
-    {
-      target: '0x3333333333333333333333333333333333333333',
-      selector: '0xa9059cbb',
-    },
+    { target: '', selector: '0x00000000' },
   ]);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,6 +94,10 @@ export function CreateMandateModal({
       const cleanAgent = agentAddress.trim();
       if (!cleanAgent.startsWith('0x') || cleanAgent.length !== 42) {
         throw new Error(`Invalid agent wallet address format: ${cleanAgent}`);
+      }
+
+      if (!agentId.trim() || isNaN(Number(agentId)) || Number(agentId) < 0) {
+        throw new Error('ERC-8004 Registry Agent ID must be a non-negative number');
       }
 
       if (targets.length === 0) {
@@ -277,6 +278,7 @@ export function CreateMandateModal({
                 className="input-field mono"
                 value={agentId}
                 onChange={(e) => setAgentId(e.target.value)}
+                placeholder="42"
                 disabled={isLoading}
                 required
               />
