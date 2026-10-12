@@ -409,13 +409,16 @@ export function ReceiptInspector() {
                 {isVerifying ? 'Auditing On-Chain Evidence...' : 'Audit On-Chain Evidence'}
               </button>
 
-              <button
-                className="btn-secondary"
-                onClick={() => handleLoadSample('local_sandbox')}
-                title="Fill with recent reproducible local demo transaction"
-              >
-                Load Local Demo Sample
-              </button>
+              {network === 'local_sandbox' && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => handleLoadSample('local_sandbox')}
+                  title="Fill with reproducible local Anvil demo transaction"
+                >
+                  Load Local Demo Sample
+                </button>
+              )}
             </div>
 
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
@@ -558,9 +561,9 @@ export function ReceiptInspector() {
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '480px', margin: '0.35rem auto 1rem auto' }}>
             Provide a Monad transaction hash and MandateManager contract address above to independently verify on-chain consensus, event topics, and spending constraints.
           </p>
-          <button className="btn-secondary" onClick={() => handleLoadSample('local_sandbox')} style={{ fontSize: '0.78rem' }}>
-            Load Verified Local Demo Hash
-          </button>
+          <p style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
+            Note: This auditor queries Monad Testnet (Chain ID 10143) directly. No local simulation mode available.
+          </p>
         </div>
       )}
     </div>
