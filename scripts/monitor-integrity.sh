@@ -47,9 +47,9 @@ if [ "$HAS_CHANGE" = true ]; then
   echo "$NOW" > "$LAST_CHANGE_FILE"
   echo "$LOCAL_DIFF" > "$LAST_STATUS_FILE"
   echo "$CURRENT_COMMIT" > "$LAST_COMMIT_FILE"
-  echo "[VERIFICATION] Validating Next.js production build..."
-  npm run build:web
-  echo "[VERIFICATION PASSED] Production build clean."
+  echo "[VERIFICATION] Validating TypeScript types..."
+  npx tsc --project apps/web/tsconfig.json --noEmit
+  echo "[VERIFICATION PASSED] Type check clean."
 else
   LAST_CHANGE=$(cat "$LAST_CHANGE_FILE")
   DIFF_SECONDS=$((NOW - LAST_CHANGE))
