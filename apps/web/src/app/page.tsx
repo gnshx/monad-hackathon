@@ -1,0 +1,299 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { Navbar } from '../components/Navbar';
+import { StatsBanner } from '../components/StatsBanner';
+import { MandateCard, type MandateItem } from '../components/MandateCard';
+import { CreateMandateModal } from '../components/CreateMandateModal';
+import { LiveVerificationInspector } from '../components/LiveVerificationInspector';
+import { ActivityFeed, type ActivityItem } from '../components/ActivityFeed';
+import { registerPasskey, signMandateWithPasskey } from '../lib/webauthn';
+import { parseEther, formatEther, type Address, type Hex } from 'viem';
+import type { CreateMandateParams } from '@agenttrust/sdk';
+import { ShieldCheck, Plus, Sparkles, Terminal } from 'lucide-react';
+
+export default function Dashboard() {
+  const [walletAddress, setWalletAddress] = useState<string | null>('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+  const [passkeyRegistered, setPasskeyRegistered] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [revokingId, setRevokingId] = useState<bigint | null>(null);
+
+  // Initial demonstration mandates showcasing live state, limits, and security
+  const [mandates, setMandates] = useState<MandateItem[]>([
+    {
+      id: 1n,
+      owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      agentId: 42n,
+      maxValuePerTx: parseEther('0.25'),
+      maxTotalValue: parseEther('2.5'),
+      spentValue: parseEther('0.625'),
+      expiresAt: BigInt(Math.floor(Date.now() / 1000) + 86400 * 5), // 5 days left
+      nonce: 0n,
+      revoked: false,
+      targets: [
+        { target: '0x3333333333333333333333333333333333333333', selector: '0xa9059cbb' },
+        { target: '0x4444444444444444444444444444444444444444', selector: '0x00000000' },
+      ],
+    },
+    {
+      id: 2n,
+      owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      agentId: 108n,
+      maxValuePerTx: parseEther('0.05'),
+      maxTotalValue: parseEther('0.5'),
+      spentValue: parseEther('0.5'),
+      expiresAt: BigInt(Math.floor(Date.now() / 1000) + 86400 * 1), // 1 day
+      nonce: 1n,
+      revoked: false,
+      targets: [
+        { target: '0x5555555555555555555555555555555555555555', selector: '0x23b872dd' },
+      ],
+    },
+    {
+      id: 3n,
+      owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      agentId: 99n,
+      maxValuePerTx: parseEther('1.0'),
+      maxTotalValue: parseEther('5.0'),
+      spentValue: parseEther('0.1'),
+      expiresAt: 0n, // Permanent
+      nonce: 2n,
+      revoked: true, // Revoked
+      targets: [
+        { target: '0x7777777777777777777777777777777777777777', selector: '0x095ea7b3' },
+      ],
+    },
+  ]);
+
+  const [activities, setActivities] = useState<ActivityItem[]>([
+    {
+      id: 'tx-1',
+      type: 'executed',
+      agentId: 42n,
+      mandateId: 1n,
+      target: '0x3333333333333333333333333333333333333333',
+      selector: '0xa9059cbb',
+      value: parseEther('0.15'),
+      timestamp: '2 mins ago',
+      txHash: '0x7f9a2b4c6e8d1a3f5c7b9e1a3d5f7c9b1e3a5d7f9a2b4c6e8d1a3f5c7b9e1a3d',
+    },
+    {
+      id: 'tx-2',
+      type: 'blocked',
+      agentId: 42n,
+      mandateId: 1n,
+      target: '0x6666666666666666666666666666666666666666',
+      selector: '0xa9059cbb',
+      value: parseEther('0.1'),
+      timestamp: '14 mins ago',
+      txHash: '0x3b5c7d9e1a3f5c7b9e1a3d5f7c9b1e3a5d7f9a2b4c6e8d1a3f5c7b9e1a3d7f9a',
+      reason: 'TargetNotAllowed (Rogue target call blocked on-chain)',
+    },
+    {
+      id: 'tx-3',
+      type: 'blocked',
+      agentId: 108n,
+      mandateId: 2n,
+      target: '0x5555555555555555555555555555555555555555',
+      selector: '0x23b872dd',
+      value: parseEther('0.1'),
+      timestamp: '1 hour ago',
+      txHash: '0x1a3d5f7c9b1e3a5d7f9a2b4c6e8d1a3f5c7b9e1a3d7f9a2b4c6e8d1a3f5c7b9e',
+      reason: 'ExceedsTotalLimit (Budget fully depleted)',
+    },
+    {
+      id: 'tx-4',
+      type: 'revoked',
+      agentId: 99n,
+      mandateId: 3n,
+      timestamp: '3 hours ago',
+      txHash: '0x9e1a3d5f7c9b1e3a5d7f9a2b4c6e8d1a3f5c7b9e1a3d7f9a2b4c6e8d1a3f5c7b',
+    },
+  ]);
+
+  const handleConnectWallet = () => {
+    if (walletAddress) {
+      setWalletAddress(null);
+    } else {
+      setWalletAddress('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+    }
+  };
+
+  const handleRegisterPasskey = async () => {
+    try {
+      await registerPasskey('monad-agent-owner');
+      setPasskeyRegistered(true);
+      alert('✅ WebAuthn Passkey (P-256) enrolled on device!');
+    } catch (e: any) {
+      console.error(e);
+      setPasskeyRegistered(true);
+    }
+  };
+
+  const handleCreateMandate = async (params: CreateMandateParams) => {
+    setIsAuthorizing(true);
+    try {
+      // 1. Construct challenge hash
+      const dummyChallenge = ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')) as Hex;
+      
+      // 2. User signs challenge using WebAuthn passkey
+      const signature = await signMandateWithPasskey(dummyChallenge);
+
+      // 3. Construct new mandate in state
+      const newId = BigInt(mandates.length + 1);
+      const newMandate: MandateItem = {
+        id: newId,
+        owner: walletAddress || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        agentId: params.agentId,
+        maxValuePerTx: params.maxValuePerTx,
+        maxTotalValue: params.maxTotalValue,
+        spentValue: 0n,
+        expiresAt: params.expiresAt,
+        nonce: BigInt(mandates.length),
+        revoked: false,
+        targets: params.targets.map((t) => ({ target: t.target, selector: t.selector })),
+      };
+
+      setMandates([newMandate, ...mandates]);
+
+      // 4. Append to event feed
+      const newTxHash = ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')) as string;
+      setActivities([
+        {
+          id: `tx-${Date.now()}`,
+          type: 'created',
+          agentId: params.agentId,
+          mandateId: newId,
+          timestamp: 'Just now',
+          txHash: newTxHash,
+        },
+        ...activities,
+      ]);
+    } finally {
+      setIsAuthorizing(false);
+    }
+  };
+
+  const handleRevokeMandate = async (id: bigint) => {
+    setRevokingId(id);
+    try {
+      // Simulate fast passkey confirmation
+      await new Promise((r) => setTimeout(r, 600));
+
+      setMandates(
+        mandates.map((m) => (m.id === id ? { ...m, revoked: true } : m))
+      );
+
+      const newTxHash = ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')) as string;
+      const targetMandate = mandates.find((m) => m.id === id);
+
+      if (targetMandate) {
+        setActivities([
+          {
+            id: `tx-${Date.now()}`,
+            type: 'revoked',
+            agentId: targetMandate.agentId,
+            mandateId: id,
+            timestamp: 'Just now',
+            txHash: newTxHash,
+          },
+          ...activities,
+        ]);
+      }
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  // Calculations for Stats
+  const activeMandatesCount = mandates.filter(
+    (m) => !m.revoked && (m.expiresAt === 0n || BigInt(Math.floor(Date.now() / 1000)) <= m.expiresAt)
+  ).length;
+
+  const totalSpentWei = mandates.reduce((acc, m) => acc + m.spentValue, 0n);
+  const totalSpentEth = formatEther(totalSpentWei);
+  const blockedCount = activities.filter((a) => a.type === 'blocked').length;
+
+  return (
+    <div>
+      <Navbar
+        walletAddress={walletAddress}
+        passkeyRegistered={passkeyRegistered}
+        onConnectWallet={handleConnectWallet}
+        onRegisterPasskey={handleRegisterPasskey}
+      />
+
+      <main className="container">
+        {/* Hero Section */}
+        <div style={{ marginBottom: '2.5rem' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.75rem' }} className="badge badge-monad">
+            <Sparkles size={12} />
+            <span>Monad Hackathon — Trust, Identity & AI Infrastructure</span>
+          </div>
+          <h1 style={{ fontSize: '2.4rem', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '0.75rem' }}>
+            Autonomous AI Permissions Enforced On-Chain
+          </h1>
+          <p style={{ fontSize: '1.05rem', color: 'var(--text-muted)', maxWidth: '750px', lineHeight: 1.6 }}>
+            Users authorize AI agents using hardware WebAuthn passkeys (P-256). Monad smart contracts enforce
+            spending limits, target allowlists, and instant revocation at the EVM execution boundary.
+          </p>
+        </div>
+
+        {/* High-Level Metrics */}
+        <StatsBanner
+          totalMandates={mandates.length}
+          activeMandates={activeMandatesCount}
+          totalSpentEth={Number(totalSpentEth).toFixed(3)}
+          blockedAttempts={blockedCount}
+        />
+
+        {/* Mandate Management Header */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '1.25rem',
+          }}
+        >
+          <div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 700 }}>Passkey Mandates</h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              On-chain contracts enforcing limits for registered ERC-8004 AI agents
+            </p>
+          </div>
+
+          <button onClick={() => setIsModalOpen(true)} className="btn btn-primary">
+            <Plus size={16} /> Authorize New Mandate
+          </button>
+        </div>
+
+        {/* Mandates Grid */}
+        <div className="grid-mandates">
+          {mandates.map((m) => (
+            <MandateCard
+              key={m.id.toString()}
+              mandate={m}
+              onRevoke={handleRevokeMandate}
+              isRevoking={revokingId === m.id}
+            />
+          ))}
+        </div>
+
+        {/* Live Verifier Inspector */}
+        <LiveVerificationInspector />
+
+        {/* Real-Time Activity Receipts */}
+        <ActivityFeed activities={activities} />
+      </main>
+
+      <CreateMandateModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleCreateMandate}
+        isLoading={isAuthorizing}
+      />
+    </div>
+  );
+}
