@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { X, KeyRound, ShieldPlus, AlertCircle, Plus, Trash2 } from 'lucide-react';
-import { parseEther, type Address, type Hex } from 'viem';
+import { parseEther, formatEther, type Address, type Hex } from 'viem';
 import type { AllowedTarget, CreateMandateParams } from '@agenttrust/sdk';
 
 interface CreateMandateModalProps {
@@ -10,6 +10,7 @@ interface CreateMandateModalProps {
   onClose: () => void;
   onSubmit: (params: CreateMandateParams) => Promise<void>;
   isLoading: boolean;
+  initialParams?: Partial<CreateMandateParams> | null;
 }
 
 export function CreateMandateModal({
@@ -17,6 +18,7 @@ export function CreateMandateModal({
   onClose,
   onSubmit,
   isLoading,
+  initialParams,
 }: CreateMandateModalProps) {
   const [agentAddress, setAgentAddress] = useState('0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
   const [agentId, setAgentId] = useState('42');
@@ -31,6 +33,19 @@ export function CreateMandateModal({
     },
   ]);
   const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (initialParams) {
+      if (initialParams.agentAddress) setAgentAddress(initialParams.agentAddress);
+      if (initialParams.agentId !== undefined) setAgentId(initialParams.agentId.toString());
+      if (initialParams.maxValuePerTx) setMaxPerTx(formatEther(initialParams.maxValuePerTx));
+      if (initialParams.maxTotalValue) setMaxTotal(formatEther(initialParams.maxTotalValue));
+      if (initialParams.depositValue) setDepositAmount(formatEther(initialParams.depositValue));
+      if (initialParams.targets && initialParams.targets.length > 0) {
+        setTargets(initialParams.targets.map((t) => ({ target: t.target, selector: t.selector })));
+      }
+    }
+  }, [initialParams, isOpen]);
 
   if (!isOpen) return null;
 
