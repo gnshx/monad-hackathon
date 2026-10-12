@@ -1,4 +1,6 @@
 # Node & Workspaces
+tools/
+apps/web/logo.jpg
 node_modules/
 .pnpm-store/
 npm-debug.log*

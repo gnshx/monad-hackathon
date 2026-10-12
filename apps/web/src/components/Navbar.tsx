@@ -19,13 +19,28 @@ export function Navbar({
   return (
     <nav className="navbar">
       <div className="brand">
-        <div className="brand-icon">
-          <Shield size={20} color="#ffffff" />
-        </div>
+        <img
+          src="/logo.jpg"
+          alt="AgentTrust"
+          style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            objectFit: 'cover',
+            border: '1px solid var(--border-highlight, #836ef9)',
+            boxShadow: '0 0 12px rgba(131, 110, 249, 0.4)'
+          }}
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = 'none';
+          }}
+        />
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span className="brand-title">AgentTrust</span>
             <span className="brand-tag">Monad Testnet</span>
+            <span className="badge badge-monad" style={{ fontSize: '0.65rem', padding: '0.15rem 0.45rem' }}>
+              ⚡ P256 Precompile: 0x100
+            </span>
           </div>
           <p style={{ fontSize: '0.7rem', color: 'var(--text-faint)' }}>
             Passkey-Authorized On-Chain AI Agent Permissions
