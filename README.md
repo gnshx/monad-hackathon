@@ -79,7 +79,7 @@ This runs `scripts/run-demo.ts` on a local EVM node, executing:
 | **Receipt Inspector** | **REAL.** Starts in unverified state; queries live Monad Testnet RPC (`Chain ID: 10143`); validates bytecode deployment; verifies logs. |
 | **WebAuthn Passkey Signing** | **REAL.** Fails closed on device prompt dismissal or errors; extracts actual SPKI DER P-256 public keys. |
 | **Smart Contract Logic** | **PROVEN REAL.** 29/29 Foundry tests pass including 1,000-run fuzz tests. |
-| **Attack Lab Scenarios** | **EXPLAINABLE SIMULATION.** Exercises local contract invariants; labeled as `Local Sandbox Preflight` with simulated EVM reverts (no fake transaction hashes). |
+| **Attack Lab Scenarios** | **EXPLAINABLE SIMULATION.** Exercises local contract invariants in the browser; labeled `Execution Mode: Local Preflight` — nothing is broadcast and no transaction receipts are fabricated. |
 | **Monad Testnet Deployment** | **DOCUMENTED LIMITATION.** Due to lack of a funded testnet wallet during hackathon build, contracts are not claimed as deployed on testnet. The UI cleanly detects 0-byte bytecode and discloses this limitation. |
 
 ### 7. Where can I verify deployment / transactions?

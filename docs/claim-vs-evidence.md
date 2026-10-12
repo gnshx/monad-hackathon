@@ -33,7 +33,9 @@ AgentTrust enforces strict network isolation:
    - Never generates synthetic random transaction hashes.
    - Starts Receipt Inspector in unverified state (`null`).
 
-2. **`LOCAL SIMULATION (31337)`**:
-   - Runs against local Anvil development chain (`http://127.0.0.1:8545`).
-   - Every card and activity item is prominently tagged with `[SIMULATED]`.
-   - Reverted attack simulations are labeled `Simulated EVM Revert`, never "On-Chain Blocked".
+ 2. **`LOCAL SIMULATION (31337)`**:
+   - Runs an offline in-browser sandbox; no RPC connection is made.
+   - Every card and activity item is prominently tagged as simulation.
+   - Sandbox wallets are randomly generated and labeled, never real addresses.
+   - Attack Lab runs as labeled browser preflight (`Execution Mode: Local Preflight`), never "On-Chain Blocked".
+   - Starts with zero mandates and zero activity; nothing is seeded.
