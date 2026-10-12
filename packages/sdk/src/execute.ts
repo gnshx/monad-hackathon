@@ -54,7 +54,6 @@ export async function executeAction(
         params.value,
         execNonce,
       ],
-      value: params.value,
     });
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash });

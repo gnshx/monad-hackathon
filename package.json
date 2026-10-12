@@ -10,6 +10,7 @@
     "build:sdk": "npm run --workspace=@agenttrust/sdk build",
     "test:sdk": "npm run --workspace=@agenttrust/sdk test",
     "build:agent": "npm run --workspace=@agenttrust/demo-agent build",
-    "build:web": "npm run --workspace=@agenttrust/web build"
+    "build:web": "npm run --workspace=@agenttrust/web build",
+    "demo": "npx -y tsx scripts/run-demo.ts"
   }
 }

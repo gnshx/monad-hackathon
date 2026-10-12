@@ -19,6 +19,7 @@ dist/
 # Foundry
 contracts/cache/
 contracts/out/
+contracts/broadcast/
 *.abi
 *.bin
 

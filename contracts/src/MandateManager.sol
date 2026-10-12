@@ -440,6 +440,29 @@ contract MandateManager is ReentrancyGuard {
         return false;
     }
 
+    /// @notice Compute the canonical hash for a mandate definition.
+    function computeMandateHash(
+        address owner,
+        address agentAddress,
+        uint256 agentId,
+        AllowedTarget[] calldata targets,
+        uint256 maxValuePerTx,
+        uint256 maxTotalValue,
+        uint256 expiresAt,
+        uint256 nonce
+    ) external view returns (bytes32) {
+        return _mandateHash(
+            owner,
+            agentAddress,
+            agentId,
+            targets,
+            maxValuePerTx,
+            maxTotalValue,
+            expiresAt,
+            nonce
+        );
+    }
+
     function _mandateHash(
         address owner,
         address agentAddress,
