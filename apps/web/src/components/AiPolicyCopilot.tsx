@@ -220,7 +220,7 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
           <Info size={15} color="var(--accent-slate)" style={{ flexShrink: 0, marginTop: '2px' }} />
           <div>
             <strong style={{ color: '#fff' }}>Authority Boundary Disclosure: </strong>
-            This policy composer translates plain-English requirements into deterministic EVM constraints. An AI model may suggest permissions; it does not enforce them. The smart contract and your hardware passkey remain the sole enforcement boundary.
+            This composer parses your plain-English prompt with deterministic in-browser rules — there is no LLM call and no network request. It drafts EVM constraints from what you wrote and never enforces anything: the smart contract and your hardware passkey remain the sole enforcement boundary. Review every parsed value before authorizing.
           </div>
         </div>
 

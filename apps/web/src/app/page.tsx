@@ -979,7 +979,7 @@ export default function SecurityConsoleDashboard() {
                     Describe required permissions in plain English. The Copilot compiles deterministic target allowlists and spending limits ready for hardware passkey authorization.
                   </p>
                   <div style={{ marginTop: '1rem', fontSize: '0.8rem', color: 'var(--accent-monad)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    Draft Scoped Mandate with AI <ArrowRight size={14} />
+                    Draft Scoped Mandate <ArrowRight size={14} />
                   </div>
                 </div>
 
