@@ -10,17 +10,20 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { AgentTrustClient, MANDATE_MANAGER_ABI } from '@agenttrust/sdk';
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 
-const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
-const MANDATE_MANAGER_ADDRESS = (process.env.MANDATE_MANAGER_ADDRESS ||
+const RPC_URL = process.env.RPC_URL || process.env.MONAD_RPC_URL || 'http://127.0.0.1:8545';
+let MANDATE_MANAGER_ADDRESS = (process.env.MANDATE_MANAGER_ADDRESS ||
   '0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E') as Address;
-const TARGET_ADDRESS = (process.env.TARGET_ADDRESS ||
+let TARGET_ADDRESS = (process.env.TARGET_ADDRESS ||
   '0x67d269191c92Caf3cD7723F116c85e6E9bf55933') as Address;
 
-const OWNER_PRIVATE_KEY =
-  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as Hex; // Account 0
-const AGENT_PRIVATE_KEY =
-  '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d' as Hex; // Account 1
+const OWNER_PRIVATE_KEY = (process.env.OWNER_PRIVATE_KEY ||
+  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex; // Account 0
+const AGENT_PRIVATE_KEY = (process.env.AGENT_PRIVATE_KEY ||
+  '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d') as Hex; // Account 1
 const STRANGER_PRIVATE_KEY =
   '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a' as Hex; // Account 2
 
@@ -39,21 +42,71 @@ async function runDemo() {
   console.log('       🛡️  AGENTTRUST LIVE DEMO — ON-CHAIN SECURITY PROOF  🛡️    ');
   console.log('================================================================\n');
 
-  const localChain = {
-    id: 31337,
-    name: 'Anvil Localhost',
-    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  const probeClient = createPublicClient({ transport: http(RPC_URL) });
+  let chainId: number;
+  try {
+    chainId = await probeClient.getChainId();
+  } catch (err: any) {
+    console.error(`❌ Could not connect to RPC at ${RPC_URL}.`);
+    console.error(`   If running locally, please start Anvil in a separate terminal:`);
+    console.error(`   $ anvil --port 8545\n`);
+    process.exit(1);
+  }
+
+  const isAnvil = chainId === 31337;
+  const isMonadTestnet = chainId === 10143;
+
+  if (isAnvil) {
+    console.log('⚡ [MODE: LOCAL ANVIL SANDBOX (Chain 31337)]');
+    console.log('   Fast repeatable local EVM sandbox for demonstration & regression testing.');
+    console.log('   Initializing fresh on-chain contract state for reproducible demo...');
+    const forgeBin = fs.existsSync(path.join(process.env.HOME || '', '.foundry/bin/forge'))
+      ? path.join(process.env.HOME || '', '.foundry/bin/forge')
+      : 'forge';
+
+    try {
+      execSync(`${forgeBin} script script/DemoDeploy.s.sol:DemoDeploy --rpc-url http://127.0.0.1:8545 --broadcast`, {
+        cwd: path.resolve(__dirname, '../contracts'),
+        stdio: 'ignore',
+      });
+      const broadcastPath = path.resolve(__dirname, '../contracts/broadcast/DemoDeploy.s.sol/31337/run-latest.json');
+      if (fs.existsSync(broadcastPath)) {
+        const data = JSON.parse(fs.readFileSync(broadcastPath, 'utf8'));
+        const mmTx = data.transactions.find((t: any) => t.contractName === 'MandateManager');
+        const targetTx = data.transactions.find((t: any) => t.contractName === 'MockTarget');
+        if (mmTx?.contractAddress) MANDATE_MANAGER_ADDRESS = mmTx.contractAddress as Address;
+        if (targetTx?.contractAddress) TARGET_ADDRESS = targetTx.contractAddress as Address;
+      }
+      console.log(`   ✓ Fresh MandateManager initialized: ${MANDATE_MANAGER_ADDRESS}`);
+      console.log(`   ✓ Fresh MockTarget initialized:     ${TARGET_ADDRESS}`);
+    } catch (e: any) {
+      console.warn('   ⚠️ Note: Auto-deploy skipped, using preset addresses:', e.message);
+    }
+  } else if (isMonadTestnet) {
+    console.log('🌐 [MODE: MONAD TESTNET (Chain 10143)]');
+    console.log(`   Connected to live Monad Testnet at ${RPC_URL}`);
+    console.log(`   Target MandateManager: ${MANDATE_MANAGER_ADDRESS}`);
+  } else {
+    console.log(`🔗 [MODE: EVM NETWORK (Chain ID: ${chainId})]`);
+    console.log(`   Connected to RPC: ${RPC_URL}`);
+    console.log(`   Target MandateManager: ${MANDATE_MANAGER_ADDRESS}`);
+  }
+
+  const activeChain = {
+    id: chainId,
+    name: isAnvil ? 'Anvil Sandbox' : isMonadTestnet ? 'Monad Testnet' : `EVM Chain ${chainId}`,
+    nativeCurrency: { name: 'Monad', symbol: 'MON', decimals: 18 },
     rpcUrls: { default: { http: [RPC_URL] } },
   };
 
-  const publicClient = createPublicClient({ chain: localChain, transport: http(RPC_URL) });
+  const publicClient = createPublicClient({ chain: activeChain, transport: http(RPC_URL) });
   const ownerAccount = privateKeyToAccount(OWNER_PRIVATE_KEY);
   const agentAccount = privateKeyToAccount(AGENT_PRIVATE_KEY);
   const strangerAccount = privateKeyToAccount(STRANGER_PRIVATE_KEY);
 
-  const ownerWallet = createWalletClient({ account: ownerAccount, chain: localChain, transport: http(RPC_URL) });
-  const agentWallet = createWalletClient({ account: agentAccount, chain: localChain, transport: http(RPC_URL) });
-  const strangerWallet = createWalletClient({ account: strangerAccount, chain: localChain, transport: http(RPC_URL) });
+  const ownerWallet = createWalletClient({ account: ownerAccount, chain: activeChain, transport: http(RPC_URL) });
+  const agentWallet = createWalletClient({ account: agentAccount, chain: activeChain, transport: http(RPC_URL) });
+  const strangerWallet = createWalletClient({ account: strangerAccount, chain: activeChain, transport: http(RPC_URL) });
 
   const sdk = new AgentTrustClient({
     contractAddress: MANDATE_MANAGER_ADDRESS,
@@ -67,7 +120,7 @@ async function runDemo() {
   // ───────────────────────────────────────────────────────────────────────────
   // SCENARIO 0: INSPECT ON-CHAIN MANDATE & VAULT STATE
   // ───────────────────────────────────────────────────────────────────────────
-  console.log('📋 [SCENARIO 0] Querying Passkey Mandate State from Smart Contract...');
+  console.log('\n📋 [SCENARIO 0] Querying Passkey Mandate State from Smart Contract...');
   const mandate = await sdk.getMandate(mandateId);
   const targets = await sdk.getAllowedTargets(mandateId);
   const initialBalance = await sdk.getMandateBalance(mandateId);
@@ -196,7 +249,7 @@ async function runDemo() {
 
   // ───────────────────────────────────────────────────────────────────────────
   // SCENARIO 5: REVOCATION & UNSPENT VAULT WITHDRAWAL
-  // ───────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   console.log('\n----------------------------------------------------------------');
   console.log('🟡 [SCENARIO 5] Human Owner Revokes Mandate & Withdraws Funds');
   console.log('----------------------------------------------------------------');
@@ -237,22 +290,24 @@ async function runDemo() {
   // SCENARIO 6: INDEPENDENT THIRD-PARTY RECEIPT VERIFICATION
   // ───────────────────────────────────────────────────────────────────────────
   console.log('\n----------------------------------------------------------------');
-  console.log('🔍 [SCENARIO 6] Independent Auditor Verifies Execution Receipt');
+  console.log('🔍 [SCENARIO 6] Independent Auditor Verifies On-Chain Execution Record');
   console.log('----------------------------------------------------------------');
-  console.log(`Auditor independently verifying receipt for Scenario 1 tx: ${txHash1}...`);
+  console.log(`Auditing transaction receipt against Monad contract address, event topic, and mandate parameters:`);
 
   const verified = await sdk.verifyReceipt(txHash1, {
     expectedMandateId: mandateId,
     expectedTarget: TARGET_ADDRESS,
   });
 
-  console.log(`   • Verified:        ${verified.verified ? '✅ TRUE' : '❌ FALSE'}`);
-  console.log(`   • Transaction:     ${verified.transactionHash}`);
-  console.log(`   • Status:          ${verified.status}`);
-  console.log(`   • Mandate ID:      #${verified.mandateId?.toString()}`);
-  console.log(`   • Value Executed:  ${formatEther(verified.value || 0n)} MON`);
-  console.log(`   • Target Called:   ${verified.target}`);
-  console.log('   ✅ RESULT: Cryptographic receipt independently verified with Zero-Backend trust!');
+  console.log(`   • Verified Event Record:  ${verified.verified ? '✅ CONFIRMED' : '❌ FAILED'}`);
+  console.log(`   • Transaction Hash:       ${verified.transactionHash}`);
+  console.log(`   • Chain ID:               ${chainId}`);
+  console.log(`   • Contract Address:       ${MANDATE_MANAGER_ADDRESS}`);
+  console.log(`   • Mandate ID:             #${verified.mandateId?.toString()}`);
+  console.log(`   • Value Transferred:      ${formatEther(verified.value || 0n)} MON`);
+  console.log(`   • Destination Target:     ${verified.target}`);
+  console.log('   Notice: This independently verifies the on-chain execution receipt and vault balance deductions');
+  console.log('           against raw event logs without trusting off-chain UI state.');
 
   console.log('\n================================================================');
   console.log(' 🎉  ALL 6 DEMO SCENARIOS PASSED WITH LIVE ON-CHAIN CONSENSUS!  🎉 ');

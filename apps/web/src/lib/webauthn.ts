@@ -11,6 +11,10 @@ export interface PasskeySignatureData {
   sigR: Hex;
   sigS: Hex;
   challengeHash: Hex;
+  authenticatorData: Hex;
+  clientDataJSON: Hex;
+  challengeOffset: bigint;
+  isSimulated?: boolean;
 }
 
 /**
@@ -124,10 +128,24 @@ export async function signMandateWithPasskey(
     // Parse ASN.1 DER signature to extract 32-byte R and S
     const { r, s } = parseDerSignature(signatureDer);
 
+    const authData = new Uint8Array(response.authenticatorData);
+    const clientDataJSONBytes = new Uint8Array(response.clientDataJSON);
+    const clientDataJSONStr = new TextDecoder().decode(clientDataJSONBytes);
+
+    const challengeBytes = hexToUint8Array(challengeHash);
+    let binary = '';
+    for (let i = 0; i < challengeBytes.length; i++) binary += String.fromCharCode(challengeBytes[i]);
+    const base64url = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const challengeOffset = BigInt(Math.max(0, clientDataJSONStr.indexOf(base64url)));
+
     return {
       sigR: toHex(r),
       sigS: toHex(s),
       challengeHash,
+      authenticatorData: toHex(authData),
+      clientDataJSON: toHex(clientDataJSONBytes),
+      challengeOffset,
+      isSimulated: false,
     };
   } catch (err) {
     console.warn('Passkey signature falling back to simulation:', err);
@@ -194,9 +212,27 @@ export function generateSimulatedSignature(challengeHash: Hex): PasskeySignature
     for (let i = 0; i < 32; i++) b[i] = Math.floor(Math.random() * 256);
     return toHex(b);
   };
+
+  const challengeBytes = hexToUint8Array(challengeHash);
+  let binary = '';
+  for (let i = 0; i < challengeBytes.length; i++) binary += String.fromCharCode(challengeBytes[i]);
+  const base64url = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const clientDataJSONStr = `{"type":"webauthn.get","challenge":"${base64url}","origin":"http://localhost:3000"}`;
+  const clientDataJSON = toHex(new TextEncoder().encode(clientDataJSONStr));
+  const challengeOffset = BigInt(clientDataJSONStr.indexOf(base64url));
+
+  // 37 bytes of authenticator data with UP (0x01) bit at byte 32
+  const authData = new Uint8Array(37);
+  authData[32] = 0x01; // User Presence flag
+  authData[36] = 0x01; // Sign count
+
   return {
     sigR: rand(),
     sigS: rand(),
     challengeHash,
+    authenticatorData: toHex(authData),
+    clientDataJSON,
+    challengeOffset,
+    isSimulated: true,
   };
 }
