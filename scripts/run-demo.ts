@@ -13,9 +13,9 @@ import { AgentTrustClient, MANDATE_MANAGER_ABI } from '@agenttrust/sdk';
 
 const RPC_URL = process.env.RPC_URL || 'http://127.0.0.1:8545';
 const MANDATE_MANAGER_ADDRESS = (process.env.MANDATE_MANAGER_ADDRESS ||
-  '0x59b670e9fA9D0A427751Af201D676719a970857b') as Address;
+  '0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E') as Address;
 const TARGET_ADDRESS = (process.env.TARGET_ADDRESS ||
-  '0xc6e7DF5E7b4f2A278906862b61205850344D4e7d') as Address;
+  '0x67d269191c92Caf3cD7723F116c85e6E9bf55933') as Address;
 
 const OWNER_PRIVATE_KEY =
   '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as Hex; // Account 0
