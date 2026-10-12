@@ -1,0 +1,41 @@
+# Node & Workspaces
+node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# TypeScript
+dist/
+*.tsbuildinfo
+
+# Foundry
+contracts/cache/
+contracts/out/
+*.abi
+*.bin
+
+# Environment & Secrets (Zero Key Leak Protocol)
+.env
+.env*.local
+.env.production
+.env.development
+credentials.json
+token.json
+*.pem
+*.key
+
+# IDE & OS
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vscode/
+.idea/
