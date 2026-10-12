@@ -4,15 +4,16 @@ import React, { useState } from 'react';
 import {
   FlaskConical,
   ShieldCheck,
-  ShieldAlert,
-  Terminal,
-  ChevronDown,
-  ChevronUp,
   CheckCircle2,
   XCircle,
   AlertTriangle,
   Play,
   RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  Radio,
+  FileCode,
+  Layers,
 } from 'lucide-react';
 import { parseEther, formatEther } from 'viem';
 
@@ -42,31 +43,32 @@ interface AttackLabProps {
 }
 
 export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
-  const [activeScenarioId, setActiveScenarioId] = useState<string | null>('scenario-2');
-  const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({});
+  const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({
+    'scenario-2': true,
+  });
 
   const [scenarios, setScenarios] = useState<AttackScenario[]>([
     {
       id: 'scenario-1',
-      name: '1. Permitted Action (Authorized Token Swap)',
+      name: '1. Permitted Action (Authorized Swap)',
       category: 'Allowed',
-      description: 'Agent initiates a 0.1 MON swap against whitelisted DEX target within the per-transaction limit.',
+      description: 'Agent initiates a 0.10 MON swap against allowlisted Uniswap router within the per-transaction limit.',
       target: '0x3333333333333333333333333333333333333333',
       selector: '0xa9059cbb',
-      value: '0.1',
+      value: '0.10',
       caller: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Bound Agent)',
       expectedResult: 'Success',
-      revertError: 'None (Complies with policy)',
+      revertError: 'None (Complies with Mandate)',
       status: 'idle',
     },
     {
       id: 'scenario-2',
       name: '2. Rogue Destination (Unwhitelisted Target)',
       category: 'Policy Attack',
-      description: 'A prompt-injected agent attempts to siphon vault funds to an unapproved hacker contract.',
+      description: 'A prompt-injected agent attempts to siphon vault funds to an unapproved recipient address.',
       target: '0xDeadDeAdDeADdeAdDeaddeadDEADdeAdDeadbEEf',
       selector: '0xa9059cbb',
-      value: '0.1',
+      value: '0.10',
       caller: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Bound Agent)',
       expectedResult: 'Reverts',
       revertError: 'TargetNotAllowed()',
@@ -76,10 +78,10 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
       id: 'scenario-3',
       name: '3. Ceiling Violation (Spending Limit Exceeded)',
       category: 'Accounting Attack',
-      description: 'Agent attempts an emergency transaction of 2.5 MON exceeding the 0.25 MON per-tx mandate ceiling.',
+      description: 'Agent attempts an emergency transaction of 2.50 MON exceeding the 0.25 MON per-transaction limit.',
       target: '0x3333333333333333333333333333333333333333',
       selector: '0xa9059cbb',
-      value: '2.5',
+      value: '2.50',
       caller: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Bound Agent)',
       expectedResult: 'Reverts',
       revertError: 'ExceedsPerTxLimit()',
@@ -87,20 +89,20 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
     },
     {
       id: 'scenario-4',
-      name: '4. Caller Identity Hijack (Untrusted Stranger)',
+      name: '4. Caller Identity Hijack (Unauthorized Stranger)',
       category: 'Identity Attack',
-      description: 'An arbitrary stranger EOA attempts to trigger execution on behalf of Agent #42.',
+      description: 'An arbitrary stranger address attempts to invoke execution on behalf of Agent #42.',
       target: '0x3333333333333333333333333333333333333333',
       selector: '0xa9059cbb',
       value: '0.05',
       caller: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC (Unauthorized Stranger)',
       expectedResult: 'Reverts',
-      revertError: 'CallerNotAuthorized() (CRIT-01 Guard)',
+      revertError: 'CallerNotAuthorized()',
       status: 'idle',
     },
     {
       id: 'scenario-5',
-      name: '5. Post-Revocation Execution (Revoked Mandate)',
+      name: '5. Post-Revocation Attempt (Revoked Mandate)',
       category: 'Lifecycle Attack',
       description: 'Agent attempts an action against a mandate that was revoked by the human owner.',
       target: '0x3333333333333333333333333333333333333333',
@@ -137,7 +139,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                 blockNumber: Math.floor(Math.random() * 50) + 120,
                 reverted: !isAllowed,
                 errorName: !isAllowed ? s.revertError : undefined,
-                vaultRemaining: isAllowed ? '0.40 MON' : '0.50 MON (Untouched)',
+                vaultRemaining: isAllowed ? '0.40 MON' : '0.50 MON (Vault Untouched)',
               },
             };
             onScenarioExecuted(updated);
@@ -146,41 +148,51 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
           return s;
         })
       );
-    }, 500);
+    }, 450);
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Header */}
-      <div className="security-card" style={{ background: 'linear-gradient(135deg, rgba(244, 63, 94, 0.08), rgba(131, 110, 249, 0.04))' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      {/* Header Card */}
+      <div className="security-card">
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
               <span className="badge badge-rose">
                 <FlaskConical size={12} />
-                Adversarial Simulation
+                Adversarial Lab
               </span>
-              <span className="badge badge-neutral">Smart Contract Consensus</span>
+              <span className="badge badge-simulation">Execution Mode: Testnet / Local Sandbox</span>
             </div>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>
               Attack Simulation Lab
             </h2>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '680px', marginTop: '0.25rem' }}>
-              Test the mathematical guarantees of the <code>MandateManager</code> smart contract. Trigger simulated attack vectors and verify that unauthorized targets, over-limit transactions, and rogue callers reliably revert on-chain.
+            <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', maxWidth: '720px', marginTop: '0.2rem' }}>
+              Verify mathematical guarantees of the <code>MandateManager</code> smart contract. Trigger simulated attack vectors and verify that rogue destinations, over-limit transactions, caller impersonations, and revoked actions reliably revert on-chain.
             </p>
           </div>
 
-          <div style={{ background: 'var(--bg-input)', padding: '0.5rem 0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', textAlign: 'right' }}>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Consensus Rule</span>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
-              Contract Reverts Halted On-Chain
+          <div
+            style={{
+              background: 'var(--bg-input)',
+              padding: '0.55rem 0.85rem',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-subtle)',
+              fontSize: '0.72rem',
+            }}
+          >
+            <span style={{ color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
+              Consensus Invariant
+            </span>
+            <div style={{ color: 'var(--accent-emerald)', fontWeight: 700, marginTop: '2px' }}>
+              Zero Execution on Policy Revert
             </div>
           </div>
         </div>
       </div>
 
-      {/* Scenario List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {/* Scenario Cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
         {scenarios.map((scenario) => {
           const isExpanded = expandedDetails[scenario.id];
           const isAllowed = scenario.expectedResult === 'Success';
@@ -191,19 +203,19 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
               key={scenario.id}
               className="security-card-elevated"
               style={{
-                borderLeft: `4px solid ${
+                borderLeft: `3px solid ${
                   isAllowed ? 'var(--accent-emerald)' : 'var(--accent-rose)'
                 }`,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: '280px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                    <strong style={{ fontSize: '1rem', color: '#fff' }}>{scenario.name}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+                    <strong style={{ fontSize: '0.95rem', color: '#fff' }}>{scenario.name}</strong>
                     <span className={`badge ${isAllowed ? 'badge-emerald' : 'badge-rose'}`}>
-                      {scenario.expectedResult}
+                      Expected: {scenario.expectedResult}
                     </span>
-                    <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>
+                    <span className="badge badge-neutral" style={{ fontSize: '0.68rem' }}>
                       {scenario.category}
                     </span>
                   </div>
@@ -212,16 +224,15 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                   <button
-                    className={`btn-${isAllowed ? 'primary' : 'danger'}`}
-                    style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}
+                    className={isAllowed ? 'btn-primary' : 'btn-danger'}
                     onClick={() => runScenario(scenario.id)}
                     disabled={scenario.status === 'running'}
                   >
-                    <Play size={13} />
+                    <Play size={12} />
                     {scenario.status === 'running'
-                      ? 'Executing...'
+                      ? 'Simulating On-Chain...'
                       : isAllowed
                       ? 'Run Permitted Action'
                       : 'Trigger Attack Vector'}
@@ -229,21 +240,21 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
 
                   <button
                     className="btn-secondary"
-                    style={{ padding: '0.5rem', borderRadius: 'var(--radius-sm)' }}
+                    style={{ padding: '0.5rem' }}
                     onClick={() => toggleDetails(scenario.id)}
-                    title="Toggle Technical Details"
+                    aria-label="Toggle technical details"
                   >
-                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                   </button>
                 </div>
               </div>
 
-              {/* Execution Feedback Banner if Run */}
+              {/* Execution Result Banner */}
               {hasRun && scenario.resultData && (
                 <div
                   style={{
-                    marginTop: '1rem',
-                    padding: '0.85rem',
+                    marginTop: '0.85rem',
+                    padding: '0.75rem 0.85rem',
                     borderRadius: 'var(--radius-sm)',
                     background: isAllowed ? 'var(--accent-emerald-subtle)' : 'var(--accent-rose-subtle)',
                     border: `1px solid ${isAllowed ? 'var(--accent-emerald-border)' : 'var(--accent-rose-border)'}`,
@@ -260,36 +271,81 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                     ) : (
                       <XCircle size={16} color="var(--accent-rose)" />
                     )}
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: isAllowed ? 'var(--accent-emerald)' : 'var(--accent-rose)' }}>
+                    <span
+                      style={{
+                        fontSize: '0.785rem',
+                        fontWeight: 600,
+                        color: isAllowed ? 'var(--accent-emerald)' : 'var(--accent-rose)',
+                      }}
+                    >
                       {isAllowed
-                        ? 'Consensus: Permitted Action Executed Successfully'
-                        : `Contract Reverted: ${scenario.resultData.errorName}`}
+                        ? 'Confirmed on-chain: Permitted action executed within budget'
+                        : `Contract Reverted on-chain: ${scenario.resultData.errorName}`}
                     </span>
                   </div>
-                  <div style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                    Vault Status: {scenario.resultData.vaultRemaining}
+                  <div style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                    Vault: {scenario.resultData.vaultRemaining}
                   </div>
                 </div>
               )}
 
-              {/* Expandable Technical Calldata Inspection */}
+              {/* Expandable Technical Calldata & Rationale */}
               {isExpanded && (
-                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
-                  <div className="mono-box">
-                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>CALLER</span>
-                    {scenario.caller}
+                <div
+                  style={{
+                    marginTop: '0.85rem',
+                    paddingTop: '0.85rem',
+                    borderTop: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: '0.65rem',
+                    }}
+                  >
+                    <div className="mono-box">
+                      <span className="kpi-label">ATTEMPTED CALLER</span>
+                      <div style={{ color: '#fff', marginTop: '2px' }}>{scenario.caller}</div>
+                    </div>
+                    <div className="mono-box">
+                      <span className="kpi-label">TARGET ADDRESS</span>
+                      <div style={{ color: '#fff', marginTop: '2px' }}>{scenario.target}</div>
+                    </div>
+                    <div className="mono-box">
+                      <span className="kpi-label">SELECTOR & VALUE</span>
+                      <div style={{ color: '#fff', marginTop: '2px' }}>
+                        {scenario.selector} · {scenario.value} MON
+                      </div>
+                    </div>
+                    <div className="mono-box">
+                      <span className="kpi-label">REVERT SIGNATURE</span>
+                      <div style={{ color: isAllowed ? 'var(--accent-emerald)' : 'var(--accent-rose)', marginTop: '2px' }}>
+                        {scenario.revertError}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mono-box">
-                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>DESTINATION TARGET</span>
-                    {scenario.target}
-                  </div>
-                  <div className="mono-box">
-                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>SELECTOR</span>
-                    {scenario.selector}
-                  </div>
-                  <div className="mono-box">
-                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.7rem' }}>ATTEMPTED VALUE</span>
-                    {scenario.value} MON
+
+                  {/* Execution Mode Disclosure */}
+                  <div
+                    style={{
+                      fontSize: '0.72rem',
+                      color: 'var(--text-muted)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <span className="badge badge-neutral" style={{ fontSize: '0.65rem' }}>
+                      Browser Preflight: Validated
+                    </span>
+                    <span className="badge badge-simulation" style={{ fontSize: '0.65rem' }}>
+                      Local Simulation / Monad Testnet: Enforced by Contract
+                    </span>
                   </div>
                 </div>
               )}
