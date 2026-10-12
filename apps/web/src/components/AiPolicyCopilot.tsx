@@ -236,7 +236,7 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
               rows={3}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g. Allow trading agent 0x7099... to execute swaps on router 0x3333... up to 0.2 MON per tx with 1.0 MON total cap for 48 hours..."
+              placeholder="e.g. Allow agent 0x7099... to call treasury 0x3333... with selector 0xa9059cbb up to 0.2 MON per transaction with 1.0 MON total cap for 48 hours..."
               style={{ resize: 'vertical', paddingBottom: '2.5rem' }}
             />
             <button
