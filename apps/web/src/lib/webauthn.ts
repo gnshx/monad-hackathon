@@ -1,6 +1,8 @@
 import type { Hex } from 'viem';
 import { toHex } from 'viem';
 
+export type NetworkMode = 'local_simulation' | 'monad_testnet';
+
 export interface PasskeyKeypair {
   pubKeyX: Hex;
   pubKeyY: Hex;
@@ -14,14 +16,15 @@ export interface PasskeySignatureData {
   authenticatorData: Hex;
   clientDataJSON: Hex;
   challengeOffset: bigint;
-  isSimulated?: boolean;
+  isSimulated: boolean;
 }
 
 /**
  * Registers a new P-256 Passkey on the user's device using the WebAuthn standard API.
  * Returns the uncompressed P-256 coordinates (pubKeyX, pubKeyY).
+ * In testnet mode, throws on any error instead of falling back to simulation.
  */
-export async function registerPasskey(userName: string): Promise<PasskeyKeypair> {
+export async function registerPasskey(userName: string, mode: NetworkMode = 'local_simulation'): Promise<PasskeyKeypair> {
   if (typeof window === 'undefined' || !window.navigator?.credentials) {
     throw new Error('WebAuthn is not supported in this browser environment');
   }
@@ -83,8 +86,13 @@ export async function registerPasskey(userName: string): Promise<PasskeyKeypair>
       rawCredentialId: rawId,
     };
   } catch (err: any) {
-    console.error('WebAuthn Passkey registration failed:', err);
-    throw new Error(`Passkey registration failed or cancelled: ${err.message || String(err)}`);
+    // In testnet mode, fail closed - never silently fall back to simulation
+    if (mode === 'monad_testnet') {
+      throw new Error(`Passkey registration failed: ${err.message || String(err)}. Cannot proceed in testnet mode without a valid hardware credential.`);
+    }
+    // Local simulation mode: generate simulated credential for demo purposes
+    console.warn('WebAuthn prompt dismissed or not supported, generating simulated test passkey:', err);
+    return generateSimulatedPasskey();
   }
 }
 

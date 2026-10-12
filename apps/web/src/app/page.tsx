@@ -897,6 +897,52 @@ export default function SecurityConsoleDashboard() {
         <main className="page-container">
           {activeTab === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+              {/* Product Positioning Hero Header */}
+              <div
+                className="security-card"
+                style={{
+                  padding: '2rem',
+                  background: 'linear-gradient(135deg, rgba(131, 110, 249, 0.08), rgba(16, 185, 129, 0.03))',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div style={{ maxWidth: '820px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <span className="badge badge-monad">Delegated Authority Console</span>
+                    <span className={`badge ${networkMode === 'MONAD_TESTNET' ? 'badge-emerald' : 'badge-amber'}`}>
+                      {networkMode === 'MONAD_TESTNET' ? 'Monad Testnet' : 'Local Simulation'}
+                    </span>
+                  </div>
+                  <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.025em', lineHeight: 1.25 }}>
+                    Give your AI agent a mandate, not unlimited power.
+                  </h2>
+                  <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', marginTop: '0.45rem', lineHeight: 1.5 }}>
+                    Passkey-authorized delegation. Contract-enforced limits. Independently checkable receipts.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
+                    <button
+                      className="btn-primary"
+                      onClick={() => {
+                        setCopilotDraft(null);
+                        setIsModalOpen(true);
+                      }}
+                      style={{ padding: '0.5rem 1.1rem', fontSize: '0.82rem' }}
+                    >
+                      <Plus size={15} />
+                      Create Mandate
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => setActiveTab('copilot')}
+                      style={{ padding: '0.5rem 1.1rem', fontSize: '0.82rem' }}
+                    >
+                      <Sparkles size={14} color="var(--accent-monad)" />
+                      Policy Compiler
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Executive KPI Banner */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
                 <div className="kpi-card emerald">
@@ -904,31 +950,49 @@ export default function SecurityConsoleDashboard() {
                     <span>Active Mandates</span>
                     <ShieldCheck size={16} color="var(--accent-emerald)" />
                   </div>
-                  <div className="kpi-value">{activeMandates.length.toString().padStart(2, '0')}</div>
+                  <div className="kpi-value">
+                    {networkMode === 'MONAD_TESTNET'
+                      ? (activeMandates.length > 0 ? activeMandates.length.toString().padStart(2, '0') : '—')
+                      : activeMandates.length.toString().padStart(2, '0')}
+                  </div>
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {networkMode === 'MONAD_TESTNET' ? 'On-Chain Testnet Mandates' : 'Simulated Sample Mandates'}
+                    {networkMode === 'MONAD_TESTNET'
+                      ? (walletAddress ? `${activeMandates.length} on-chain policies` : 'Connect wallet to query')
+                      : 'Simulated Sample Mandates'}
                   </span>
                 </div>
 
                 <div className="kpi-card emerald">
                   <div className="kpi-label">
-                    <span>Secured Vault Balance</span>
+                    <span>Available Budget</span>
                     <Lock size={16} color="var(--accent-emerald)" />
                   </div>
-                  <div className="kpi-value">{formatEther(totalVaultSecured)} MON</div>
+                  <div className="kpi-value">
+                    {networkMode === 'MONAD_TESTNET'
+                      ? (walletAddress ? `${formatEther(totalVaultSecured)} MON` : '— MON')
+                      : `${formatEther(totalVaultSecured)} MON`}
+                  </div>
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {networkMode === 'MONAD_TESTNET' ? 'Contract Vault Deposits' : 'Simulated Balance'}
+                    {networkMode === 'MONAD_TESTNET'
+                      ? (walletAddress ? 'Contract Vault Deposits' : 'Connect to load balance')
+                      : 'Simulated Balance'}
                   </span>
                 </div>
 
                 <div className="kpi-card rose">
                   <div className="kpi-label">
-                    <span>Attacks Blocked</span>
+                    <span>Recent Decisions</span>
                     <AlertTriangle size={16} color="var(--accent-rose)" />
                   </div>
-                  <div className="kpi-value">{blockedActionsCount.toString().padStart(2, '0')}</div>
+                  <div className="kpi-value">
+                    {networkMode === 'MONAD_TESTNET'
+                      ? (currentActivities.length > 0 ? currentActivities.length.toString().padStart(2, '0') : '—')
+                      : blockedActionsCount.toString().padStart(2, '0')}
+                  </div>
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {networkMode === 'MONAD_TESTNET' ? 'Testnet Violations Stopped' : 'Sandbox Revert Invariants'}
+                    {networkMode === 'MONAD_TESTNET'
+                      ? (currentActivities.length > 0 ? 'Confirmed testnet events' : 'Awaiting evidence')
+                      : 'Sandbox Revert Invariants'}
                   </span>
                 </div>
 
@@ -938,10 +1002,10 @@ export default function SecurityConsoleDashboard() {
                     <SearchCode size={16} color="var(--accent-amber)" />
                   </div>
                   <div className="kpi-value" style={{ fontSize: '1.25rem', color: 'var(--accent-emerald)' }}>
-                    LIVE RPC
+                    READY
                   </div>
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    Chain ID 10143 Verified
+                    Monad Chain 10143
                   </span>
                 </div>
               </div>

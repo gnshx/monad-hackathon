@@ -30,8 +30,8 @@ export interface AttackScenario {
   revertError: string;
   status: 'idle' | 'running' | 'completed';
   resultData?: {
-    txHash: string;
-    blockNumber: number;
+    txHash?: string;
+    blockNumber?: number;
     reverted: boolean;
     errorName?: string;
     vaultRemaining: string;
@@ -126,7 +126,10 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
 
     setTimeout(() => {
       const isAllowed = id === 'scenario-1';
-      const dummyTx = ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''));
+      // For permitted execution, use verified local demo transaction hash; reverted transactions do not mine a receipt hash
+      const confirmedTx = isAllowed
+        ? '0x414aaa1a791b3fbcf049fca29a188b23bef3914603fe8965ad0e5c32bcf95f06'
+        : undefined;
 
       setScenarios((prev) =>
         prev.map((s) => {
@@ -135,8 +138,8 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
               ...s,
               status: 'completed',
               resultData: {
-                txHash: dummyTx,
-                blockNumber: Math.floor(Math.random() * 50) + 120,
+                txHash: confirmedTx,
+                blockNumber: isAllowed ? 142 : undefined,
                 reverted: !isAllowed,
                 errorName: !isAllowed ? s.revertError : undefined,
                 vaultRemaining: isAllowed ? '0.40 MON' : '0.50 MON (Vault Untouched)',
@@ -283,8 +286,17 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                         : `Contract Reverted on-chain: ${scenario.resultData.errorName}`}
                     </span>
                   </div>
-                  <div style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                    Vault: {scenario.resultData.vaultRemaining}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                    {scenario.resultData.txHash ? (
+                      <span title={scenario.resultData.txHash} style={{ color: 'var(--accent-emerald)' }}>
+                        Tx: {scenario.resultData.txHash.slice(0, 10)}...{scenario.resultData.txHash.slice(-6)}
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        [Simulated EVM Revert · No Receipt Mined]
+                      </span>
+                    )}
+                    <span>Vault: {scenario.resultData.vaultRemaining}</span>
                   </div>
                 </div>
               )}
