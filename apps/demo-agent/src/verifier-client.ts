@@ -19,9 +19,10 @@ async function auditTransaction(txHash: Hex) {
     publicClient,
   });
 
-  console.log(`\nAuditing transaction hash: ${txHash}`);
+  const expectedMandateId = process.argv[3] ? BigInt(process.argv[3]) : undefined;
+  console.log(`\nAuditing transaction hash: ${txHash}${expectedMandateId !== undefined ? ` (Expected Mandate #${expectedMandateId.toString()})` : ''}`);
   try {
-    const result = await sdk.verifyReceipt(txHash);
+    const result = await sdk.verifyReceipt(txHash, { expectedMandateId });
 
     if (result.verified && result.status === 'success') {
       console.log('✅ VERIFICATION RESULT: AUTHENTIC ON-CHAIN EXECUTION');

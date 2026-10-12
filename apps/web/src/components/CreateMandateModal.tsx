@@ -18,9 +18,11 @@ export function CreateMandateModal({
   onSubmit,
   isLoading,
 }: CreateMandateModalProps) {
+  const [agentAddress, setAgentAddress] = useState('0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
   const [agentId, setAgentId] = useState('42');
   const [maxPerTx, setMaxPerTx] = useState('0.1');
   const [maxTotal, setMaxTotal] = useState('1.0');
+  const [depositAmount, setDepositAmount] = useState('0.5');
   const [durationHours, setDurationHours] = useState('168'); // 7 days default
   const [targets, setTargets] = useState<Array<{ target: string; selector: string }>>([
     {
@@ -51,6 +53,10 @@ export function CreateMandateModal({
     setError(null);
 
     try {
+      if (!agentAddress.startsWith('0x') || agentAddress.length !== 42) {
+        throw new Error(`Invalid agent wallet address format: ${agentAddress}`);
+      }
+
       if (targets.length === 0) {
         throw new Error('At least one allowed target must be specified');
       }
@@ -70,6 +76,7 @@ export function CreateMandateModal({
           : BigInt(Math.floor(Date.now() / 1000) + Number(durationHours) * 3600);
 
       const params: CreateMandateParams = {
+        agentAddress: agentAddress as Address,
         agentId: BigInt(agentId),
         targets: targets.map((t) => ({
           target: t.target as Address,
@@ -77,6 +84,7 @@ export function CreateMandateModal({
         })),
         maxValuePerTx: parseEther(maxPerTx),
         maxTotalValue: parseEther(maxTotal),
+        depositValue: depositAmount ? parseEther(depositAmount) : 0n,
         expiresAt,
       };
 
@@ -132,14 +140,38 @@ export function CreateMandateModal({
 
         <form onSubmit={handleFormSubmit}>
           <div className="input-group">
-            <label className="input-label">AI Agent ID (ERC-8004 Registry ID)</label>
+            <label className="input-label">Designated Agent Wallet Address</label>
             <input
-              type="number"
-              className="input-field"
-              value={agentId}
-              onChange={(e) => setAgentId(e.target.value)}
+              type="text"
+              className="input-field mono"
+              value={agentAddress}
+              onChange={(e) => setAgentAddress(e.target.value)}
+              placeholder="0x..."
               required
             />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="input-group">
+              <label className="input-label">AI Agent ID (ERC-8004 Registry)</label>
+              <input
+                type="number"
+                className="input-field"
+                value={agentId}
+                onChange={(e) => setAgentId(e.target.value)}
+                required
+              />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Initial Vault Deposit (MON)</label>
+              <input
+                type="text"
+                className="input-field"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                placeholder="0.5"
+              />
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -228,7 +260,7 @@ export function CreateMandateModal({
                   type="text"
                   className="input-field mono"
                   style={{ fontSize: '0.75rem' }}
-                  placeholder="Selector (e.g. 0xa9059cbb)"
+                  placeholder="Selector (e.g. 0xa9059cbb or 0x00000000)"
                   value={t.selector}
                   onChange={(e) => handleTargetChange(idx, 'selector', e.target.value)}
                   required

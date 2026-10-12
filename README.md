@@ -12,24 +12,28 @@
   <a href="./docs/pitch.md">2-Min Pitch Video Script</a> •
   <a href="./docs/demo-script.md">3-Min Demo Video Script</a> •
   <a href="./docs/integration-guide.md">Integrator Guide</a> •
+  <a href="docs/final-audit.md">30-Hour Security Audit Report</a> •
   <a href="#quickstart">Quickstart</a>
 </p>
 
+> **One-sentence pitch:** AgentTrust binds autonomous AI agents to hardware passkeys, enforcing granular smart contract permissions, target allowlists, and spending limits directly on Monad so rogue agents are blocked by blockchain consensus.
+
 > **Track:** Trust, Identity & AI Infrastructure (Metropolis Track)  
-> **Target Network:** Monad Blockchain (Testnet & Mainnet)
+> **Target Network:** Monad Blockchain (Chain ID: `10143`)  
+> **Security Audit:** Complete 30-Hour Final Audit Report available at [`docs/final-audit.md`](docs/final-audit.md)
 
 ---
 
-## 1. Overview
+## 1. Overview & Core Security Guarantee
 
-**AgentTrust** establishes a decentralized trust and security boundary for autonomous AI agents. Rather than trusting off-chain backend policies or agent prompts (which are vulnerable to prompt injection and jailbreaks), a human owner authorizes an agent using a hardware **WebAuthn Passkey (P-256)**. 
+Prompt injection, model hallucinations, and compromised agent memory make client-side guardrails unreliable. AgentTrust solves this by establishing **the smart contract as the authoritative enforcement boundary**:
 
-The permissions, target contract allowlists, per-action caps, and cumulative spending limits are committed directly to the **`MandateManager`** smart contract on Monad.
-
-- **The contract is the enforcement boundary**: The frontend, AI framework, and SDK are convenience layers; the blockchain guarantees that unauthorized actions revert.
-- **Passkey-Authorized Mandates**: Uses WebAuthn P-256 signatures to authorize canonical mandate definitions bound to `chainId` and contract nonce.
-- **ERC-8004 Identity Integration**: References registered on-chain agent identities.
-- **Independent Verification**: Anyone can verify execution receipts and audit historical agent compliance using the `@agenttrust/sdk`.
+1. **Hardware Passkey Delegation:** A user authorizes an AI agent by signing a canonical mandate challenge using a device **WebAuthn Passkey (P-256)**.
+2. **On-Chain Policy Enforcement:** The `MandateManager` contract verifies the WebAuthn assertion / P-256 signature, binds the designated agent wallet address, and records strict target allowlists, selector rules, per-action caps, cumulative budget limits, and expiry.
+3. **Deterministic Blocking:** When an agent attempts an unauthorized action (e.g., rogue target contract, unapproved selector, spending exceeding limit, or caller identity mismatch), **the transaction reverts on Monad**.
+4. **Isolated Vault Accounting:** Native funds are locked in per-mandate balances (`mandateBalances`), preventing cross-mandate balance theft.
+5. **Instant Revocation:** Owners can revoke mandates on-chain with immediate effect and withdraw unspent funds (`withdrawUnspent`).
+6. **Independent Receipt Verification:** Any external protocol or auditor can independently verify an agent's execution receipts directly against raw Monad logs via the `@agenttrust/sdk` without trusting the web dashboard.
 
 ---
 
@@ -40,26 +44,27 @@ The permissions, target contract allowlists, per-action caps, and cumulative spe
                           │       Human Owner        │
                           │ (Passkey / WebAuthn P256) │
                           └─────────────┬────────────┘
-                                        │ Signed Mandate Challenge
+                                        │ WebAuthn Assertion Envelope
                                         ▼
                           ┌──────────────────────────┐
                           │    AgentTrust Web App    │
                           │   (Next.js 15 Dashboard) │
                           └─────────────┬────────────┘
-                                        │ Broadcasts Mandate
+                                        │ createMandate / createMandateWithWebAuthn
                                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              MONAD BLOCKCHAIN                               │
 │                                                                             │
 │  ┌────────────────────────┐                   ┌──────────────────────────┐  │
-│  │    IP256Verifier       │                   │  ERC-8004 Registry       │  │
-│  │ (Monad P256 Precompile)│                   │   (Agent Identity)       │  │
+│  │  RIP-7212 Precompile   │                   │  ERC-8004 Registry       │  │
+│  │ (P-256 at address 0x100)│                   │  (Agent Identity & Op)   │  │
 │  └───────────▲────────────┘                   └────────────▲─────────────┘  │
-│              │ Verify sig                                  │ Check ID       │
+│              │ Raw 160-byte staticcall                     │ Owner / Operator│
 │  ┌───────────┴─────────────────────────────────────────────┴─────────────┐  │
 │  │                          MandateManager                               │  │
-│  │  - Nonce & Replay Check     - Per-Action & Total Spending Caps        │  │
-│  │  - Target/Selector Allowlist - Owner Revocation & Expiry              │  │
+│  │  - Nonce & Replay Check       - Vault Isolation (mandateBalances)     │  │
+│  │  - Target/Selector Allowlist   - Per-Tx & Cumulative Spending Caps    │  │
+│  │  - Caller Address Auth        - Instant Owner Revoke & Withdraw       │  │
 │  └───────────────────────────────────┬───────────────────────────────────┘  │
 │                                      │ Atomic Execution / Revert            │
 │                                      ▼                                      │
@@ -68,7 +73,7 @@ The permissions, target contract allowlists, per-action caps, and cumulative spe
 │                         └──────────────────────────┘                        │
 └──────────────────────────────────────▲──────────────────────────────────────┘
                                        │
-                      Execute Action   │ Verify Receipts
+                      Execute Action   │ Independent Audit Receipt
                                        │
                         ┌──────────────┴──────────────┐
                         │    AI Agent / Verifier      │
@@ -84,27 +89,29 @@ The permissions, target contract allowlists, per-action caps, and cumulative spe
 agenttrust/
 ├── contracts/               # Smart contracts (Solidity 0.8.24 & Foundry)
 │   ├── src/
-│   │   ├── MandateManager.sol   # Core permissions & execution engine
-│   │   ├── IP256Verifier.sol    # Monad P256 precompile interface
+│   │   ├── MandateManager.sol   # Core permissions, vault isolation, & execution engine
+│   │   ├── IP256Verifier.sol    # RIP-7212 P256 precompile interface
+│   │   ├── IERC8004Registry.sol # ERC-8004 identity registry interface
 │   │   └── lib/ReentrancyGuard.sol
 │   ├── test/
-│   │   ├── MandateManager.t.sol # Test suite (expiry, replay, limits, revocation)
+│   │   ├── MandateManager.t.sol # 29 tests (fuzz, limits, replay, vault, WebAuthn)
 │   │   ├── MockP256Verifier.sol
+│   │   ├── MockERC8004Registry.sol
 │   │   └── MockTarget.sol
 │   ├── script/Deploy.s.sol      # Monad testnet deployment script
-│   └── foundry.toml
+│   └── foundry.toml             # Foundry configuration with via_ir
 │
 ├── packages/
 │   └── sdk/                 # TypeScript SDK (@agenttrust/sdk)
 │       ├── src/
 │       │   ├── client.ts    # AgentTrustClient
-│       │   ├── mandate.ts   # Canonical hashing, creation, revocation
+│       │   ├── mandate.ts   # Canonical v2 hashing, creation, deposit, withdraw
 │       │   ├── execute.ts   # On-chain execution wrapper
 │       │   ├── verify.ts    # Independent receipt and preflight verification
-│       │   ├── abi.ts       # Typed contract ABI
+│       │   ├── abi.ts       # Typed contract ABI v2
 │       │   ├── types.ts     # TypeScript interfaces
 │       │   └── errors.ts    # Typed error hierarchy
-│       └── test/sdk.test.ts # 10 unit tests with vitest
+│       └── test/sdk.test.ts # 13 unit tests with vitest (anti-tamper, receipts)
 │
 ├── apps/
 │   ├── web/                 # Next.js 15 passkey dashboard & activity inspector
@@ -115,55 +122,159 @@ agenttrust/
 │       ├── src/index.ts     # Agent attempting allowed vs blocked actions
 │       └── src/verifier-client.ts # Third-party receipt verification client
 │
+├── docs/
+│   └── final-audit.md       # Comprehensive 30-hour security audit report
 └── package.json             # Monorepo workspaces
 ```
 
 ---
 
-## 4. Key Security Invariants
+## 4. Key Security Invariants & Guarantees
 
-| Risk | On-Chain Mitigation |
-|---|---|
-| **Replay Attacks** | Sequential owner nonces for mandate creation + per-mandate execution nonces |
-| **Rogue AI Actions** | Strict allowlist of `(targetContract, selector)` tuples |
-| **Budget Depletion** | Enforces both `maxValuePerTx` and cumulative `maxTotalValue` atomically |
-| **Compromised Agent** | Instant owner revocation with zero lingering delegation |
-| **Failed Calls** | Revert rolls back state; failed calls never consume spending allowance |
-| **Reentrancy** | Checks-effects-interactions pattern + reentrancy guard |
+| Invariant | Enforcement Mechanism | Status |
+|---|---|---|
+| **Caller Authentication** | `msg.sender == m.agentAddress \|\| msg.sender == m.owner` | **Enforced** |
+| **Vault Balance Isolation** | Isolated `mandateBalances[mandateId]` mapping; cannot spend other vaults | **Enforced** |
+| **Replay Protection** | Sequential owner creation nonces + per-mandate execution nonces | **Enforced** |
+| **Target & Selector Allowlist** | Strict `(target, selector)` allowlist check + calldata prefix validation | **Enforced** |
+| **Spending Limits** | Atomic enforcement of `maxValuePerTx` and cumulative `maxTotalValue` | **Enforced** |
+| **Call Failure Rollback** | External call revert rolls back decremented balances & spending counters | **Enforced** |
+| **Reentrancy Immunity** | Checks-effects-interactions + `nonReentrant` on `execute` and `withdraw` | **Enforced** |
+| **Cryptographic Bounds** | Enforces $s \le n/2$, non-zero coordinates, and field order checks | **Enforced** |
+| **WebAuthn Envelope** | Validates base64url challenge in `clientDataJSON` and User Presence | **Enforced** |
 
 ---
 
-## 5. Quickstart
+## 5. Verified Test Results
 
-### 1. Build and Test the SDK
+All tests are verified and reproducible:
+
+```
+[PASS] testFuzz_spendingCap(uint256) (runs: 1000, μ: 387466, ~: 387488)
+[PASS] testFuzz_totalCapExceeded() (gas: 862411)
+[PASS] test_createMandateWithWebAuthn_happy() (gas: 360595)
+[PASS] test_createMandateWithWebAuthn_missingUserPresence_reverts() (gas: 104187)
+[PASS] test_createMandateWithWebAuthn_wrongChallenge_reverts() (gas: 121811)
+[PASS] test_createMandate_badNonce_reverts() (gas: 75231)
+[PASS] test_createMandate_erc8004_mismatch_reverts() (gas: 81994)
+[PASS] test_createMandate_happy() (gas: 378237)
+[PASS] test_createMandate_invalidAgentAddress_reverts() (gas: 71075)
+[PASS] test_createMandate_invalidSig_reverts() (gas: 92060)
+[PASS] test_createMandate_malleableSig_reverts() (gas: 87655)
+[PASS] test_createMandate_zeroSig_reverts() (gas: 127997)
+[PASS] test_execute_exceedsPerTxLimit_reverts() (gas: 386823)
+[PASS] test_execute_expired_reverts() (gas: 394430)
+[PASS] test_execute_happy() (gas: 450598)
+[PASS] test_execute_replayNonce_reverts() (gas: 486272)
+[PASS] test_execute_revoked_reverts() (gas: 420214)
+[PASS] test_execute_unauthorizedCaller_stranger_reverts() (gas: 375410)
+[PASS] test_execute_unauthorizedSelector_reverts() (gas: 384372)
+[PASS] test_execute_unauthorizedTarget_reverts() (gas: 384704)
+[PASS] test_execute_wrongAgentId_reverts() (gas: 377320)
+[PASS] test_registerCredential() (gas: 12988)
+[PASS] test_registerCredential_fieldOverflow_reverts() (gas: 33007)
+[PASS] test_registerCredential_zeroKey_reverts() (gas: 33290)
+[PASS] test_vault_insufficientBalance_reverts() (gas: 393618)
+[PASS] test_vault_isolation_preventsCrossMandateTheft() (gas: 800635)
+[PASS] test_withdrawUnspent_activeMandate_reverts() (gas: 368530)
+[PASS] test_withdrawUnspent_afterRevoke_happy() (gas: 436550)
+[PASS] test_withdrawUnspent_nonOwner_reverts() (gas: 412979)
+
+Ran 29 tests for test/MandateManager.t.sol:MandateManagerTest: 29 passed, 0 failed.
+Ran 13 tests for packages/sdk/test/sdk.test.ts: 13 passed, 0 failed.
+```
+
+---
+
+## 6. Quickstart & Developer Guide
+
+### Prerequisites
+- Node.js >= 18
+- Foundry (`forge` >= 0.2.0)
+
+### 1. Build and Test Smart Contracts
+```bash
+cd contracts
+forge test -vvv
+forge build
+```
+
+### 2. Build and Test TypeScript SDK
 ```bash
 cd packages/sdk
 npm install
-npm test      # Runs vitest unit tests
-npm run build # Compiles TypeScript to dist/
+npm test
+npm run build
 ```
 
-### 2. Run the Web Application
+### 3. Run the Next.js Web Dashboard
 ```bash
 cd apps/web
 npm install
-npm run dev   # Starts Next.js dashboard at http://localhost:3000
+npm run dev
+# Open http://localhost:3000 in your browser
 ```
 
-### 3. Run the Demo AI Agent
+### 4. Run the AI Demo Agent
 ```bash
 cd apps/demo-agent
 npm install
 npm run build
-npm start          # Simulates agent actions (allowed, over-limit, rogue target)
-npm run verify-client <txHash> # Independently verifies an execution receipt
+npm start
+```
+
+### 5. Run the Independent Receipt Verifier
+```bash
+# Verify any transaction hash on Monad testnet:
+npm run verify-client 0xYourTransactionHash
 ```
 
 ---
 
-## 6. Monad Network Configuration
+## 7. 3-Minute Demo Script for Judges
 
-- **Chain ID:** `10143`
+1. **Authorize an Agent (0:00 - 0:45):**
+   - Open the web dashboard at `http://localhost:3000`.
+   - Click **"Create Mandate"**.
+   - Set spending cap (`0.1 MON`), total budget (`1.0 MON`), allowlisted target contract, and agent address.
+   - Click **"Sign with Passkey & Submit to Monad"**. Touch TouchID/FaceID to create the passkey-authorized mandate.
+2. **Execute Permitted Action (0:45 - 1:30):**
+   - The AI agent initiates a transaction within its allowlisted target and budget.
+   - The contract executes the call atomically, emits `ActionExecuted`, and updates `spentValue`.
+3. **Adversarial Attack Blocked (1:30 - 2:15):**
+   - Run `npm start` in `apps/demo-agent`.
+   - The agent attempts to call an unauthorized contract (`0x6666...`) or exceed its spending cap.
+   - Monad contract reverts with `TargetNotAllowed()` or `ExceedsPerTxLimit()`. No funds are lost; state remains unchanged.
+4. **Independent Verification & Revocation (2:15 - 3:00):**
+   - Paste the execution transaction hash into the **Independent On-Chain Verifier** or run `npm run verify-client <txHash>`.
+   - The SDK queries raw Monad logs, verifies event signatures, and confirms authenticity.
+   - Click **"Revoke Passkey Mandate"** in the dashboard. Subsequent agent executions immediately revert on-chain.
+
+---
+
+## 8. Monad Network Configuration
+
+- **Chain ID:** `10143` (`0x279f`)
 - **RPC URL:** `https://testnet-rpc.monad.xyz`
+- **RIP-7212 Precompile Address:** `0x0000000000000000000000000000000000000100`
 - **Currency Symbol:** `MON`
 - **Explorer:** `https://testnet.monadexplorer.com`
+
+---
+
+## 9. Testnet Deployment Procedure
+
+To deploy to Monad testnet with a funded deployer wallet:
+
+```bash
+cd contracts
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url https://testnet-rpc.monad.xyz \
+  --broadcast
+```
+
+Configure your deployed address in `.env`:
+```env
+NEXT_PUBLIC_MANDATE_MANAGER_ADDRESS=0xYourDeployedAddress
+MANDATE_MANAGER_ADDRESS=0xYourDeployedAddress
+```

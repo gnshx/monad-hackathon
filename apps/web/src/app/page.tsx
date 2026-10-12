@@ -9,7 +9,8 @@ import { LiveVerificationInspector } from '../components/LiveVerificationInspect
 import { ActivityFeed, type ActivityItem } from '../components/ActivityFeed';
 import { registerPasskey, signMandateWithPasskey } from '../lib/webauthn';
 import { parseEther, formatEther, type Address, type Hex } from 'viem';
-import type { CreateMandateParams } from '@agenttrust/sdk';
+import { computeMandateHash, type CreateMandateParams } from '@agenttrust/sdk';
+import { DEFAULT_MANDATE_MANAGER_ADDRESS } from '../lib/contracts';
 import { ShieldCheck, Plus, Sparkles, Terminal } from 'lucide-react';
 
 export default function Dashboard() {
@@ -24,10 +25,12 @@ export default function Dashboard() {
     {
       id: 1n,
       owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      agentAddress: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
       agentId: 42n,
       maxValuePerTx: parseEther('0.25'),
       maxTotalValue: parseEther('2.5'),
       spentValue: parseEther('0.625'),
+      balance: parseEther('1.875'),
       expiresAt: BigInt(Math.floor(Date.now() / 1000) + 86400 * 5), // 5 days left
       nonce: 0n,
       revoked: false,
@@ -39,10 +42,12 @@ export default function Dashboard() {
     {
       id: 2n,
       owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      agentAddress: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC',
       agentId: 108n,
       maxValuePerTx: parseEther('0.05'),
       maxTotalValue: parseEther('0.5'),
       spentValue: parseEther('0.5'),
+      balance: 0n,
       expiresAt: BigInt(Math.floor(Date.now() / 1000) + 86400 * 1), // 1 day
       nonce: 1n,
       revoked: false,
@@ -53,10 +58,12 @@ export default function Dashboard() {
     {
       id: 3n,
       owner: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      agentAddress: '0x90F79bf6EB2c4f870365E785982E1f101E93b906',
       agentId: 99n,
       maxValuePerTx: parseEther('1.0'),
       maxTotalValue: parseEther('5.0'),
       spentValue: parseEther('0.1'),
+      balance: parseEther('0.9'),
       expiresAt: 0n, // Permanent
       nonce: 2n,
       revoked: true, // Revoked
@@ -134,23 +141,39 @@ export default function Dashboard() {
   const handleCreateMandate = async (params: CreateMandateParams) => {
     setIsAuthorizing(true);
     try {
-      // 1. Construct challenge hash
-      const dummyChallenge = ('0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')) as Hex;
-      
-      // 2. User signs challenge using WebAuthn passkey
-      const signature = await signMandateWithPasskey(dummyChallenge);
+      const ownerAddress = (walletAddress || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') as Address;
+      const nextNonce = BigInt(mandates.length);
+
+      // 1. Construct canonical challenge hash bound to all mandate constraints
+      const challengeHash = computeMandateHash({
+        chainId: 10143,
+        mandateManagerAddress: DEFAULT_MANDATE_MANAGER_ADDRESS,
+        owner: ownerAddress,
+        agentAddress: params.agentAddress,
+        agentId: params.agentId,
+        targets: params.targets,
+        maxValuePerTx: params.maxValuePerTx,
+        maxTotalValue: params.maxTotalValue,
+        expiresAt: params.expiresAt,
+        nonce: nextNonce,
+      });
+
+      // 2. User authorizes strictly this mandate challenge using WebAuthn passkey
+      const signature = await signMandateWithPasskey(challengeHash);
 
       // 3. Construct new mandate in state
       const newId = BigInt(mandates.length + 1);
       const newMandate: MandateItem = {
         id: newId,
-        owner: walletAddress || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        owner: ownerAddress,
+        agentAddress: params.agentAddress,
         agentId: params.agentId,
         maxValuePerTx: params.maxValuePerTx,
         maxTotalValue: params.maxTotalValue,
         spentValue: 0n,
+        balance: params.depositValue ?? 0n,
         expiresAt: params.expiresAt,
-        nonce: BigInt(mandates.length),
+        nonce: nextNonce,
         revoked: false,
         targets: params.targets.map((t) => ({ target: t.target, selector: t.selector })),
       };

@@ -5,15 +5,17 @@ import {
   decodeEventLog,
 } from 'viem';
 import { MandateManagerABI } from './abi.js';
-import { getMandate, getAllowedTargets } from './mandate.js';
+import { getMandate, getAllowedTargets, getMandateBalance } from './mandate.js';
 import type {
   ExecutionReceiptVerification,
   VerificationResult,
+  VerifyReceiptOptions,
 } from './types.js';
 
 /**
- * Independently pre-validates whether an intended action satisfies all on-chain
+ * Advisory pre-check verifying whether an intended action satisfies all on-chain
  * permissions and spending constraints of a mandate before broadcasting.
+ * Note: Contract execution on Monad remains the authoritative enforcement boundary.
  */
 export async function verifyActionPreflight(
   publicClient: PublicClient,
@@ -95,24 +97,46 @@ export async function verifyActionPreflight(
     };
   }
 
+  // Query isolated mandate vault balance
+  let mandateBalance = 0n;
+  try {
+    mandateBalance = await getMandateBalance(publicClient, contractAddress, mandateId);
+  } catch {
+    // If balance reading fails, omit
+  }
+
   return {
     valid: true,
     mandate,
     allowedTargets: targets,
     remainingBudget,
+    mandateBalance,
   };
 }
 
 /**
  * Independently verifies an execution transaction receipt directly against the blockchain.
  * Decodes the on-chain ActionExecuted receipt event to prove authorization and execution.
+ * Confirms contract address, event signature, and optional expected mandate / target fields.
  */
 export async function verifyReceipt(
   publicClient: PublicClient,
   contractAddress: Address,
-  transactionHash: Hex
+  transactionHash: Hex,
+  options?: VerifyReceiptOptions
 ): Promise<ExecutionReceiptVerification> {
-  const receipt = await publicClient.waitForTransactionReceipt({ hash: transactionHash });
+  let receipt;
+  try {
+    receipt = await publicClient.waitForTransactionReceipt({ hash: transactionHash });
+  } catch (err: any) {
+    return {
+      verified: false,
+      status: 'reverted',
+      transactionHash,
+      blockNumber: 0n,
+      revertReason: `Failed to query transaction receipt: ${err.message || String(err)}`,
+    };
+  }
 
   if (receipt.status === 'reverted') {
     return {
@@ -120,13 +144,13 @@ export async function verifyReceipt(
       status: 'reverted',
       transactionHash,
       blockNumber: receipt.blockNumber,
-      revertReason: 'Transaction reverted on-chain',
+      revertReason: 'Transaction reverted on-chain (contract policy rejected execution)',
     };
   }
 
   const contractAddressLower = contractAddress.toLowerCase();
 
-  // Search logs for the ActionExecuted event from the MandateManager contract
+  // Search logs strictly for ActionExecuted event emitted by MandateManager contract
   for (const log of receipt.logs) {
     if (log.address.toLowerCase() !== contractAddressLower) continue;
 
@@ -139,6 +163,59 @@ export async function verifyReceipt(
 
       if (decoded.eventName === 'ActionExecuted') {
         const { mandateId, target, selector, value, returnData } = decoded.args;
+
+        // Verify optional expectations if provided
+        if (options?.expectedMandateId !== undefined && mandateId !== options.expectedMandateId) {
+          return {
+            verified: false,
+            status: 'success',
+            mandateId,
+            target,
+            selector: selector as Hex,
+            value,
+            returnData,
+            transactionHash,
+            blockNumber: receipt.blockNumber,
+            revertReason: `Receipt emitted for Mandate #${mandateId.toString()}, expected #${options.expectedMandateId.toString()}`,
+          };
+        }
+
+        if (
+          options?.expectedTarget !== undefined &&
+          target.toLowerCase() !== options.expectedTarget.toLowerCase()
+        ) {
+          return {
+            verified: false,
+            status: 'success',
+            mandateId,
+            target,
+            selector: selector as Hex,
+            value,
+            returnData,
+            transactionHash,
+            blockNumber: receipt.blockNumber,
+            revertReason: `Receipt target ${target} does not match expected ${options.expectedTarget}`,
+          };
+        }
+
+        if (
+          options?.expectedSelector !== undefined &&
+          (selector as Hex).toLowerCase() !== options.expectedSelector.toLowerCase()
+        ) {
+          return {
+            verified: false,
+            status: 'success',
+            mandateId,
+            target,
+            selector: selector as Hex,
+            value,
+            returnData,
+            transactionHash,
+            blockNumber: receipt.blockNumber,
+            revertReason: `Receipt selector ${selector} does not match expected ${options.expectedSelector}`,
+          };
+        }
+
         return {
           verified: true,
           status: 'success',

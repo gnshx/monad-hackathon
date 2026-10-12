@@ -7,10 +7,12 @@ import { formatEther } from 'viem';
 export interface MandateItem {
   id: bigint;
   owner: string;
+  agentAddress?: string;
   agentId: bigint;
   maxValuePerTx: bigint;
   maxTotalValue: bigint;
   spentValue: bigint;
+  balance?: bigint;
   expiresAt: bigint;
   nonce: bigint;
   revoked: boolean;

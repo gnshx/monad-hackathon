@@ -5,12 +5,13 @@ import {
 } from '../src/mandate.js';
 import { verifyActionPreflight, verifyReceipt } from '../src/verify.js';
 import type { AllowedTarget, Mandate } from '../src/types.js';
-import { keccak256, toHex, stringToHex, encodeEventTopics } from 'viem';
+import { encodeEventTopics, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { MandateManagerABI } from '../src/abi.js';
 
 describe('AgentTrust SDK', () => {
   const dummyContract = '0x1111111111111111111111111111111111111111' as const;
   const dummyOwner = '0x2222222222222222222222222222222222222222' as const;
+  const dummyAgentAddress = '0x4444444444444444444444444444444444444444' as const;
   const dummyTarget = '0x3333333333333333333333333333333333333333' as const;
 
   describe('computeMandateHash', () => {
@@ -20,6 +21,7 @@ describe('AgentTrust SDK', () => {
         chainId: 10143, // Monad testnet
         mandateManagerAddress: dummyContract,
         owner: dummyOwner,
+        agentAddress: dummyAgentAddress,
         agentId: 42n,
         targets,
         maxValuePerTx: 1000n,
@@ -42,6 +44,7 @@ describe('AgentTrust SDK', () => {
         chainId: 10143,
         mandateManagerAddress: dummyContract,
         owner: dummyOwner,
+        agentAddress: dummyAgentAddress,
         agentId: 42n,
         targets,
         maxValuePerTx: 1000n,
@@ -52,11 +55,16 @@ describe('AgentTrust SDK', () => {
 
       const baseHash = computeMandateHash(base);
       const alteredAgentHash = computeMandateHash({ ...base, agentId: 43n });
+      const alteredAgentAddrHash = computeMandateHash({
+        ...base,
+        agentAddress: '0x5555555555555555555555555555555555555555',
+      });
       const alteredLimitHash = computeMandateHash({ ...base, maxValuePerTx: 1001n });
       const alteredNonceHash = computeMandateHash({ ...base, nonce: 1n });
       const alteredChainHash = computeMandateHash({ ...base, chainId: 1 });
 
       expect(alteredAgentHash).not.toBe(baseHash);
+      expect(alteredAgentAddrHash).not.toBe(baseHash);
       expect(alteredLimitHash).not.toBe(baseHash);
       expect(alteredNonceHash).not.toBe(baseHash);
       expect(alteredChainHash).not.toBe(baseHash);
@@ -66,6 +74,7 @@ describe('AgentTrust SDK', () => {
   describe('verifyActionPreflight', () => {
     const mockMandate: Mandate = {
       owner: dummyOwner,
+      agentAddress: dummyAgentAddress,
       agentId: 77n,
       maxValuePerTx: 500n,
       maxTotalValue: 2000n,
@@ -85,6 +94,7 @@ describe('AgentTrust SDK', () => {
         readContract: vi.fn(async ({ functionName }: any) => {
           if (functionName === 'getMandate') return currentMandate;
           if (functionName === 'getAllowedTargets') return mockTargets;
+          if (functionName === 'mandateBalances') return 10000n;
           if (functionName === 'isActive')
             return !currentMandate.revoked && currentMandate.owner !== '0x0000000000000000000000000000000000000000';
           return null;
@@ -104,6 +114,7 @@ describe('AgentTrust SDK', () => {
 
       expect(res.valid).toBe(true);
       expect(res.remainingBudget).toBe(1800n);
+      expect(res.mandateBalance).toBe(10000n);
     });
 
     it('rejects action if mandate has been revoked', async () => {
@@ -203,6 +214,136 @@ describe('AgentTrust SDK', () => {
 
       expect(res.verified).toBe(false);
       expect(res.status).toBe('reverted');
+      expect(res.revertReason).toContain('reverted');
+    });
+
+    it('rejects logs emitted by an unrelated contract (false positive defense)', async () => {
+      const topics = encodeEventTopics({
+        abi: MandateManagerABI,
+        eventName: 'ActionExecuted',
+        args: {
+          mandateId: 1n,
+          target: dummyTarget,
+        },
+      });
+
+      const data = encodeAbiParameters(
+        parseAbiParameters('bytes4 selector, uint256 value, bytes returnData'),
+        ['0xa9059cbb', 100n, '0x']
+      );
+
+      const unrelatedAddress = '0x9999999999999999999999999999999999999999';
+      const mockPublicClient = {
+        waitForTransactionReceipt: vi.fn(async () => ({
+          status: 'success',
+          blockNumber: 12345n,
+          logs: [
+            {
+              address: unrelatedAddress, // Not the MandateManager contract!
+              topics,
+              data,
+            },
+          ],
+        })),
+      } as any;
+
+      const res = await verifyReceipt(
+        mockPublicClient,
+        dummyContract,
+        '0xabc1230000000000000000000000000000000000000000000000000000000000'
+      );
+
+      expect(res.verified).toBe(false);
+      expect(res.revertReason).toContain('no ActionExecuted event was emitted by MandateManager');
+    });
+
+    it('verifies valid ActionExecuted event from correct contract', async () => {
+      const topics = encodeEventTopics({
+        abi: MandateManagerABI,
+        eventName: 'ActionExecuted',
+        args: {
+          mandateId: 1n,
+          target: dummyTarget,
+        },
+      });
+
+      const data = encodeAbiParameters(
+        parseAbiParameters('bytes4 selector, uint256 value, bytes returnData'),
+        ['0xa9059cbb', 100n, '0x']
+      );
+
+      const mockPublicClient = {
+        waitForTransactionReceipt: vi.fn(async () => ({
+          status: 'success',
+          blockNumber: 54321n,
+          logs: [
+            {
+              address: dummyContract,
+              topics,
+              data,
+            },
+          ],
+        })),
+      } as any;
+
+      const res = await verifyReceipt(
+        mockPublicClient,
+        dummyContract,
+        '0xabc1230000000000000000000000000000000000000000000000000000000000',
+        {
+          expectedMandateId: 1n,
+          expectedTarget: dummyTarget,
+          expectedSelector: '0xa9059cbb',
+        }
+      );
+
+      expect(res.verified).toBe(true);
+      expect(res.mandateId).toBe(1n);
+      expect(res.target).toBe(dummyTarget);
+      expect(res.selector).toBe('0xa9059cbb');
+      expect(res.value).toBe(100n);
+    });
+
+    it('rejects when expected mandate ID mismatches', async () => {
+      const topics = encodeEventTopics({
+        abi: MandateManagerABI,
+        eventName: 'ActionExecuted',
+        args: {
+          mandateId: 1n,
+          target: dummyTarget,
+        },
+      });
+
+      const data = encodeAbiParameters(
+        parseAbiParameters('bytes4 selector, uint256 value, bytes returnData'),
+        ['0xa9059cbb', 100n, '0x']
+      );
+
+      const mockPublicClient = {
+        waitForTransactionReceipt: vi.fn(async () => ({
+          status: 'success',
+          blockNumber: 54321n,
+          logs: [
+            {
+              address: dummyContract,
+              topics,
+              data,
+            },
+          ],
+        })),
+      } as any;
+
+      const res = await verifyReceipt(
+        mockPublicClient,
+        dummyContract,
+        '0xabc1230000000000000000000000000000000000000000000000000000000000',
+        {
+          expectedMandateId: 99n, // wrong expected ID
+        }
+      );
+
+      expect(res.verified).toBe(false);
+      expect(res.revertReason).toContain('Receipt emitted for Mandate #1, expected #99');
     });
   });
 });

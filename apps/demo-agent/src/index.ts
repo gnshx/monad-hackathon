@@ -51,13 +51,16 @@ async function main() {
     const mandate = await sdk.getMandate(MANDATE_ID);
     const targets = await sdk.getAllowedTargets(MANDATE_ID);
     const active = await sdk.isActive(MANDATE_ID);
+    const balance = await sdk.getMandateBalance(MANDATE_ID);
 
     console.log(`📋 Mandate #${MANDATE_ID.toString()}:`);
     console.log(`   Owner:             ${mandate.owner}`);
+    console.log(`   Agent Address:     ${mandate.agentAddress}`);
     console.log(`   Agent ID:          ${mandate.agentId.toString()}`);
     console.log(`   Per-Tx Cap:        ${mandate.maxValuePerTx.toString()} wei`);
     console.log(`   Total Budget:      ${mandate.maxTotalValue.toString()} wei`);
     console.log(`   Spent Value:       ${mandate.spentValue.toString()} wei`);
+    console.log(`   Vault Balance:     ${balance.toString()} wei`);
     console.log(`   Expires At:        ${mandate.expiresAt.toString()}`);
     console.log(`   Revoked:           ${mandate.revoked}`);
     console.log(`   Status:            ${active ? '✅ ACTIVE' : '❌ INACTIVE'}`);

@@ -12,10 +12,11 @@ contract Deploy is Script {
         uint256 pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
         // shortcut: using address(0) so contract falls back to P256_PRECOMPILE constant
         // Update once Monad confirms the precompile address
-        address p256Override = address(0);
+        address p256Override = vm.envOr("P256_VERIFIER_ADDRESS", address(0));
+        address agentRegistry = vm.envOr("ERC8004_REGISTRY_ADDRESS", address(0));
 
         vm.startBroadcast(pk);
-        MandateManager mm = new MandateManager(p256Override);
+        MandateManager mm = new MandateManager(p256Override, agentRegistry);
         vm.stopBroadcast();
 
         console2.log("MandateManager deployed at:", address(mm));

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, CheckCircle, XCircle, Shield, ExternalLink, Terminal } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Terminal, AlertTriangle } from 'lucide-react';
 import type { Hex } from 'viem';
 import { formatEther } from 'viem';
 import { verifyReceipt } from '@agenttrust/sdk';
@@ -15,7 +15,18 @@ export function LiveVerificationInspector() {
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!queryHash.trim()) return;
+    const hash = queryHash.trim();
+    if (!hash) return;
+
+    if (!hash.startsWith('0x') || hash.length !== 66) {
+      setResult({
+        verified: false,
+        status: 'invalid_format',
+        transactionHash: hash,
+        revertReason: 'Invalid transaction hash format. Must be a 32-byte hex string (0x followed by 64 hex characters).',
+      });
+      return;
+    }
 
     setIsVerifying(true);
     setResult(null);
@@ -29,22 +40,16 @@ export function LiveVerificationInspector() {
       const res = await verifyReceipt(
         publicClient as any,
         DEFAULT_MANDATE_MANAGER_ADDRESS,
-        queryHash.trim() as Hex
+        hash as Hex
       );
 
       setResult(res);
     } catch (err: any) {
-      // In development or simulation preview when offline
       setResult({
-        verified: true,
-        status: 'success',
-        mandateId: 1n,
-        target: '0x3333333333333333333333333333333333333333',
-        selector: '0xa9059cbb',
-        value: 100000000000000000n, // 0.1 MON
-        transactionHash: queryHash,
-        blockNumber: 1084291n,
-        simulated: true,
+        verified: false,
+        status: 'reverted',
+        transactionHash: hash,
+        revertReason: err.shortMessage || err.message || 'Transaction query failed or not found on Monad Testnet RPC',
       });
     } finally {
       setIsVerifying(false);
@@ -95,13 +100,11 @@ export function LiveVerificationInspector() {
               <>
                 <CheckCircle size={18} color="#10b981" />
                 <span style={{ fontWeight: 600, color: '#10b981', fontSize: '0.9rem' }}>
-                  Cryptographically Verified On-Chain Receipt
+                  Authentic On-Chain Receipt Verified
                 </span>
-                {result.simulated && (
-                  <span className="badge badge-monad" style={{ fontSize: '0.65rem' }}>
-                    Simulation Proof
-                  </span>
-                )}
+                <span className="badge badge-active" style={{ fontSize: '0.65rem' }}>
+                  Monad Event Verified
+                </span>
               </>
             ) : (
               <>
@@ -113,35 +116,42 @@ export function LiveVerificationInspector() {
             )}
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '0.75rem',
-              fontSize: '0.8rem',
-            }}
-          >
-            <div>
-              <span style={{ color: 'var(--text-faint)' }}>Mandate ID:</span>{' '}
-              <span className="hash-pill">#{result.mandateId?.toString()}</span>
+          {result.verified ? (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '0.75rem',
+                fontSize: '0.8rem',
+              }}
+            >
+              <div>
+                <span style={{ color: 'var(--text-faint)' }}>Mandate ID:</span>{' '}
+                <span className="hash-pill">#{result.mandateId?.toString()}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-faint)' }}>Target Contract:</span>{' '}
+                <span className="hash-pill">{result.target}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-faint)' }}>Function Selector:</span>{' '}
+                <span className="hash-pill">{result.selector}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-faint)' }}>Value Transferred:</span>{' '}
+                <span style={{ fontWeight: 600 }}>{result.value ? formatEther(result.value) : '0'} MON</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-faint)' }}>Block Number:</span>{' '}
+                <span className="hash-pill">{result.blockNumber?.toString()}</span>
+              </div>
             </div>
-            <div>
-              <span style={{ color: 'var(--text-faint)' }}>Target Contract:</span>{' '}
-              <span className="hash-pill">{result.target}</span>
+          ) : (
+            <div style={{ fontSize: '0.8rem', color: '#fda4af', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <AlertTriangle size={15} color="#f43f5e" />
+              <span>{result.revertReason || 'Transaction was not confirmed as an authentic ActionExecuted receipt.'}</span>
             </div>
-            <div>
-              <span style={{ color: 'var(--text-faint)' }}>Function Selector:</span>{' '}
-              <span className="hash-pill">{result.selector}</span>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-faint)' }}>Value Transferred:</span>{' '}
-              <span style={{ fontWeight: 600 }}>{result.value ? formatEther(result.value) : '0'} MON</span>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-faint)' }}>Block Number:</span>{' '}
-              <span className="hash-pill">{result.blockNumber?.toString()}</span>
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>

@@ -7,6 +7,7 @@ export interface AllowedTarget {
 
 export interface Mandate {
   owner: Address;
+  agentAddress: Address;
   agentId: bigint;
   maxValuePerTx: bigint; // in wei
   maxTotalValue: bigint; // in wei
@@ -28,12 +29,30 @@ export interface PasskeySignature {
 }
 
 export interface CreateMandateParams {
+  agentAddress: Address;
   agentId: bigint;
   targets: AllowedTarget[];
   maxValuePerTx: bigint;
   maxTotalValue: bigint;
   expiresAt: bigint;
   nonce?: bigint;
+  depositValue?: bigint; // optional initial funding in wei
+}
+
+export interface CreateMandateWithWebAuthnParams {
+  agentAddress: Address;
+  agentId: bigint;
+  targets: AllowedTarget[];
+  maxValuePerTx: bigint;
+  maxTotalValue: bigint;
+  expiresAt: bigint;
+  nonce?: bigint;
+  depositValue?: bigint;
+  sigR: Hex;
+  sigS: Hex;
+  authenticatorData: Hex;
+  clientDataJSON: Hex;
+  challengeOffset: bigint;
 }
 
 export interface ExecuteActionParams {
@@ -52,6 +71,13 @@ export interface VerificationResult {
   mandate?: Mandate;
   allowedTargets?: AllowedTarget[];
   remainingBudget?: bigint;
+  mandateBalance?: bigint;
+}
+
+export interface VerifyReceiptOptions {
+  expectedMandateId?: bigint;
+  expectedTarget?: Address;
+  expectedSelector?: Hex;
 }
 
 export interface ExecutionReceiptVerification {
