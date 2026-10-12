@@ -1,0 +1,20 @@
+{
+  "name": "@agenttrust/demo-agent",
+  "version": "0.1.0",
+  "description": "Demo AI Agent that requests actions within and outside passkey-authorized mandates",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "verify-client": "node dist/verifier-client.js"
+  },
+  "dependencies": {
+    "@agenttrust/sdk": "*",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
