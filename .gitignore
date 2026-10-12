@@ -1,6 +1,7 @@
 # Node & Workspaces
 tools/
 .bin/
+.monitor-state/
 apps/web/logo.jpg
 node_modules/
 .pnpm-store/
