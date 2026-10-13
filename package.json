@@ -23,6 +23,7 @@
     "test:contracts": "cd contracts && forge test",
     "build:mcp": "npm run build:sdk && npm run --workspace=@agenttrust/mcp build",
     "e2e:serve": "npm run build:sdk && npx -y tsx scripts/mandates-e2e.ts --serve",
-    "mcp:smoke": "npm run build:mcp && node scripts/mcp-smoke.mjs"
+    "mcp:smoke": "npm run build:mcp && node scripts/mcp-smoke.mjs",
+    "example:paid-api": "npm run build:sdk && npx -y tsx examples/paid-api.ts"
   }
 }

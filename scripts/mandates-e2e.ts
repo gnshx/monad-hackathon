@@ -193,6 +193,8 @@ async function main() {
     log(`withdrew ${Number(leftUsdc) / 1e6} USDC to ${coldWallet}   ${link(record.withdrawToken)}`);
 
     step('8/8', 'Final state');
+    const gas = async (h: Hex) => (await publicClient.getTransactionReceipt({ hash: h })).gasUsed;
+    log(`gas: createMandate ${await gas(record.createMandate)}, execute ${await gas(record.allowedCall)}, payToken ${await gas(record.allowedPayment)}, revoke ${await gas(record.revoke)}`);
     const m = await ownerSdk.getMandate(mandateId);
     const ta = await ownerSdk.getTokenAllowance(mandateId, usdc);
     log(`spent ${formatEther(m.spent)} / ${formatEther(m.budget)} MON and ${Number(ta.spent) / 1e6} / ${Number(ta.budget) / 1e6} USDC, vaults empty: ${m.balance === 0n && ta.balance === 0n}, revoked ${m.revoked}`);

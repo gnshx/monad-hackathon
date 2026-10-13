@@ -73,6 +73,8 @@ npm run e2e                                          # full lifecycle on a local
 4. The owner revokes with the passkey; the agent's next call reverts.
 5. The owner withdraws the remaining MON and USDC to a cold wallet.
 
+Gas measured in that run (Osaka P-256 precompile, same interface and cost as Monad's): `createMandate` ≈ 597k (stores terms, permissions, a token limit and indexes, and registers the passkey on first use), `execute` ≈ 120k and `payToken` ≈ 120k (both including two ERC-8004 registry reads), `revoke` ≈ 74k (including a full WebAuthn verification).
+
 Add `--testnet` with `DEPLOYER_PRIVATE_KEY` set to run the same flow on Monad testnet and record every transaction in `deployments.mandates.json` ([deploy guide](docs/deploy.md)).
 
 ## Integrate
@@ -117,6 +119,10 @@ await fetch('/api/relay', { method: 'POST', headers: { 'content-type': 'applicat
 await mandates.checkAction(id, agent, target, data, value); // { allowed: false, reason: 'ExceedsBudget' }
 await mandates.execute(id, target, data, value);            // throws MandateDeniedError before spending gas
 ```
+
+### Pay-per-call APIs: only serve agents a human authorized
+
+[`examples/paid-api.ts`](examples/paid-api.ts) is an x402-style flow. The agent signs its request, and the API calls `checkPayment()` to confirm a live mandate lets this agent pay this price, then answers `402` with the price. The agent pays through `payToken()`, and the API verifies the `TokenPaid` event before serving. Replayed payments and claims on someone else's mandate are refused. Run it with `npm run e2e:serve`, then `npm run example:paid-api`.
 
 ### Solidity: gate agent traffic in your protocol
 
