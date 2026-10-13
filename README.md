@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://d6eafce2000e50.lhr.life"><img src="https://img.shields.io/badge/Live_Console-d6eafce2000e50.lhr.life-5944db?style=for-the-badge&logo=monad&logoColor=white" alt="Live Console" /></a>
+  <a href="https://d252e85e771918.lhr.life"><img src="https://img.shields.io/badge/Live_Console-d252e85e771918.lhr.life-5944db?style=for-the-badge&logo=monad&logoColor=white" alt="Live Console" /></a>
   <a href="https://github.com/gnshx/monad-hackathon"><img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Repo" /></a>
   <img src="https://img.shields.io/badge/Monad_Testnet-Chain_10143-836ef9?style=for-the-badge&logo=ethereum&logoColor=white" alt="Monad Network" />
 </p>
@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://d6eafce2000e50.lhr.life">🌐 Live Web Console</a> •
+  <a href="https://d252e85e771918.lhr.life">🌐 Live Web Console</a> •
   <a href="#-reproducible-judge-evaluation-guide">📋 Judge Evaluation Guide</a> •
   <a href="#-3-minute-developer--sdk-quickstart">⚡ 3-Min SDK Quickstart</a> •
   <a href="docs/claim-vs-evidence.md">📊 Claim vs. Evidence Matrix</a> •
@@ -31,6 +31,8 @@
   <a href="docs/demo-script.md">🎬 90-Sec Video Script</a> •
   <a href="docs/threat-model.md">🛡️ Threat Model</a>
 </p>
+
+> 💡 **Judge Note on Live Deployment:** The public console is tunneled at **[https://d252e85e771918.lhr.life](https://d252e85e771918.lhr.life)**. If external tunnels are restricted by corporate firewall rules, the production console runs locally in seconds via `npm run build:web && npm run start:web` at `http://localhost:3000`.
 
 ---
 
@@ -69,7 +71,7 @@ This runs `scripts/run-demo.ts` on a local Anvil EVM node (Chain ID 31337), exec
 - Standalone fail-closed receipt verification via `@agenttrust/sdk`
 
 ### 5. How can I connect to Monad Testnet?
-- Open the live console at **[https://d6eafce2000e50.lhr.life](https://d6eafce2000e50.lhr.life)**.
+- Open the live console at **[https://d252e85e771918.lhr.life](https://d252e85e771918.lhr.life)**.
 - Connect MetaMask or Rabby. The app prompts to switch to **Monad Testnet (Chain ID 10143, RPC: `https://testnet-rpc.monad.xyz`)**.
 - The app checks contract bytecode (`client.getBytecode`) on Monad Testnet before permitting live transactions.
 
