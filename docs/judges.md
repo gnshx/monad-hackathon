@@ -5,6 +5,7 @@
 > **Judges Reference:** Keone Hon, Tina Qi, Maria Shen, Will Nuelle, Frankie, Evan Feng, Ajit Tripathi, Francesco Andreoli  
 
 **Judges & Evaluators Quick Links:**
+- 🏆 **Official Submission Package & Portal Copy:** [`docs/submission-package.md`](submission-package.md)
 - 🎬 **Video Storyboards & Integration Outreach:** [`docs/storyboard-and-outreach.md`](storyboard-and-outreach.md)
 - 📊 **Claim vs. Evidence Matrix:** [`docs/claim-vs-evidence.md`](claim-vs-evidence.md)
 - 🎙️ **Interview Defense Brief & Rehearsed Answers:** [`docs/interview-brief.md`](interview-brief.md)

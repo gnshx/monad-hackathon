@@ -25,12 +25,12 @@
 
 <p align="center">
   <a href="docs/judges.md">👨‍⚖️ Master Judges Dossier</a> •
-  <a href="https://9d64be3048fb67.lhr.life">🌐 Live Web Console</a> •
+  <a href="docs/submission-package.md">🏆 Official Submission Package</a> •
+  <a href="docs/storyboard-and-outreach.md">🎬 Video Storyboard & Outreach</a> •
   <a href="#-reproducible-judge-evaluation-guide">📋 Evaluation Guide</a> •
-  <a href="#-15-minute-integrator-quickstart-drop-in-guard-middleware">🔌 SDK Guard Quickstart</a> •
+  <a href="#-15-minute-integrator-quickstart-drop-in-guard-middleware">🔌 SDK Quickstart</a> •
   <a href="docs/claim-vs-evidence.md">📊 Claims vs. Evidence</a> •
-  <a href="docs/interview-brief.md">🎙️ Interview Defense</a> •
-  <a href="docs/threat-model.md">🛡️ Threat Model</a>
+  <a href="docs/interview-brief.md">🎙️ Interview Defense</a>
 </p>
 
 > 💡 **Judge Note on Live Deployment:** The public console is tunneled at **[https://9d64be3048fb67.lhr.life](https://9d64be3048fb67.lhr.life)**. If external tunnels are restricted by corporate firewall rules, the production console runs locally in seconds via `npm run build:web && npm run start:web` at `http://localhost:3000`.
