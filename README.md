@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://1877f27577c602.lhr.life"><img src="https://img.shields.io/badge/Live_Console-1877f27577c602.lhr.life-5944db?style=for-the-badge&logo=monad&logoColor=white" alt="Live Console" /></a>
+  <a href="https://d6eafce2000e50.lhr.life"><img src="https://img.shields.io/badge/Live_Console-d6eafce2000e50.lhr.life-5944db?style=for-the-badge&logo=monad&logoColor=white" alt="Live Console" /></a>
   <a href="https://github.com/gnshx/monad-hackathon"><img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Repo" /></a>
   <img src="https://img.shields.io/badge/Monad_Testnet-Chain_10143-836ef9?style=for-the-badge&logo=ethereum&logoColor=white" alt="Monad Network" />
 </p>
@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://1877f27577c602.lhr.life">🌐 Live Web Console</a> •
+  <a href="https://d6eafce2000e50.lhr.life">🌐 Live Web Console</a> •
   <a href="#-reproducible-judge-evaluation-guide">📋 Judge Evaluation Guide</a> •
   <a href="#-3-minute-developer--sdk-quickstart">⚡ 3-Min SDK Quickstart</a> •
   <a href="docs/claim-vs-evidence.md">📊 Claim vs. Evidence Matrix</a> •
@@ -69,24 +69,25 @@ This runs `scripts/run-demo.ts` on a local Anvil EVM node (Chain ID 31337), exec
 - Standalone fail-closed receipt verification via `@agenttrust/sdk`
 
 ### 5. How can I connect to Monad Testnet?
-- Open the live console at **[https://1877f27577c602.lhr.life](https://1877f27577c602.lhr.life)**.
+- Open the live console at **[https://d6eafce2000e50.lhr.life](https://d6eafce2000e50.lhr.life)**.
 - Connect MetaMask or Rabby. The app prompts to switch to **Monad Testnet (Chain ID 10143, RPC: `https://testnet-rpc.monad.xyz`)**.
 - The app checks contract bytecode (`client.getBytecode`) on Monad Testnet before permitting live transactions.
 
 ### 6. What is real versus simulated?
 | Component | Reality Status |
 | :--- | :--- |
-| **P-256 Precompile (`0x0100`)** | **PROVEN ON TESTNET.** Precompile presence queried at `0x0100` on `https://testnet-rpc.monad.xyz` via `eth_call`; returns non-reverting empty data for invalid inputs as per Monad docs. Full valid signature vectors are verified on-chain in 29 Foundry tests (`MandateManager.t.sol`) and SDK tests. |
-| **Receipt Inspector** | **REAL & FAIL-CLOSED.** Queries live Monad Testnet RPC (`Chain ID: 10143`); validates bytecode deployment; verifies log topics, selector match, and value caps. Flags untrusted custom contracts. |
+| **P-256 Precompile (`0x0100`)** | **PRECOMPILE AVAILABILITY QUERIED ON TESTNET · LOCAL TESTS PROVEN.** Address `0x0100` on `https://testnet-rpc.monad.xyz` queried via `eth_call` confirms active precompile handler (returns non-reverting empty data for malformed inputs per Monad RIP-7212 documentation). Full valid signature verification is proven in **29 local Foundry tests (`MandateManager.t.sol`)** and **SDK unit tests**, not yet executed on Monad testnet due to testnet faucet limits. |
+| **Receipt Inspector** | **REAL & FAIL-CLOSED.** Queries live Monad Testnet RPC (`Chain ID: 10143`); validates bytecode deployment; verifies log topics, selector match, and value caps. Distinguishes event decoding from full policy compliance. Flags untrusted custom contracts. |
 | **WebAuthn Passkey Signing** | **REAL.** Enforces User Presence bit (`flags & 0x01`); fails closed on device prompt dismissal or errors; extracts SPKI DER P-256 public keys. |
 | **Smart Contract Logic** | **PROVEN REAL.** 29/29 Foundry tests pass including 1,000-run fuzz tests. |
 | **Attack Lab Scenarios** | **EXPLAINABLE SIMULATION.** Exercises local contract invariants in the browser; labeled `Execution Mode: Local Preflight` — nothing is broadcast and no transaction receipts are fabricated. |
-| **Monad Testnet Deployment** | **DOCUMENTED LIMITATION.** Due to rate-limited public faucets during hackathon build, contracts are not claimed as deployed on testnet. The UI cleanly detects 0-byte bytecode and discloses this limitation. |
+| **Monad Testnet Deployment** | **NOT DEPLOYED ON TESTNET (LOCAL ANVIL 31337 IS PROVEN BASELINE).** AgentTrust contracts have not been deployed to Monad Testnet; no deployment transaction hash is claimed. The live web application explicitly checks bytecode, discovers 0 bytes on Monad Testnet (Chain ID 10143), and gracefully discloses this boundary while directing users to the reproducible Local Anvil EVM environment (Chain ID 31337). |
 
 ### 7. Where can I verify deployment / transactions?
-- **Precompile Verification:** Tested directly against `https://testnet-rpc.monad.xyz` at `0x0000000000000000000000000000000000000100`.
-- **Local Confirmed Hash:** Action executed on local Anvil node (Chain 31337) at `0x50823d6cdb9ce7124050b5d7e6d8525ea43a07f0367b316855c21b28de7be681`.
-- **Receipt Auditor Tool:** Integrated in the live console under the **Receipts** tab with fail-closed checks.
+- **P-256 Precompile Availability:** Queried via RPC against Monad Testnet at `0x0000000000000000000000000000000000000100`, confirming non-reverting handler for malformed input per RIP-7212 spec.
+- **Local On-Chain Enforcement (Chain 31337):** Complete 6-scenario execution lifecycle runs against local Anvil with real on-chain transaction hash `0xb7cf85e1b4ec983fd3ad8cea904e8bc132236f18948e79121f7212f3095ddadd` (reproducible via `npm run demo`).
+- **Monad Testnet Contracts (Chain 10143):** Explicitly unconfigured / not deployed. No false testnet deployment transaction is claimed.
+- **Receipt Auditor Tool:** Integrated in the live console under the **Receipts** tab with fail-closed checks against Monad Testnet or any specified EVM RPC.
 
 ---
 
@@ -99,10 +100,7 @@ AgentTrust provides a zero-backend TypeScript SDK (`@agenttrust/sdk`) so autonom
 ```typescript
 import { verifyReceipt } from '@agenttrust/sdk';
 
-const result = await verifyReceipt({
-  txHash: '0x50823d6cdb9ce7124050b5d7e6d8525ea43a07f0367b316855c21b28de7be681',
-  contractAddress: '0x7bc06c482dead17c0e297afbc32f6e63d3846650',
-  rpcUrl: 'http://127.0.0.1:8545',
+const result = await verifyReceipt(publicClient, contractAddress, txHash, {
   expectedChainId: 31337,
   expectedSelector: '0x50824e4f', // MockTarget.doSomething
   expectedMaxValue: 200000000000000000n, // 0.2 MON
@@ -110,7 +108,7 @@ const result = await verifyReceipt({
 
 console.log(result.status); // 'success' | 'reverted' | 'not_found' | 'wrong_network'
 console.log(result.verified); // true
-console.log(result.eventData?.spentValue); // 100000000000000000n (0.1 MON)
+console.log(result.value); // 100000000000000000n (0.1 MON)
 ```
 
 ### 2. Run Local Security Enforcement Demo

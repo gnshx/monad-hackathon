@@ -38,6 +38,8 @@ interface VerificationCheck {
 
 interface AuditResult {
   verified: boolean;
+  fullPolicyCompliance: boolean;
+  policyMatchLevel: 'full' | 'partial' | 'unspecified';
   statusCategory: ReceiptVerificationStatus;
   networkName: string;
   chainId: number;
@@ -46,7 +48,8 @@ interface AuditResult {
   contractAddress: string;
   isCanonicalContract: boolean;
   mandateId?: number;
-  agentId?: number;
+  agentId?: number | null;
+  agentVerificationNote?: string;
   target?: string;
   selector?: string;
   value?: string;
@@ -134,6 +137,8 @@ export function ReceiptInspector() {
         });
         setAuditResult({
           verified: false,
+          fullPolicyCompliance: false,
+          policyMatchLevel: 'unspecified',
           statusCategory: 'rpc_error',
           networkName: 'Monad Testnet',
           chainId: MONAD_TESTNET_CHAIN_ID,
@@ -192,29 +197,94 @@ export function ReceiptInspector() {
       const res = await verifyReceipt(client, cleanContract as Address, cleanTx as Hex, verifyOpts);
 
       if (res.status === 'success' && res.verified && isBytecodePresent) {
+        // 1. Transaction Receipt Confirmed
         checks.push({
-          title: 'Transaction On-Chain Inclusion',
+          title: '1. Transaction Receipt Confirmed',
           description: `Confirmed on-chain in Block #${res.blockNumber.toString()}`,
           status: 'passed',
           evidence: `Status: 0x1 (Success) · Block Number: ${res.blockNumber.toString()}`,
         });
 
+        // 2. Event Signature & Emitter Checked
         checks.push({
-          title: 'Canonical ActionExecuted Event Signature',
+          title: '2. Canonical ActionExecuted Event Signature',
           description: 'Event emitted strictly by specified contract address',
           status: 'passed',
-          evidence: `Topic0: ActionExecuted(uint256,address,bytes4,uint256,bytes) verified`,
+          evidence: `Topic0: ActionExecuted(uint256,address,bytes4,uint256,bytes) verified from ${cleanContract}`,
         });
 
-        checks.push({
-          title: 'Mandate Constraints & Spending Audit',
-          description: 'Execution parameters decoded and matched against policy',
-          status: 'passed',
-          evidence: `Mandate #${res.mandateId?.toString()} · Target: ${res.target} · Selector: ${res.selector} · Native MON: ${res.value ? formatEther(res.value) : '0'} MON`,
-        });
+        // Check which expectations were supplied vs missing
+        const providedExpectations: string[] = [];
+        const missingExpectations: string[] = [];
+
+        if (expectedMandateId.trim()) providedExpectations.push(`Mandate #${expectedMandateId.trim()}`);
+        else missingExpectations.push('Mandate ID');
+
+        if (expectedTarget.trim()) providedExpectations.push(`Target ${expectedTarget.trim().slice(0, 8)}...`);
+        else missingExpectations.push('Target Address');
+
+        if (expectedSelector.trim()) providedExpectations.push(`Selector ${expectedSelector.trim()}`);
+        else missingExpectations.push('Method Selector');
+
+        if (expectedMaxMon.trim()) providedExpectations.push(`Max MON ${expectedMaxMon.trim()}`);
+        else missingExpectations.push('Spending Cap');
+
+        const hasAllExpectations = missingExpectations.length === 0;
+        const hasAnyExpectations = providedExpectations.length > 0;
+        const isFullPolicyCompliance = hasAllExpectations && !isCustomContract;
+
+        // 3. Expected Policy Fields Actually Matched
+        if (hasAllExpectations) {
+          checks.push({
+            title: '3. Expected Policy Fields Actually Matched',
+            description: 'All 4 supplied policy boundaries verified against decoded event parameters',
+            status: 'passed',
+            evidence: `Mandate #${res.mandateId?.toString()} · Target: ${res.target} · Selector: ${res.selector} · Native MON: ${res.value ? formatEther(res.value) : '0'} MON (within ${expectedMaxMon} MON cap)`,
+          });
+        } else if (hasAnyExpectations) {
+          checks.push({
+            title: '3. Partial Policy Fields Matched',
+            description: `Matched provided constraints (${providedExpectations.join(', ')}). Omitted constraints: ${missingExpectations.join(', ')}`,
+            status: 'warning',
+            evidence: `Decoded event values: Mandate #${res.mandateId?.toString()} · Target: ${res.target} · Selector: ${res.selector} · Native MON: ${res.value ? formatEther(res.value) : '0'} MON`,
+          });
+        } else {
+          checks.push({
+            title: '3. Expected Policy Constraints Not Provided',
+            description: 'No expected policy parameters were entered for comparison. Raw event values extracted without policy-bound matching.',
+            status: 'warning',
+            evidence: `Decoded event values: Mandate #${res.mandateId?.toString()} · Target: ${res.target} · Selector: ${res.selector} · Native MON: ${res.value ? formatEther(res.value) : '0'} MON`,
+          });
+        }
+
+        // 4. Full Policy Compliance Independently Verified
+        if (isFullPolicyCompliance) {
+          checks.push({
+            title: '4. Full Policy Compliance Independently Verified',
+            description: 'Independent proof: On-chain transaction succeeded, valid event emitted by canonical contract, and all policy boundaries satisfied.',
+            status: 'passed',
+            evidence: '100% Policy Bounds Proven: Mandate ID, Target, Selector, and Native Spending Cap verified on canonical contract.',
+          });
+        } else if (isCustomContract) {
+          checks.push({
+            title: '4. Policy Verification on Custom Contract (Notice)',
+            description: 'Event matched policy parameters, but contract address differs from canonical AgentTrust MandateManager.',
+            status: 'warning',
+            evidence: `Custom Contract: ${cleanContract} [Uncertified Origin]`,
+          });
+        } else {
+          checks.push({
+            title: '4. Policy Compliance Incomplete (Missing Fields)',
+            description: 'The transaction and event are verified authentic, but full policy compliance cannot be confirmed without supplying all expected constraints.',
+            status: 'warning',
+            evidence: `Missing expectations: ${missingExpectations.join(', ')}. Supply all expected fields to verify full policy compliance.`,
+          });
+        }
 
         setAuditResult({
           verified: true,
+          fullPolicyCompliance: isFullPolicyCompliance,
+          policyMatchLevel: hasAllExpectations ? 'full' : hasAnyExpectations ? 'partial' : 'unspecified',
           statusCategory: 'success',
           networkName: 'Monad Testnet',
           chainId: liveChainId,
@@ -223,7 +293,8 @@ export function ReceiptInspector() {
           contractAddress: cleanContract,
           isCanonicalContract: !isCustomContract,
           mandateId: Number(res.mandateId ?? 0n),
-          agentId: 42,
+          agentId: null, // Unverified: ActionExecuted event does not emit agentId; enforced on-chain during execution
+          agentVerificationNote: 'Unverified from event log (Agent authorization is enforced on-chain by MandateManager at execution time)',
           target: res.target,
           selector: res.selector,
           value: res.value ? `${formatEther(res.value)} MON` : '0 MON',
@@ -251,6 +322,8 @@ export function ReceiptInspector() {
 
         setAuditResult({
           verified: false,
+          fullPolicyCompliance: false,
+          policyMatchLevel: 'unspecified',
           statusCategory: res.status,
           networkName: 'Monad Testnet',
           chainId: liveChainId,
@@ -272,6 +345,8 @@ export function ReceiptInspector() {
 
       setAuditResult({
         verified: false,
+        fullPolicyCompliance: false,
+        policyMatchLevel: 'unspecified',
         statusCategory: 'rpc_error',
         networkName: 'Monad Testnet',
         chainId: MONAD_TESTNET_CHAIN_ID,
@@ -488,8 +563,10 @@ export function ReceiptInspector() {
               </div>
               <div>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  {auditResult.verified
-                    ? 'Cryptographically Verified Receipt'
+                  {auditResult.fullPolicyCompliance
+                    ? 'Cryptographically Verified Receipt & Full Policy Compliance'
+                    : auditResult.verified
+                    ? 'Authentic Event Decoded · Policy Incomplete'
                     : auditResult.statusCategory === 'not_found'
                     ? 'Transaction Not Found / Pending'
                     : auditResult.statusCategory === 'reverted'
@@ -497,8 +574,10 @@ export function ReceiptInspector() {
                     : 'Receipt Verification Failed'}
                 </h3>
                 <span style={{ fontSize: '0.785rem', color: 'var(--text-secondary)' }}>
-                  {auditResult.verified
-                    ? `ActionExecuted event decoded from Monad block #${auditResult.blockNumber}`
+                  {auditResult.fullPolicyCompliance
+                    ? `ActionExecuted event decoded from Monad block #${auditResult.blockNumber} and strictly conforms to all expected policy constraints.`
+                    : auditResult.verified
+                    ? `ActionExecuted event decoded from Monad block #${auditResult.blockNumber}, but missing expected policy fields prevent full compliance verification.`
                     : auditResult.revertReason || 'Failed to establish cryptographic validity against mandate'}
                 </span>
               </div>
@@ -507,14 +586,22 @@ export function ReceiptInspector() {
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <span
                 className={
-                  auditResult.verified
+                  auditResult.fullPolicyCompliance
                     ? 'badge badge-emerald'
+                    : auditResult.verified
+                    ? 'badge badge-amber'
                     : auditResult.statusCategory === 'not_found'
                     ? 'badge badge-amber'
                     : 'badge badge-rose'
                 }
               >
-                {auditResult.verified ? 'PASSED VERIFICATION' : auditResult.statusCategory.toUpperCase()}
+                {auditResult.fullPolicyCompliance
+                  ? 'FULL COMPLIANCE VERIFIED'
+                  : auditResult.verified
+                  ? auditResult.policyMatchLevel === 'partial'
+                    ? 'EVENT VERIFIED (PARTIAL POLICY)'
+                    : 'EVENT VERIFIED (UNCHECKED POLICY)'
+                  : auditResult.statusCategory.toUpperCase()}
               </span>
               <button
                 className="btn-secondary"
@@ -532,7 +619,7 @@ export function ReceiptInspector() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
                 gap: '0.75rem',
                 marginBottom: '1.5rem',
                 background: 'var(--bg-inset)',
@@ -545,6 +632,12 @@ export function ReceiptInspector() {
                 <span className="kpi-label">MANDATE ID</span>
                 <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
                   #{auditResult.mandateId}
+                </div>
+              </div>
+              <div>
+                <span className="kpi-label">BOUND AGENT ID</span>
+                <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginTop: '2px', fontSize: '0.8rem' }}>
+                  Unverified <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(Not in event)</span>
                 </div>
               </div>
               <div>
@@ -563,6 +656,12 @@ export function ReceiptInspector() {
                 <span className="kpi-label">NATIVE MON TRANSFERRED</span>
                 <div style={{ fontWeight: 700, color: 'var(--accent-emerald)', marginTop: '2px' }}>
                   {auditResult.value}
+                </div>
+              </div>
+              <div>
+                <span className="kpi-label">POLICY MATCH STATUS</span>
+                <div style={{ fontWeight: 700, color: auditResult.fullPolicyCompliance ? 'var(--accent-emerald)' : 'var(--accent-amber)', marginTop: '2px', fontSize: '0.8rem' }}>
+                  {auditResult.fullPolicyCompliance ? '100% Verified' : auditResult.policyMatchLevel === 'partial' ? 'Partial Match' : 'Unchecked (No Policy Fields)'}
                 </div>
               </div>
             </div>
