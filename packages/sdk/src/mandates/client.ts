@@ -171,6 +171,18 @@ export class AgentMandates {
     });
   }
 
+  async mandatesOf(ownerKey: Hex): Promise<readonly bigint[]> {
+    return this.publicClient.readContract({
+      address: this.address, abi: AgentMandatesABI, functionName: 'mandatesOf', args: [ownerKey],
+    });
+  }
+
+  async mandatesForAgent(agent: Address): Promise<readonly bigint[]> {
+    return this.publicClient.readContract({
+      address: this.address, abi: AgentMandatesABI, functionName: 'mandatesForAgent', args: [agent],
+    });
+  }
+
   async nonce(ownerKey: Hex): Promise<bigint> {
     return this.publicClient.readContract({
       address: this.address, abi: AgentMandatesABI, functionName: 'nonces', args: [ownerKey],

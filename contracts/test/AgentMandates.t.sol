@@ -136,6 +136,14 @@ contract AgentMandatesTest is Test {
         assertTrue(am.isActive(id));
     }
 
+    function test_indexesByOwnerAndAgent() public {
+        _create(0);
+        _create(0);
+        assertEq(am.mandatesOf(ownerKey).length, 2);
+        assertEq(am.mandatesForAgent(agent)[1], 2);
+        assertEq(am.mandatesForAgent(stranger).length, 0);
+    }
+
     function test_create_wrongPasskey_reverts() public {
         AgentMandates.MandateTerms memory t = _terms();
         bytes32 d = am.createDigest(ownerKey, t, 0);

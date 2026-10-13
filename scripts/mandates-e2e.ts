@@ -213,7 +213,7 @@ async function deploy(wallet: any, publicClient: PublicClient, artifact: string,
 
 async function startAnvil(): Promise<ChildProcess> {
   const bin = fs.existsSync(`${process.env.HOME}/.foundry/bin/anvil`) ? `${process.env.HOME}/.foundry/bin/anvil` : 'anvil';
-  const proc = spawn(bin, ['--hardfork', 'osaka', '--port', '8546', '--silent'], { stdio: 'ignore' });
+  const proc = spawn(bin, ['--hardfork', 'osaka', '--port', '8546', '--silent', ...(process.env.LOCAL_CHAIN_ID ? ['--chain-id', process.env.LOCAL_CHAIN_ID] : [])], { stdio: 'ignore' });
   for (let i = 0; i < 50; i++) {
     try {
       await createPublicClient({ transport: http(RPC_URL) }).getChainId();

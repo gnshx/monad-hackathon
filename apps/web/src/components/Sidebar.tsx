@@ -9,11 +9,13 @@ import {
   SearchCode,
   ShieldCheck,
   BookOpen,
+  Fingerprint,
   Menu,
   X,
 } from 'lucide-react';
 
 export type NavTab =
+  | 'passkey'
   | 'overview'
   | 'policy-to-proof'
   | 'mandates'
@@ -46,6 +48,12 @@ export function Sidebar({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
+    {
+      id: 'passkey' as NavTab,
+      label: 'Passkey Mandates',
+      icon: Fingerprint,
+      badge: 'No wallet',
+    },
     {
       id: 'overview' as NavTab,
       label: 'Overview',

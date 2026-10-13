@@ -84,6 +84,9 @@ contract AgentMandates is ReentrancyGuard {
     mapping(bytes32 => uint256) public nonces;
     /// ownerKey → current epoch; mandates from older epochs are dead
     mapping(bytes32 => uint64) public epochs;
+    /// ownerKey → mandate ids it created; agent → mandate ids it can act under
+    mapping(bytes32 => uint256[]) internal _byOwner;
+    mapping(address => uint256[]) internal _byAgent;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Events
@@ -179,6 +182,8 @@ contract AgentMandates is ReentrancyGuard {
         for (uint256 i; i < terms.permissions.length; ++i) {
             _permissions[mandateId].push(terms.permissions[i]);
         }
+        _byOwner[ownerKey].push(mandateId);
+        _byAgent[terms.agent].push(mandateId);
 
         emit MandateCreated(
             mandateId, ownerKey, terms.agent, terms.agentId, terms.maxPerCall, terms.budget, terms.expiresAt
@@ -283,6 +288,14 @@ contract AgentMandates is ReentrancyGuard {
 
     function getPermissions(uint256 mandateId) external view returns (Permission[] memory) {
         return _permissions[mandateId];
+    }
+
+    function mandatesOf(bytes32 ownerKey) external view returns (uint256[] memory) {
+        return _byOwner[ownerKey];
+    }
+
+    function mandatesForAgent(address agent) external view returns (uint256[] memory) {
+        return _byAgent[agent];
     }
 
     function remainingBudget(uint256 mandateId) external view returns (uint256) {

@@ -80,6 +80,38 @@ export function parseSpkiPublicKey(spki: Uint8Array): PasskeyPublicKey {
 }
 
 /**
+ * Create a new device passkey (Face ID / Touch ID / Windows Hello / security key) and return its
+ * P-256 public key. Nothing is sent anywhere: the key's on-chain identity is ownerKeyOf(publicKey),
+ * recorded the first time it signs a mandate.
+ */
+export async function createBrowserPasskey(
+  userName: string,
+  rpName = 'AgentTrust'
+): Promise<{ publicKey: PasskeyPublicKey; credentialId: Hex }> {
+  const nav = (globalThis as any).navigator;
+  if (!nav?.credentials?.create) throw new Error('WebAuthn is not available in this environment');
+  const userId = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(userId);
+  const challenge = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(challenge);
+  const cred = await nav.credentials.create({
+    publicKey: {
+      challenge,
+      rp: { name: rpName },
+      user: { id: userId, name: userName, displayName: userName },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }], // ES256 = P-256
+      authenticatorSelection: { userVerification: 'required', residentKey: 'preferred' },
+      attestation: 'none',
+      timeout: 60_000,
+    },
+  });
+  if (!cred) throw new Error('Passkey creation was dismissed');
+  const spki = cred.response.getPublicKey?.();
+  if (!spki) throw new Error('This browser cannot export the passkey public key (getPublicKey unsupported)');
+  return { publicKey: parseSpkiPublicKey(new Uint8Array(spki)), credentialId: bytesToHex(new Uint8Array(cred.rawId)) };
+}
+
+/**
  * Sign `challenge` with a passkey in the browser. Prompts Face ID / Touch ID / Windows Hello and
  * requires user verification. Pass the credential id to skip the account picker.
  */
