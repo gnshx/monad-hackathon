@@ -13,7 +13,8 @@ Give your agent a budget, not your keys.</p>
   <a href="#integrate">Integrate</a> ·
   <a href="docs/security.md">Security model</a> ·
   <a href="docs/adoption.md">Adoption plan</a> ·
-  <a href="docs/demo-and-pitch.md">Demo &amp; pitch scripts</a>
+  <a href="docs/demo-and-pitch.md">Demo &amp; pitch scripts</a> ·
+  <a href="docs/submission.md">Submission</a>
 </p>
 
 ---
