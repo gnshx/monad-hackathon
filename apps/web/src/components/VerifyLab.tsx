@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ScanSearch,
   ShieldCheck,
@@ -15,8 +15,10 @@ import {
   CheckCircle2,
   SlidersHorizontal,
   Info,
+  AlertTriangle,
 } from 'lucide-react';
-import { encodeFunctionData, isAddress, isHex, parseEther, type Address, type Hex } from 'viem';
+import { encodeFunctionData, formatEther, isAddress, isHex, parseEther, type Address, type Hex } from 'viem';
+import { ANY_SELECTOR } from '@agenttrust/sdk';
 import { mandatesClient } from '../lib/agentMandates';
 import { DEFAULT_MOCK_TARGET_ADDRESS } from '../lib/contracts';
 import { PageHead } from './PageHead';
@@ -60,13 +62,17 @@ type Scenario = {
   value: string;
 };
 
-const SCENARIOS: Scenario[] = [
-  { id: 'ok', title: 'Normal call', desc: 'Agent calls the allowed function, well under the cap', icon: Bot, expect: 'allow', agent: DEMO_AGENT, target: DEMO_TARGET, data: CALL, value: '0.001' },
-  { id: 'overspend', title: 'Overspend', desc: 'Same call, but tries to send 1 MON', icon: Flame, expect: 'deny', agent: DEMO_AGENT, target: DEMO_TARGET, data: CALL, value: '1' },
-  { id: 'rogue', title: 'Rogue target', desc: 'Prompt-injected agent sends funds to 0x…dEaD', icon: Crosshair, expect: 'deny', agent: DEMO_AGENT, target: DEAD, data: '0x', value: '0.001' },
-  { id: 'fn', title: 'Wrong function', desc: 'Allowed contract, but a function nobody approved', icon: FunctionSquare, expect: 'deny', agent: DEMO_AGENT, target: DEMO_TARGET, data: encodeFunctionData({ abi: TARGET_ABI, functionName: 'transfer', args: [DEAD, 1n] }), value: '0' },
-  { id: 'stranger', title: 'Impostor agent', desc: 'A different wallet tries to use the mandate', icon: UserX, expect: 'deny', agent: STRANGER, target: DEMO_TARGET, data: CALL, value: '0.001' },
-];
+function buildScenarios(agent: Address, target: Address, okValue: string, anyFn = false): Scenario[] {
+  return [
+    { id: 'ok', title: 'Normal call', desc: 'Agent calls the allowed function, inside every limit', icon: Bot, expect: 'allow', agent, target, data: CALL, value: okValue },
+    { id: 'overspend', title: 'Overspend', desc: 'Same call, but tries to send 1 MON', icon: Flame, expect: 'deny', agent, target, data: CALL, value: '1' },
+    { id: 'rogue', title: 'Rogue target', desc: 'Prompt-injected agent sends funds to 0x…dEaD', icon: Crosshair, expect: 'deny', agent, target: DEAD, data: '0x', value: '0.001' },
+    { id: 'fn', title: 'Wrong function', desc: 'Allowed contract, but a function nobody approved', icon: FunctionSquare, expect: anyFn ? 'allow' : 'deny', agent, target, data: encodeFunctionData({ abi: TARGET_ABI, functionName: 'transfer', args: [DEAD, 1n] }), value: '0' },
+    { id: 'stranger', title: 'Impostor agent', desc: 'A different wallet tries to use the mandate', icon: UserX, expect: 'deny', agent: STRANGER, target, data: CALL, value: '0' },
+  ];
+}
+
+export const LAST_MANDATE_KEY = 'agenttrust.lastMandate';
 
 type Result = { allowed: boolean; reason?: string; error?: string };
 
@@ -81,6 +87,48 @@ export function VerifyLab() {
   const [running, setRunning] = useState<string | null>(null);
   const [custom, setCustom] = useState({ agent: DEMO_AGENT as string, target: DEMO_TARGET as string, data: CALL as string, value: '0.001' });
   const [showCustom, setShowCustom] = useState(false);
+  const [subject, setSubject] = useState<{ agent: Address; target: Address; okValue: string; live: boolean | null; source: string; anyFn?: boolean }>({
+    agent: DEMO_AGENT,
+    target: DEMO_TARGET,
+    okValue: '0',
+    live: null,
+    source: 'demo',
+  });
+
+  // Prefer the mandate this browser just granted on the Passkey page.
+  useEffect(() => {
+    try {
+      const last = JSON.parse(localStorage.getItem(LAST_MANDATE_KEY) || 'null');
+      if (last?.id) setMandateId(String(last.id));
+    } catch {}
+  }, []);
+
+  // Read the mandate under test so the scenarios use its real agent, target and limits.
+  useEffect(() => {
+    if (!client || !/^\d+$/.test(mandateId)) return;
+    let stale = false;
+    (async () => {
+      try {
+        const id = BigInt(mandateId);
+        const [m, perms, active] = await Promise.all([client.getMandate(id), client.getPermissions(id), client.isActive(id)]);
+        if (stale) return;
+        const perm = perms.find((p) => p.selector !== ANY_SELECTOR) || perms[0];
+        let ok = m.maxPerCall;
+        if (m.budget - m.spent < ok) ok = m.budget - m.spent;
+        if (m.balance < ok) ok = m.balance;
+        ok = ok / 2n;
+        setSubject({ agent: m.agent, target: (perm?.target || DEMO_TARGET) as Address, okValue: formatEther(ok), live: active, source: 'chain', anyFn: perms.every((p) => p.selector === ANY_SELECTOR) });
+        setResults({});
+      } catch {
+        if (!stale) setSubject((x) => ({ ...x, live: null, source: 'demo' }));
+      }
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [client, mandateId]);
+
+  const SCENARIOS = useMemo(() => buildScenarios(subject.agent, subject.target, subject.okValue, subject.anyFn), [subject]);
 
   const check = async (agent: string, target: string, data: string, value: string): Promise<Result> => {
     try {
@@ -143,8 +191,11 @@ export function VerifyLab() {
           <input className={s.input} value={mandateId} onChange={(e) => setMandateId(e.target.value)} inputMode="numeric" />
         </div>
         <div className={v.barInfo}>
-          <span><Bot size={14} /> Agent <b className={s.mono}>{DEMO_AGENT ? short(DEMO_AGENT) : 'not set'}</b></span>
-          <span><Crosshair size={14} /> Allowed contract <b className={s.mono}>{short(DEMO_TARGET)}</b></span>
+          <span><Bot size={14} /> Agent <b className={s.mono}>{subject.agent ? short(subject.agent) : 'not set'}</b></span>
+          <span><Crosshair size={14} /> Allowed contract <b className={s.mono}>{short(subject.target)}</b></span>
+          {subject.live !== null && (
+            <span className={subject.live ? v.liveOk : v.liveNo}>{subject.live ? 'Mandate active' : 'Mandate revoked or expired'}</span>
+          )}
         </div>
         {done.length > 0 && (
           <div className={v.score}>
@@ -157,6 +208,16 @@ export function VerifyLab() {
           </div>
         )}
       </div>
+
+      {subject.live === false && (
+        <div className={s.notice} style={{ marginTop: 0 }}>
+          <AlertTriangle size={16} />
+          <span>
+            Mandate #{mandateId} is no longer active, so every check will say <code>MandateInactive</code>. Grant a fresh one on{' '}
+            <a href="#passkey">Passkey Mandates</a> and it will show up here automatically.
+          </span>
+        </div>
+      )}
 
       <div className={v.grid}>
         {SCENARIOS.map((sc) => {

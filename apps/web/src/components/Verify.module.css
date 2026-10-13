@@ -47,4 +47,7 @@
 
 @media (max-width: 1200px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } .score { margin-left: 0; } }
-.reason { display: block; width: fit-content; max-width: 100%; margin-top: 0.2rem; font-size: 0.66rem; color: var(--accent-rose); background: rgba(251,113,133,0.12); overflow-wrap: anywhere; }
+.reason { display: block; width: fit-content; max-width: 100%; margin-top: 0.2rem; font-size: 0.6rem; letter-spacing: -0.02em; color: var(--accent-rose); background: rgba(251,113,133,0.12); overflow-wrap: anywhere; }
+.liveOk, .liveNo { font-size: 0.7rem !important; font-weight: 700; letter-spacing: 0.04em; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid; }
+.liveOk { color: var(--accent-emerald); background: var(--accent-emerald-subtle); border-color: var(--accent-emerald-border); }
+.liveNo { color: var(--accent-amber); background: var(--accent-amber-subtle); border-color: var(--accent-amber-border); }

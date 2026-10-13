@@ -26,6 +26,7 @@ import {
   Inbox,
 } from 'lucide-react';
 import { PageHead } from './PageHead';
+import { LAST_MANDATE_KEY } from './VerifyLab';
 import {
   formatEther,
   formatUnits,
@@ -174,6 +175,9 @@ export function PasskeyConsole() {
         }))
       );
       setRows(loaded);
+      const newest = loaded.find((r) => r.active);
+      if (newest) localStorage.setItem(LAST_MANDATE_KEY, JSON.stringify({ id: newest.id.toString() }));
+      else localStorage.removeItem(LAST_MANDATE_KEY);
     } catch (e: any) {
       setNotice({ kind: 'err', text: `Could not read mandates: ${e.shortMessage || e.message}` });
     }
