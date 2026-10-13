@@ -24,12 +24,12 @@
 </p>
 
 <p align="center">
+  <a href="docs/judges.md">👨‍⚖️ Master Judges Dossier</a> •
   <a href="https://90b8bd0cc61493.lhr.life">🌐 Live Web Console</a> •
-  <a href="#-reproducible-judge-evaluation-guide">📋 Judge Evaluation Guide</a> •
-  <a href="#-3-minute-developer--sdk-quickstart">⚡ 3-Min SDK Quickstart</a> •
-  <a href="docs/claim-vs-evidence.md">📊 Claim vs. Evidence Matrix</a> •
-  <a href="docs/acceptance-checklist.md">✅ 10/10 Acceptance Checklist</a> •
-  <a href="docs/demo-script.md">🎬 90-Sec Video Script</a> •
+  <a href="#-reproducible-judge-evaluation-guide">📋 Evaluation Guide</a> •
+  <a href="#-15-minute-integrator-quickstart-drop-in-guard-middleware">🔌 SDK Guard Quickstart</a> •
+  <a href="docs/claim-vs-evidence.md">📊 Claims vs. Evidence</a> •
+  <a href="docs/interview-brief.md">🎙️ Interview Defense</a> •
   <a href="docs/threat-model.md">🛡️ Threat Model</a>
 </p>
 

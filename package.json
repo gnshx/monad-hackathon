@@ -14,6 +14,7 @@
     "demo": "npx -y tsx scripts/run-demo.ts",
     "verify:p256": "npx -y tsx scripts/verify-p256-testnet.ts",
     "verify:erc8004": "npx -y tsx scripts/verify-erc8004-testnet.ts",
+    "verify:tx": "npx -y tsx scripts/verify-tx.ts",
     "deploy:testnet": "npx -y tsx scripts/deploy-and-run-testnet.ts"
   }
 }

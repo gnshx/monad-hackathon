@@ -86,17 +86,20 @@ AgentTrust: Sovereign human passkeys. Unbreakable on-chain mandates. Welcome to 
   - 🔄 Session key delegation with time-decaying allowances.
   - 🔄 Biometric-exclusive `flags & 0x04` validation in WebAuthn envelope v2.
 
-### Slide 6: 30 / 60 / 90-Day Post-Hackathon Plan
-- **Day 30 — Mainnet Launch & Early Integrations:**
-  - Complete formal verification of `MandateManager.sol`.
-  - Deploy to Monad Mainnet at genesis.
-  - Publish `@agenttrust/sdk` v1.0.0 to npm.
-  - Onboard first 3 partner agent teams from the Monad ecosystem.
-- **Day 60 — ERC-20 Calldata Inspection & MCP Adapter:**
-  - Ship calldata argument inspection module for ERC-20 `transfer(address,uint256)` and `approve(address,uint256)` token caps.
-  - Release official MCP server package (`@agenttrust/mcp-server`) for Claude Desktop and Cursor.
-  - Launch developer portal with interactive policy testing playground.
-- **Day 90 — Cross-Chain Sync & Institutional Safe{Wallet} Module:**
-  - Implement Safe{Wallet} Zodiac module adapter for protocol treasuries.
-  - Enable multi-agent collective mandates (threshold approvals across multiple AI models).
-  - Complete tier-1 security audit (OpenZeppelin / Trail of Bits).
+### Slide 6: The Startup Business Path & Metropolis Ask
+- **The Wedge:** Developers already deploying agents on Monad with ERC-8004 and x402 payments who need scoped, revocable execution boundaries.
+- **Why They Adopt:** Cryptographic passkey verification, vault isolation, and verifiable receipts take months to build and audit. AgentTrust provides a 15-minute drop-in `@agenttrust/sdk`.
+- **Business Path:**
+  - Open Core Primitive (Smart contracts & SDK).
+  - Hosted Relayer & Bundler API (Usage-based fee per sponsored passkey transaction).
+  - Enterprise Policy Compiler & Audit Dashboard ($499/mo SaaS).
+  - Counterparty Receipt Audit API (query fees for compliance verifications).
+- **The Metropolis Ask:**
+  - **Monad Ecosystem Residency:** Direct mentorship from Monad core engineering to optimize RIP-7212 verification pipelines.
+  - **Seed Ecosystem Grant / Investment:** Funding formal verification of `MandateManager.sol` before Monad mainnet genesis.
+  - **Design Partnerships:** Official integration with 3 launch-partner DeFi protocols and agent frameworks on Monad.
+
+### 30 / 60 / 90-Day Milestones
+- **Day 30:** Deploy to Monad Mainnet genesis with formal verification; publish `@agenttrust/sdk` v1.0.0.
+- **Day 60:** Release ERC-20 calldata inspection module & `@agenttrust/mcp-server` for Claude/Cursor.
+- **Day 90:** Safe{Wallet} Zodiac module adapter for institutional treasuries & multi-agent threshold mandates.

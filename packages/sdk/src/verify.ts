@@ -157,7 +157,10 @@ export async function verifyReceipt(
   // 2. Query transaction receipt
   let receipt;
   try {
-    receipt = await publicClient.waitForTransactionReceipt({ hash: transactionHash });
+    receipt = await publicClient.waitForTransactionReceipt({
+      hash: transactionHash,
+      timeout: 5000,
+    });
   } catch (err: any) {
     const errMsg = err.message || String(err);
     const isNotFound = /not found|could not find|timeout|unknown transaction/i.test(errMsg);
