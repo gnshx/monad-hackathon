@@ -9,7 +9,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@agenttrust/sdk": "*",
@@ -21,5 +22,22 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "monad",
+    "ai-agents",
+    "passkey",
+    "erc-8004"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gnshx/monad-hackathon.git",
+    "directory": "packages/mcp"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }
