@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://f12634005c5362.lhr.life"><img src="https://img.shields.io/badge/Live_Console-f12634005c5362.lhr.life-5944db?style=for-the-badge&logo=monad&logoColor=white" alt="Live Console" /></a>
+  <a href="https://agenttrust.vercel.app"><img src="https://img.shields.io/badge/Live_Console-agenttrust.vercel.app-5944db?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Console" /></a>
   <a href="https://github.com/gnshx/monad-hackathon"><img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Repo" /></a>
   <img src="https://img.shields.io/badge/Monad_Testnet-Chain_10143-836ef9?style=for-the-badge&logo=ethereum&logoColor=white" alt="Monad Network" />
 </p>
@@ -33,7 +33,7 @@
   <a href="docs/interview-brief.md">🎙️ Interview Defense</a>
 </p>
 
-> 💡 **Judge Note on Live Deployment:** The public console is tunneled at **[https://f12634005c5362.lhr.life](https://f12634005c5362.lhr.life)**. If external tunnels are restricted by corporate firewall rules, the production console runs locally in seconds via `npm run build:web && npm run start:web` at `http://localhost:3000`.
+> 💡 **Judge Note on Live Deployment:** The public console is permanently hosted at **[https://agenttrust.vercel.app](https://agenttrust.vercel.app)** (Vercel). If you prefer to run locally: `npm run build:web && npm run start:web` → `http://localhost:3000`. No wallet funds required to evaluate.
 
 ---
 
@@ -72,7 +72,7 @@ This runs `scripts/run-demo.ts` on a local Anvil EVM node (Chain ID 31337), exec
 - Standalone fail-closed receipt verification via `@agenttrust/sdk`
 
 ### 5. How can I connect to Monad Testnet?
-- Open the live console at **[https://f12634005c5362.lhr.life](https://f12634005c5362.lhr.life)**.
+- Open the live console at **[https://agenttrust.vercel.app](https://agenttrust.vercel.app)**.
 - Connect MetaMask or Rabby. The app prompts to switch to **Monad Testnet (Chain ID 10143, RPC: `https://testnet-rpc.monad.xyz`)**.
 - The app checks contract bytecode (`client.getBytecode`) on Monad Testnet before permitting live transactions.
 
@@ -195,7 +195,7 @@ console.log(`✓ Receipt Verified: ${result.receipt.verified}`);
 Judges **do not need testnet MON or wallet funds** to evaluate AgentTrust:
 
 1. **Interactive In-Browser Evidence Testing (Zero Gas):**
-   - Open **[https://f12634005c5362.lhr.life](https://f12634005c5362.lhr.life)**.
+   - Open **[https://agenttrust.vercel.app](https://agenttrust.vercel.app)**.
    - Navigate to the **"Evidence & Proofs"** tab in the sidebar.
    - Click **"Run Live Precompile Verification Test"** to witness an interactive `eth_call` to Monad Testnet's native precompile (`0x0100`) returning `0x01` in real-time.
    - Query live agent identities on the Monad ERC-8004 Registry (`0x8004A818...`).

@@ -84,7 +84,7 @@ npm run verify:tx 0xdf928824bddee386bac134559d4148ac88fa5d79fdf9dcb710d8bcd2947e
 To make evaluation frictionless for judges, **judges do not need to hold testnet MON or connect funded personal wallets**:
 
 1. **Interactive In-Browser Evidence Testing:**
-   - Open the web console at **[https://f12634005c5362.lhr.life](https://f12634005c5362.lhr.life)** (or locally at `http://localhost:3000`).
+   - Open the web console at **[https://agenttrust.vercel.app](https://agenttrust.vercel.app)** (or locally at `http://localhost:3000`).
    - Click the **"Evidence & Proofs"** tab in the sidebar.
    - Click **"Run Live Precompile Verification Test"** to witness an interactive RPC call to Monad Testnet's precompile returning `0x01` in real-time.
    - Query any agent ID on Monad Testnet's live ERC-8004 Identity Registry.
