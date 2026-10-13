@@ -3,18 +3,22 @@
 import React from 'react';
 import {
   LayoutDashboard,
+  Route,
   FileText,
   Shield,
   SearchCode,
   BookOpen,
-  Sparkles,
-  Activity,
-  Plus,
-  Radio,
-  ExternalLink,
 } from 'lucide-react';
 
-export type NavTab = 'overview' | 'mandates' | 'copilot' | 'attack-lab' | 'inspector' | 'activity' | 'docs';
+export type NavTab =
+  | 'overview'
+  | 'policy-to-proof'
+  | 'mandates'
+  | 'copilot'
+  | 'attack-lab'
+  | 'inspector'
+  | 'activity'
+  | 'docs';
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -34,20 +38,18 @@ export function Sidebar({
   onSelectTab,
   activeMandatesCount,
   blockedCount,
-  walletAddress,
-  onConnectWallet,
-  onOpenCreateModal,
-  networkMode = 'MONAD_TESTNET',
-  onToggleNetworkMode,
-  chainId,
 }: SidebarProps) {
-  const isTestnet = networkMode === 'MONAD_TESTNET';
-
   const navItems = [
     {
       id: 'overview' as NavTab,
       label: 'Overview',
       icon: LayoutDashboard,
+    },
+    {
+      id: 'policy-to-proof' as NavTab,
+      label: 'Policy-to-Proof',
+      icon: Route,
+      badge: 'Interactive',
     },
     {
       id: 'mandates' as NavTab,
@@ -86,18 +88,18 @@ export function Sidebar({
           }}
           onClick={() => onSelectTab('overview')}
         >
-          {/* Exact Shield Brand Logo */}
+          {/* Exact Shield Brand Logo with Monad Violet Identity */}
           <div
             style={{
               width: '32px',
               height: '32px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+              background: '#5944DB',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 2px 4px rgba(79, 70, 229, 0.25)',
+              color: '#FFFFFF',
+              boxShadow: '0 2px 4px rgba(89, 68, 219, 0.25)',
               flexShrink: 0,
             }}
           >
@@ -107,7 +109,7 @@ export function Sidebar({
             style={{
               fontWeight: 800,
               fontSize: '1.25rem',
-              color: '#111827',
+              color: 'var(--text-primary)',
               letterSpacing: '-0.025em',
             }}
           >
@@ -166,7 +168,7 @@ export function Sidebar({
         })}
       </nav>
 
-      {/* Bottom Footer: Monad Badge & Brand Note */}
+      {/* Bottom Footer: Monad Identity & Brand Tagline */}
       <div
         style={{
           padding: '1.25rem',
@@ -176,19 +178,17 @@ export function Sidebar({
           gap: '1rem',
         }}
       >
-        {/* Monad Economy Tagline */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
-          {/* Monad Icon Mark */}
           <div
             style={{
               width: '20px',
               height: '20px',
               borderRadius: '50%',
-              background: '#4f46e5',
+              background: 'var(--accent-primary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#ffffff',
+              color: '#FFFFFF',
               flexShrink: 0,
               marginTop: '1px',
             }}
@@ -198,12 +198,12 @@ export function Sidebar({
                 width: '8px',
                 height: '8px',
                 borderRadius: '2px',
-                border: '2px solid #ffffff',
+                border: '2px solid #FFFFFF',
                 transform: 'rotate(45deg)',
               }}
             />
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.35 }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
             Built for a safer<br />
             AI agent economy.
           </div>

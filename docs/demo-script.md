@@ -1,31 +1,53 @@
 # AgentTrust — 90-Second Hackathon Judge Demo Script
 
-**Theme:** Give your AI agent a mandate, not unlimited power.  
+**Theme:** Agent authority, under control.  
 **Total Runtime:** 90 Seconds  
 **Format:** Live Walkthrough & Narration  
+**Centerpiece Feature:** Policy-to-Proof Explorer (Judge Mode)
 
 ---
 
 ### [0:00 - 0:10] The Core Problem
-> "AI agents are becoming economic actors, but giving an autonomous LLM a private key is an existential risk. A single prompt injection, hallucination, or rogue call can completely drain a user's wallet. What agents need is delegated, bounded authority."
+> "AI agents can perform high-value on-chain transactions, but giving an autonomous agent unrestricted wallet authority is an existential risk. A single prompt injection or hallucination can completely drain funds. What agents need is delegated, bounded authority. That's why we built AgentTrust."
 
-### [0:10 - 0:25] Step 1: Scoped Mandate Configuration
-> "Here on the AgentTrust console, we don't grant unlimited wallet access. We compile a scoped policy: designating Agent #42, allowlisting only the Uniswap DEX router and the `swap` selector, setting a 0.2 MON per-tx ceiling, and capping the total budget at 1 MON with a 48-hour expiration."
+---
 
-### [0:25 - 0:38] Step 2: Hardware Passkey Authorization (P-256)
-> "To activate this policy, the human owner doesn't store a session key in hot browser memory. They authorize it using their device hardware passkey—TouchID, FaceID, or a YubiKey. On Monad, this SECP256R1 signature is verified natively on-chain using the RIP-7212 precompile at `0x0100`."
+### [0:10 - 0:25] Step 1: Draft Mandate & Actionable Policy Linter
+*(Action: Click "Run guided demo" on the overview to open Policy-to-Proof Explorer. Select Preset 1: Canonical DEX Swap.)*
+> "In Policy-to-Proof Explorer, we draft a scoped mandate: 'Swap up to 0.2 MON on this approved contract for 1 hour.'
+> Notice what happens: rather than a black-box AI score, our Actionable Policy Linter evaluates explicit EVM invariants: it confirms the target is allowlisted, checks selector specificity, enforces the per-transaction ceiling of 0.2 MON, and verifies a 1-hour expiration."
 
-### [0:38 - 0:53] Step 3: Permitted Action Execution
-> "Now the agent goes to work. In our local test environment, the agent submits a 0.1 MON swap to the allowlisted DEX target. The contract verifies caller authorization, checks the target allowlist, checks the spending ceiling, and approves the transaction. The vault balance safely updates."
+---
 
-### [0:53 - 1:05] Step 4: Policy Revert on Rogue Call
-> "What happens if the agent goes rogue? In Attack Scenario #2, a prompt injection instructs the agent to drain 0.1 MON to an unapproved hacker address. The contract immediately reverts with `TargetNotAllowed()`. The transaction fails, and the user's vault balance remains 100% intact."
+### [0:25 - 0:40] Step 2: Passkey Authorization Boundary (P-256)
+*(Action: Click "Proceed to Passkey Authorization" to show the WebAuthn boundary modal.)*
+> "To activate authority, the human owner doesn't store a hot session key. They authorize it with their hardware passkey—TouchID, FaceID, or Windows Hello. 
+> The challenge hash strictly binds the Monad chain ID, contract address, and mandate parameters. And if the prompt is cancelled or unauthenticated, it fails closed—zero fake authorizations."
 
-### [1:05 - 1:15] Step 5: Instant Human Revocation
-> "If the user detects anomalous agent behavior, they retain instant on-chain revocation power. With one click, the owner revokes the mandate on-chain. All subsequent agent transactions immediately revert with `MandateIsRevoked()`, and any unspent vault funds can be withdrawn back to the owner."
+---
 
-### [1:15 - 1:25] Step 6: Independent Receipt Verification
-> "Finally, how does anyone know what really happened? Using the AgentTrust Receipt Inspector—powered by our zero-backend TypeScript SDK—any judge, developer, or counterparty can take a transaction hash, query Monad RPC, and independently verify that the execution strictly complied with the authorized mandate."
+### [0:40 - 0:55] Step 3: Security Invariant Tests (Allowed vs. Denied)
+*(Action: In Step 03 of Explorer, click "Run Security Invariant Tests".)*
+> "We test this exact policy against real security invariants:
+> First, the permitted DEX swap succeeds.
+> Second, when an adversarial prompt injection attempts to siphon funds to an unapproved recipient, the contract reverts with `TargetNotAllowed()`.
+> Third, when an agent attempts a 0.6 MON transaction exceeding the 0.2 MON cap, it reverts with `ExceedsPerTxLimit()`. The vault balance remains intact."
 
-### [1:25 - 1:30] Conclusion & Call to Action
-> "AgentTrust delivers passkey-authorized delegation, contract-enforced bounds on Monad, and independently verifiable execution receipts. Give your AI agents a mandate, not unlimited power."
+---
+
+### [0:55 - 1:10] Step 4: Instant Human Revocation
+*(Action: Switch to Mandates Ledger or trigger Revoke.)*
+> "If the owner ever spots suspicious activity, they retain instant on-chain revocation power. One click revokes the mandate on-chain. All subsequent agent transactions immediately revert with `MandateIsRevoked()`, and any unspent vault deposits can be withdrawn back to the owner."
+
+---
+
+### [1:10 - 1:25] Step 5: Independent Receipt Verification & Proof Dossier
+*(Action: In Step 04 of Explorer, click "Export Proof Bundle" and open Receipt Inspector.)*
+> "How does anyone know what actually happened? With one click, the judge can export a JSON Proof Bundle dossier. 
+> And with the Receipt Inspector—powered by our zero-backend TypeScript SDK—any counterparty can query raw Monad RPC logs to independently verify inclusion, event signatures, and mandate spending parameters without trusting our frontend."
+
+---
+
+### [1:25 - 1:30] Closing: The Developer Path
+*(Action: Show the @agenttrust/sdk snippet.)*
+> "AgentTrust gives developers a 3-minute integration path to protect their on-chain agents. Give your AI agents a mandate, not unlimited power."

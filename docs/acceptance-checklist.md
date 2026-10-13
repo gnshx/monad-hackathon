@@ -1,4 +1,4 @@
-# AgentTrust — Final Submission Acceptance Checklist (10/10)
+# AgentTrust — Final Submission Acceptance Checklist
 
 This checklist provides a transparent, verifiable audit of the AgentTrust release before hackathon submission.
 
@@ -30,24 +30,30 @@ This checklist provides a transparent, verifiable audit of the AgentTrust releas
 ### Category 3: Evidence & Smart Contracts (2/2)
 - [x] **6. Permitted execution and policy enforcement verified on EVM**
   - **Status:** PASS (On Anvil 31337) / DOCUMENTED LIMITATION (On Monad Testnet)
-  - **Evidence:** 29/29 Foundry tests pass (`forge test`). Local Anvil demo script (`scripts/run-demo.ts`) executes allowed action (`0x5082...`) and enforces policy limits. On Monad testnet, contracts remain undeployed due to lack of a funded testnet wallet; this limitation is explicitly disclosed in the UI and documentation.
+  - **Evidence:** 29/29 Foundry tests pass (`forge test`). Local Anvil demo script (`scripts/run-demo.ts`) executes allowed action (`0x5082...`) and enforces policy limits. On Monad testnet, contracts remain undeployed due to rate-limited public faucets; this limitation is explicitly disclosed in the UI and documentation.
 - [x] **7. Revocation changes real contract state and prevents further execution**
   - **Status:** PASS
   - **Evidence:** Tested on-chain via Foundry `test_execute_revoked_reverts` and verified in local EVM execution where revoked mandates block subsequent transactions and unlock unspent vault funds.
 
 ---
 
-### Category 4: UI/UX Clarity & Explainability (2/2)
-- [x] **8. Attack Lab clearly distinguishes simulation, preflight, and on-chain execution**
+### Category 4: UI/UX & Signature Feature (3/3)
+- [x] **8. Editorial Security Console Visual Redesign**
   - **Status:** PASS
-  - **Evidence:** Every scenario card displays its environment badge (`Local Sandbox Preflight`). Reverted simulations display `Simulated EVM Revert` with custom contract error explanations rather than fabricated transaction hashes.
-- [x] **9. Policy creation explains contract, selector, limits, and expiry before authorization**
+  - **Evidence:** Warm off-white canvas (`#F7F5EF`), deep ink text (`#171724`, WCAG AAA compliant), Monad violet brand accent (`#5944DB`), restrained emerald for verified success only. Removed repeated status banners and template cards.
+- [x] **9. Policy-to-Proof Explorer (Judge Mode Centerpiece)**
   - **Status:** PASS
-  - **Evidence:** CreateMandateModal features a 3-step guided flow: Agent Definition -> Policy & Limit Review (with wildcard selector warnings) -> Passkey Authorization Boundary review with safe cancellation guarantees.
+  - **Evidence:** Connected 4-step pipeline live at `/policy-to-proof` and accessible via "Run guided demo" from the overview hero. Connects Intent -> Structured Policy -> Actionable EVM Linter -> Security Invariant Tests -> Verifiable Evidence & Proof Bundle Dossier.
+- [x] **10. Actionable Policy Linter & Proof Bundle Export**
+  - **Status:** PASS
+  - **Evidence:** Replaced arbitrary "security scores" with concrete EVM checks (target allowlist presence, 4-byte selector specificity, per-tx ceiling, total budget, expiry). Exportable JSON dossier with simulation disclaimers.
 
 ---
 
-### Category 5: Submission & Documentation Package (1/1)
-- [x] **10. README, live URL, demo script, and contract evidence are ready**
+### Category 5: Submission & Documentation Package (2/2)
+- [x] **11. Developer Quickstart & SDK Tests**
   - **Status:** PASS
-  - **Evidence:** Public HTTPS console is live, comprehensive FAANG-level README is published, 90-second judge demo script is documented in `docs/demo-script.md`, and full codebase is committed and pushed to GitHub.
+  - **Evidence:** 17/17 SDK Vitest tests passing (`npm run test:sdk`). Turnkey 3-minute quickstart guide documented with copyable `@agenttrust/sdk` snippets.
+- [x] **12. Interview Brief & Judge Defense Readiness**
+  - **Status:** PASS
+  - **Evidence:** `docs/interview-brief.md` published containing 30s pitch, 90s demo script, threat model, receipt verifier capabilities, 10 difficult judge questions with defensible answers, competitor comparison, and measurable pilot plan.

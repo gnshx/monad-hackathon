@@ -16,7 +16,10 @@ This document provides a truthful, transparent breakdown of every claim made by 
 | **WebAuthn Fail-Closed** | Cancelled prompt or missing authenticator halts mandate creation | **PROVEN IN SDK & BROWSER** | `apps/web/src/lib/webauthn.ts` strictly throws on cancellation; tested in vitest integration suite (`test/webauthn-integration.test.ts`). |
 | **Receipt Verification** | Zero-backend independent receipt auditor for Monad | **PROVEN VIA SDK** | `@agenttrust/sdk` `verifyReceipt()` passes 17/17 tests against real RPC logs. Validates chain ID 10143, deployed bytecode, contract address, event topics, and selector parameters. |
 | **Local E2E Execution** | Full 6-scenario demo lifecycle on local EVM node | **PROVEN ON ANVIL (31337)** | `npx tsx scripts/run-demo.ts` executes mandate creation, token transfer, rogue target block, ceiling block, revocation, and receipt verification with real hashes on local node. |
-| **Monad Testnet Deployment** | Live MandateManager contract deployed on Monad Testnet | **UNCLAIMED (NO FUNDED WALLET)** | The placeholder address `0xa5754E89745eC4eB9d7F31f0C34eB267773531b7` currently has 0 bytes bytecode on Monad Testnet. The UI honestly detects this (`client.getBytecode`) and surfaces a clear warning rather than fabricating fake state. |
+| **Policy-to-Proof Explorer** | Connected 4-step pipeline: Intent -> Policy -> Invariants -> Evidence | **PROVEN IN BROWSER CONSOLE** | Live component in `apps/web/src/components/PolicyToProofExplorer.tsx` connecting natural language presets to real structured EVM bounds and local invariant checks. |
+| **Actionable Policy Linter** | Deterministic EVM invariant linter (replaces fake scores) | **PROVEN IN BROWSER CONSOLE** | Evaluates target allowlist presence, 4-byte selector specificity, positive per-tx limits, and lifetime budget constraints. Flags wildcard warnings. |
+| **Proof Bundle Dossier Export** | JSON/MD dossier export containing policy parameters, linter checks, and test outcomes | **PROVEN IN BROWSER CONSOLE** | Generates copyable/downloadable JSON dossier with explicit simulation disclaimers and RPC verification guidance. |
+| **Monad Testnet Deployment** | Live MandateManager contract deployed on Monad Testnet | **UNCLAIMED (FAUCET LIMITATION)** | The placeholder address `0xa5754E89745eC4eB9d7F31f0C34eB267773531b7` currently has 0 bytes bytecode on Monad Testnet due to rate-limited public faucets. The UI honestly detects this (`client.getBytecode`) and surfaces a clear warning rather than fabricating fake state. |
 | **Deterministic Policy Compiler** | Natural language task compiler | **RULE-BASED DETERMINISTIC PARSER** | Accurately disclosed in UI as a deterministic rule compiler, not a cloud LLM wrapper. Avoids hallucinated permissions. |
 
 ---
@@ -33,9 +36,9 @@ AgentTrust enforces strict network isolation:
    - Never generates synthetic random transaction hashes.
    - Starts Receipt Inspector in unverified state (`null`).
 
- 2. **`LOCAL SIMULATION (31337)`**:
+2. **`LOCAL SIMULATION (31337)`**:
    - Runs an offline in-browser sandbox; no RPC connection is made.
    - Every card and activity item is prominently tagged as simulation.
    - Sandbox wallets are randomly generated and labeled, never real addresses.
-   - Attack Lab runs as labeled browser preflight (`Execution Mode: Local Preflight`), never "On-Chain Blocked".
+   - Attack Lab and Explorer run as labeled browser preflights (`Execution Mode: Local Preflight`), never "On-Chain Blocked".
    - Starts with zero mandates and zero activity; nothing is seeded.

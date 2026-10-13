@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar, type NavTab } from '../components/Sidebar';
 import { MandateList } from '../components/MandateList';
+import { PolicyToProofExplorer } from '../components/PolicyToProofExplorer';
 import { AiPolicyCopilot } from '../components/AiPolicyCopilot';
 import { AttackLab, type AttackScenario } from '../components/AttackLab';
 import { ReceiptInspector } from '../components/ReceiptInspector';
@@ -59,6 +60,7 @@ import {
   Layers,
   KeyRound,
   Check,
+  Route,
 } from 'lucide-react';
 
 export default function SecurityConsoleDashboard() {
@@ -552,6 +554,8 @@ export default function SecurityConsoleDashboard() {
   const breadcrumbTitle =
     activeTab === 'overview'
       ? 'OVERVIEW'
+      : activeTab === 'policy-to-proof'
+      ? 'POLICY-TO-PROOF EXPLORER'
       : activeTab === 'mandates'
       ? 'MANDATES'
       : activeTab === 'attack-lab'
@@ -875,7 +879,7 @@ export default function SecurityConsoleDashboard() {
                   Scope every action. Enforce every limit. Verify every receipt.
                 </p>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginTop: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
                   <button
                     className="btn-primary"
                     onClick={() => {
@@ -885,15 +889,17 @@ export default function SecurityConsoleDashboard() {
                     style={{ padding: '0.65rem 1.25rem', fontSize: '0.875rem' }}
                   >
                     <Plus size={16} strokeWidth={2.5} />
-                    Create a mandate
+                    Create mandate
                   </button>
 
                   <button
-                    className="btn-link-purple"
-                    onClick={() => setActiveTab('attack-lab')}
+                    className="btn-secondary"
+                    onClick={() => setActiveTab('policy-to-proof')}
+                    style={{ padding: '0.65rem 1.25rem', fontSize: '0.875rem' }}
                   >
-                    <span>Run security demo</span>
-                    <ArrowRight size={16} />
+                    <Route size={16} color="var(--accent-primary)" />
+                    <span>Run guided demo</span>
+                    <ArrowRight size={15} />
                   </button>
                 </div>
               </div>
@@ -1314,7 +1320,15 @@ export default function SecurityConsoleDashboard() {
                     </div>
 
                     {/* Open receipt verifier link */}
-                    <div style={{ marginTop: '1.5rem' }}>
+                    <div style={{ marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                      <button
+                        className="btn-link-purple"
+                        onClick={() => setActiveTab('policy-to-proof')}
+                        style={{ padding: 0, fontSize: '0.85rem' }}
+                      >
+                        <Route size={14} />
+                        <span>Explore Policy-to-Proof</span>
+                      </button>
                       <button
                         className="btn-link-purple"
                         onClick={() => setActiveTab('inspector')}
@@ -1345,6 +1359,18 @@ export default function SecurityConsoleDashboard() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* TAB: POLICY-TO-PROOF EXPLORER (JUDGE MODE) */}
+          {activeTab === 'policy-to-proof' && (
+            <PolicyToProofExplorer
+              onAuthorizeMandate={(params) => {
+                setCopilotDraft(params);
+                setIsModalOpen(true);
+              }}
+              networkMode={networkMode}
+              isJudgeMode={true}
+            />
           )}
 
           {/* TAB: MANDATES */}
@@ -1413,6 +1439,7 @@ export default function SecurityConsoleDashboard() {
                 mandates={currentMandates}
                 onRevoke={handleRevoke}
                 onOpenCreate={() => setIsModalOpen(true)}
+                onExploreDemo={() => setActiveTab('policy-to-proof')}
                 isRevokingId={revokingId}
                 networkMode={networkMode}
               />

@@ -19,6 +19,7 @@ interface MandateListProps {
   mandates: MandateItem[];
   onRevoke: (id: bigint) => void;
   onOpenCreate: () => void;
+  onExploreDemo?: () => void;
   isRevokingId: bigint | null;
   networkMode?: 'LOCAL_SIMULATION' | 'MONAD_TESTNET';
 }
@@ -27,6 +28,7 @@ export function MandateList({
   mandates,
   onRevoke,
   onOpenCreate,
+  onExploreDemo,
   isRevokingId,
   networkMode = 'MONAD_TESTNET',
 }: MandateListProps) {
@@ -141,14 +143,23 @@ export function MandateList({
               ? 'No revoked mandates in the simulation history.'
               : 'No mandates configured. Click "Create mandate" to establish passkey-enforced limits.'}
           </p>
-          <button
-            className="btn-primary"
-            style={{ marginTop: '1.25rem' }}
-            onClick={onOpenCreate}
-          >
-            <Plus size={15} />
-            Create mandate
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1.25rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button
+              className="btn-primary"
+              onClick={onOpenCreate}
+            >
+              <Plus size={15} />
+              Create mandate
+            </button>
+            {onExploreDemo && (
+              <button
+                className="btn-secondary"
+                onClick={onExploreDemo}
+              >
+                Explore sample mandate
+              </button>
+            )}
+          </div>
         </div>
       )}
 
