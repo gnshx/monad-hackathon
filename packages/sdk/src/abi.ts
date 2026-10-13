@@ -49,6 +49,32 @@ export const MandateManagerABI = [
   },
   {
     "type": "function",
+    "name": "computeMandateHash",
+    "inputs": [
+      { "name": "owner", "type": "address", "internalType": "address" },
+      { "name": "agentAddress", "type": "address", "internalType": "address" },
+      { "name": "agentId", "type": "uint256", "internalType": "uint256" },
+      {
+        "name": "targets",
+        "type": "tuple[]",
+        "internalType": "struct MandateManager.AllowedTarget[]",
+        "components": [
+          { "name": "target", "type": "address", "internalType": "address" },
+          { "name": "selector", "type": "bytes4", "internalType": "bytes4" }
+        ]
+      },
+      { "name": "maxValuePerTx", "type": "uint256", "internalType": "uint256" },
+      { "name": "maxTotalValue", "type": "uint256", "internalType": "uint256" },
+      { "name": "expiresAt", "type": "uint256", "internalType": "uint256" },
+      { "name": "nonce", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [
+      { "name": "", "type": "bytes32", "internalType": "bytes32" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "allowedTargets",
     "inputs": [
       {

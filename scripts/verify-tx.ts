@@ -18,9 +18,23 @@ import {
   MandateManagerABI,
 } from '@agenttrust/sdk';
 
+import fs from 'fs';
+import path from 'path';
+
 const DEFAULT_RPC = process.env.MONAD_RPC_URL || 'https://testnet-rpc.monad.xyz';
-const DEFAULT_CONTRACT = (process.env.MANDATE_MANAGER_ADDRESS ||
-  '0xa5754E89745eC4eB9d7F31f0C34eB267773531b7') as Address;
+
+let loadedContract = '0x3550f9fc84640a9cfd7c51330615a1e05cb948be' as Address;
+try {
+  const depPath = path.resolve(__dirname, '../deployments.json');
+  if (fs.existsSync(depPath)) {
+    const dep = JSON.parse(fs.readFileSync(depPath, 'utf8'));
+    if (dep.contracts?.mandateManager) {
+      loadedContract = dep.contracts.mandateManager as Address;
+    }
+  }
+} catch {}
+
+const DEFAULT_CONTRACT = (process.env.MANDATE_MANAGER_ADDRESS || loadedContract) as Address;
 
 async function main() {
   const args = process.argv.slice(2);

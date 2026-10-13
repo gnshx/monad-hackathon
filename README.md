@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://9d64be3048fb67.lhr.life"><img src="https://img.shields.io/badge/Live_Console-9d64be3048fb67.lhr.life-5944db?style=for-the-badge&logo=monad&logoColor=white" alt="Live Console" /></a>
+  <a href="https://f12634005c5362.lhr.life"><img src="https://img.shields.io/badge/Live_Console-f12634005c5362.lhr.life-5944db?style=for-the-badge&logo=monad&logoColor=white" alt="Live Console" /></a>
   <a href="https://github.com/gnshx/monad-hackathon"><img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Repo" /></a>
   <img src="https://img.shields.io/badge/Monad_Testnet-Chain_10143-836ef9?style=for-the-badge&logo=ethereum&logoColor=white" alt="Monad Network" />
 </p>
@@ -33,7 +33,7 @@
   <a href="docs/interview-brief.md">🎙️ Interview Defense</a>
 </p>
 
-> 💡 **Judge Note on Live Deployment:** The public console is tunneled at **[https://9d64be3048fb67.lhr.life](https://9d64be3048fb67.lhr.life)**. If external tunnels are restricted by corporate firewall rules, the production console runs locally in seconds via `npm run build:web && npm run start:web` at `http://localhost:3000`.
+> 💡 **Judge Note on Live Deployment:** The public console is tunneled at **[https://f12634005c5362.lhr.life](https://f12634005c5362.lhr.life)**. If external tunnels are restricted by corporate firewall rules, the production console runs locally in seconds via `npm run build:web && npm run start:web` at `http://localhost:3000`.
 
 ---
 
@@ -72,25 +72,26 @@ This runs `scripts/run-demo.ts` on a local Anvil EVM node (Chain ID 31337), exec
 - Standalone fail-closed receipt verification via `@agenttrust/sdk`
 
 ### 5. How can I connect to Monad Testnet?
-- Open the live console at **[https://9d64be3048fb67.lhr.life](https://9d64be3048fb67.lhr.life)**.
+- Open the live console at **[https://f12634005c5362.lhr.life](https://f12634005c5362.lhr.life)**.
 - Connect MetaMask or Rabby. The app prompts to switch to **Monad Testnet (Chain ID 10143, RPC: `https://testnet-rpc.monad.xyz`)**.
 - The app checks contract bytecode (`client.getBytecode`) on Monad Testnet before permitting live transactions.
 
 ### 6. What is real versus simulated?
 | Component | Reality Status |
 | :--- | :--- |
+| **Monad Testnet Deployment** | **PROVEN LIVE ON MONAD TESTNET (CHAIN 10143).** `MandateManager` deployed at [`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`](https://testnet.monadexplorer.com/address/0x3550f9fc84640a9cfd7c51330615a1e05cb948be) and `MockTarget` at [`0x0758fdc78e20f748fa89e2d53f84748697cb177f`](https://testnet.monadexplorer.com/address/0x0758fdc78e20f748fa89e2d53f84748697cb177f). All 6 on-chain security scenarios executed and mined into blocks #70689675–#70689714. |
 | **P-256 Precompile (`0x0100`)** | **PROVEN OPERATIONAL ON MONAD TESTNET.** Address `0x0100` on `https://testnet-rpc.monad.xyz` queried via `cast call 0x000...0100 <160_bytes_vector>`. A valid Secp256r1 signature vector returns `0x000...0001` (true), while a tampered signature vector returns `0x` (fail-closed). Directly reproducible via `npm run verify:p256`. |
 | **ERC-8004 Agent Registry** | **PROVEN ON MONAD TESTNET (`0x8004A818...`).** Address `0x8004A818BFB912233c491871b3d84c89A494BD9e` queried on Monad Testnet. SDK reads `getAgentWallet(agentId)` and `ownerOf(agentId)` to prove that mandate execution permissions cryptographically bind to registered on-chain agent identities. Directly reproducible via `npm run verify:erc8004`. |
 | **Receipt Inspector** | **REAL & FAIL-CLOSED.** Queries live Monad Testnet RPC (`Chain ID: 10143`); validates bytecode deployment; verifies log topics, selector match, value caps, and on-chain ERC-8004 identity binding. Flags untrusted custom contracts. |
 | **WebAuthn Passkey Signing** | **REAL.** Enforces User Presence bit (`flags & 0x01`); fails closed on device prompt dismissal or errors; extracts SPKI DER P-256 public keys. |
 | **Smart Contract Logic** | **PROVEN REAL.** 29/29 Foundry tests pass including 1,000-run fuzz tests. |
 | **Attack Lab Scenarios** | **EXPLAINABLE SIMULATION.** Exercises local contract invariants in the browser; labeled `Execution Mode: Local Preflight` — nothing is broadcast and no transaction receipts are fabricated. |
-| **Monad Testnet Deployment** | **AWAITING FAUCET GAS FOR DEPLOYMENT TRANSACTION.** Deploy script (`Deploy.s.sol`) dry-run simulated successfully on Chain 10143 (gas requirement: ~0.46 MON). Ready to broadcast immediately upon wallet funding. The reproducible local Anvil EVM environment (Chain ID 31337) remains 100% executable and tested. |
 
 ### 7. Where can I verify deployment / transactions?
+- **Deployed Contracts (Chain 10143):** `MandateManager` at [`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`](https://testnet.monadexplorer.com/address/0x3550f9fc84640a9cfd7c51330615a1e05cb948be), `MockTarget` at [`0x0758fdc78e20f748fa89e2d53f84748697cb177f`](https://testnet.monadexplorer.com/address/0x0758fdc78e20f748fa89e2d53f84748697cb177f).
+- **1-Command Independent Verifier:** Run `npm run verify:tx <txHash>` to independently audit any on-chain receipt directly against Monad Testnet RPC.
 - **P-256 Precompile Verification:** Run `npm run verify:p256` or `cast call 0x0000000000000000000000000000000000000100 <vector> --rpc-url https://testnet-rpc.monad.xyz` to verify Monad's live precompile.
 - **ERC-8004 Identity Registry Binding:** Run `npm run verify:erc8004` to verify on-chain agent identity binding against Monad Testnet registry `0x8004A818BFB912233c491871b3d84c89A494BD9e`.
-- **Local On-Chain Enforcement (Chain 31337):** Complete 6-scenario execution lifecycle runs against local Anvil with real on-chain transaction hash `0xb7cf85e1b4ec983fd3ad8cea904e8bc132236f18948e79121f7212f3095ddadd` (reproducible via `npm run demo`).
 - **Receipt Auditor Tool:** Integrated in the live console under the **Receipts** tab with fail-closed checks against Monad Testnet or any specified EVM RPC.
 
 ---
@@ -147,7 +148,7 @@ import { createAgentGuard } from '@agenttrust/sdk';
 
 // 1. Initialize guard with human owner's on-chain mandate
 const guard = createAgentGuard({
-  contractAddress: '0xa5754E89745eC4eB9d7F31f0C34eB267773531b7',
+  contractAddress: '0x3550f9fc84640a9cfd7c51330615a1e05cb948be',
   mandateId: 0n,
   agentId: 1n,
   publicClient,
@@ -170,18 +171,21 @@ console.log(`✓ Receipt Verified: ${result.receipt.verified}`);
 
 ---
 
-## 🔒 Six-Scenario On-Chain Security Execution Matrix
+## 🔒 Six-Scenario On-Chain Security Execution Matrix (Monad Testnet — Chain 10143)
 
-| # | Scenario | Tested Security Invariant | Result | Verification Command |
-| :-: | :--- | :--- | :--- | :--- |
-| **1** | **Mandate Creation** | WebAuthn P-256 Passkey Assertion verified via precompile | **SUCCESS** | `npm run verify:p256` |
-| **2** | **Allowed Execution** | Designated agent executes 0.1 MON payable router call | **SUCCESS** | `npm run demo` (Scenario 1) |
-| **3** | **Rogue Target Call** | Prompt injection: agent attempts call to unallowlisted address | **REVERT** (`TargetNotAllowed`) | `npm run demo` (Scenario 2) |
-| **4** | **Over-Limit Spend** | Agent requests spend exceeding per-tx native MON limit | **REVERT** (`ExceedsPerTxLimit`) | `npm run demo` (Scenario 3) |
-| **5** | **Stranger Hijack** | Unauthorized stranger EOA attempts to trigger execution | **REVERT** (`CallerNotAuthorized`) | `npm run demo` (Scenario 4) |
-| **6** | **Owner Revocation** | Human owner revokes mandate and recovers unspent vault balance | **SUCCESS** (`MandateRevoked`) | `npm run demo` (Scenario 5) |
+| Scenario | On-Chain Action | Status / Block | Mined Transaction Hash | Monad Explorer Link |
+| :--- | :--- | :--- | :--- | :--- |
+| **Setup** | WebAuthn Credential Registration | Confirmed | `0x3eafdec02f64...` | [View Tx](https://testnet.monadexplorer.com/tx/0x3eafdec02f64a2fb78e0ae3fef6f7ba4eea5da0cb142e58041d100605a5d21d2) |
+| **Mandate Creation** | P-256 WebAuthn Envelope Authorization | Block #70689675 | `0xd9e9a355baa9...` | [View Tx](https://testnet.monadexplorer.com/tx/0xd9e9a355baa9d16c37c3411349a9437c6c09c9dcf2ffc0940cf049c7c8182e32) |
+| **Scenario 1** | Allowed Agent Action (0.02 MON spend) | Block #70689680 | `0xdf928824bdde...` | [View Tx](https://testnet.monadexplorer.com/tx/0xdf928824bddee386bac134559d4148ac88fa5d79fdf9dcb710d8bcd2947e7e77) |
+| **Scenario 2** | Rogue Target Call Attempt | Block #70689692 (Reverted) | `0x83df0f92e513...` | [View Tx](https://testnet.monadexplorer.com/tx/0x83df0f92e51350248df49713c9a19c6a9b2b2d0e7eb40dca6dd8155318228c7a) |
+| **Scenario 3** | Over-Limit Spend (0.1 > 0.05 MON cap) | Block #70689698 (Reverted) | `0x959dbe12d492...` | [View Tx](https://testnet.monadexplorer.com/tx/0x959dbe12d49225b19d1fea8344077f849b89a3dc5a1d7b38b9aa24ba3a0cc0bd) |
+| **Scenario 4** | Stranger Caller Hijack Attempt | Block #70689703 (Reverted) | `0xc9ca8bfa0738...` | [View Tx](https://testnet.monadexplorer.com/tx/0xc9ca8bfa073880c6818d0b43ac023ef490a56b31a7a95e5fcc3653fe909cd691) |
+| **Scenario 5** | Human Owner Instant Revocation | Block #70689710 | `0x5b082de83351...` | [View Tx](https://testnet.monadexplorer.com/tx/0x5b082de833511df83bd84d7351dcca5aff57eaf43a30aa2f5200a80d952e33ff) |
+| **Recovery** | Unspent Vault Balance Reclaim | Block #70689714 | `0x56d206d2ae77...` | [View Tx](https://testnet.monadexplorer.com/tx/0x56d206d2ae776e4aad9997059c87caeeefa44de887f1eea0c094d45f1a572f84) |
+| **Scenario 6** | Standalone SDK Receipt Audit | 100% Cryptographic Proof | Verified via CLI & SDK | `npm run verify:tx <txHash>` |
 
-*Full judge evidence dossier and Monad Explorer reference links: [`docs/evidence.md`](docs/evidence.md).*
+*All transaction hashes can be audited independently using `npm run verify:tx <txHash>` or directly on the [Monad Explorer](https://testnet.monadexplorer.com). Full judge evidence dossier: [`docs/evidence.md`](docs/evidence.md).*
 
 ---
 
@@ -190,7 +194,7 @@ console.log(`✓ Receipt Verified: ${result.receipt.verified}`);
 Judges **do not need testnet MON or wallet funds** to evaluate AgentTrust:
 
 1. **Interactive In-Browser Evidence Testing (Zero Gas):**
-   - Open **[https://9d64be3048fb67.lhr.life](https://9d64be3048fb67.lhr.life)**.
+   - Open **[https://f12634005c5362.lhr.life](https://f12634005c5362.lhr.life)**.
    - Navigate to the **"Evidence & Proofs"** tab in the sidebar.
    - Click **"Run Live Precompile Verification Test"** to witness an interactive `eth_call` to Monad Testnet's native precompile (`0x0100`) returning `0x01` in real-time.
    - Query live agent identities on the Monad ERC-8004 Registry (`0x8004A818...`).
@@ -200,7 +204,7 @@ Judges **do not need testnet MON or wallet funds** to evaluate AgentTrust:
 
 3. **Receipt Auditor Tool:**
    - Click the **"Receipts"** tab in the console.
-   - Paste any Monad testnet or local transaction hash to verify contract bytecode, log topics, and policy compliance directly against the RPC.
+   - Paste any Monad testnet transaction hash to verify contract bytecode, log topics, and policy compliance directly against the RPC (or use the 1-click sample buttons).
 
 ## 🏗️ System Architecture
 

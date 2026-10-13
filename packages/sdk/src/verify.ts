@@ -159,20 +159,31 @@ export async function verifyReceipt(
   try {
     receipt = await publicClient.waitForTransactionReceipt({
       hash: transactionHash,
-      timeout: 5000,
+      timeout: 10000,
     });
   } catch (err: any) {
-    const errMsg = err.message || String(err);
-    const isNotFound = /not found|could not find|timeout|unknown transaction/i.test(errMsg);
-    return {
-      verified: false,
-      status: isNotFound ? 'not_found' : 'rpc_error',
-      transactionHash,
-      blockNumber: 0n,
-      revertReason: isNotFound
-        ? `Transaction receipt not found on chain: ${errMsg}`
-        : `RPC communication error while querying receipt: ${errMsg}`,
-    };
+    if (err.receipt) {
+      receipt = err.receipt;
+    } else {
+      try {
+        receipt = await publicClient.getTransactionReceipt({ hash: transactionHash });
+      } catch {
+        // Ignored
+      }
+      if (!receipt) {
+        const errMsg = err.message || String(err);
+        const isNotFound = /not found|could not find|timeout|unknown transaction/i.test(errMsg);
+        return {
+          verified: false,
+          status: isNotFound ? 'not_found' : 'rpc_error',
+          transactionHash,
+          blockNumber: 0n,
+          revertReason: isNotFound
+            ? `Transaction receipt not found on chain: ${errMsg}`
+            : `RPC communication error while querying receipt: ${errMsg}`,
+        };
+      }
+    }
   }
 
   // 3. Check for reverted status

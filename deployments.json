@@ -1,0 +1,33 @@
+{
+  "network": "Monad Testnet",
+  "chainId": 10143,
+  "timestamp": "2026-10-13T13:08:34.544Z",
+  "contracts": {
+    "mandateManager": "0x3550f9fc84640a9cfd7c51330615a1e05cb948be",
+    "mockTarget": "0x0758fdc78e20f748fa89e2d53f84748697cb177f",
+    "erc8004Registry": "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+    "p256Precompile": "0x0000000000000000000000000000000000000100"
+  },
+  "transactions": {
+    "mockTargetDeploy": "0xe9ae09a8fd80eea565d0d09440906ad66cb87e88626765928497e5500bb79590",
+    "mandateManagerDeploy": "0x25960e4faa9a4326e8f1a1e4ee5da7ae4ceb2f6bb7694d08ddb2bbf76c174330",
+    "credentialRegistration": "0x3eafdec02f64a2fb78e0ae3fef6f7ba4eea5da0cb142e58041d100605a5d21d2",
+    "mandateCreation": "0xd9e9a355baa9d16c37c3411349a9437c6c09c9dcf2ffc0940cf049c7c8182e32",
+    "allowedExecution": "0xdf928824bddee386bac134559d4148ac88fa5d79fdf9dcb710d8bcd2947e7e77",
+    "rogueTargetRevert": "0x83df0f92e51350248df49713c9a19c6a9b2b2d0e7eb40dca6dd8155318228c7a",
+    "overLimitRevert": "0x959dbe12d49225b19d1fea8344077f849b89a3dc5a1d7b38b9aa24ba3a0cc0bd",
+    "strangerHijackRevert": "0xc9ca8bfa073880c6818d0b43ac023ef490a56b31a7a95e5fcc3653fe909cd691",
+    "mandateRevocation": "0x5b082de833511df83bd84d7351dcca5aff57eaf43a30aa2f5200a80d952e33ff",
+    "vaultWithdrawal": "0x56d206d2ae776e4aad9997059c87caeeefa44de887f1eea0c094d45f1a572f84"
+  },
+  "explorerUrls": {
+    "mandateManager": "https://testnet.monadexplorer.com/address/0x3550f9fc84640a9cfd7c51330615a1e05cb948be",
+    "mandateCreation": "https://testnet.monadexplorer.com/tx/0xd9e9a355baa9d16c37c3411349a9437c6c09c9dcf2ffc0940cf049c7c8182e32",
+    "allowedExecution": "https://testnet.monadexplorer.com/tx/0xdf928824bddee386bac134559d4148ac88fa5d79fdf9dcb710d8bcd2947e7e77",
+    "rogueTargetRevert": "https://testnet.monadexplorer.com/tx/0x83df0f92e51350248df49713c9a19c6a9b2b2d0e7eb40dca6dd8155318228c7a",
+    "overLimitRevert": "https://testnet.monadexplorer.com/tx/0x959dbe12d49225b19d1fea8344077f849b89a3dc5a1d7b38b9aa24ba3a0cc0bd",
+    "strangerHijackRevert": "https://testnet.monadexplorer.com/tx/0xc9ca8bfa073880c6818d0b43ac023ef490a56b31a7a95e5fcc3653fe909cd691",
+    "mandateRevocation": "https://testnet.monadexplorer.com/tx/0x5b082de833511df83bd84d7351dcca5aff57eaf43a30aa2f5200a80d952e33ff",
+    "vaultWithdrawal": "https://testnet.monadexplorer.com/tx/0x56d206d2ae776e4aad9997059c87caeeefa44de887f1eea0c094d45f1a572f84"
+  }
+}

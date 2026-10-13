@@ -470,8 +470,81 @@ export function ReceiptInspector() {
           </div>
         )}
 
+        {/* 1-Click Judge Evidence Samples */}
+        <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', background: 'var(--bg-card-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <span>⚡ 1-Click Judge Evidence Samples (Monad Testnet Block #70689680+):</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ padding: '0.35rem 0.65rem', fontSize: '0.72rem' }}
+              onClick={() => {
+                setTxHash('0xdf928824bddee386bac134559d4148ac88fa5d79fdf9dcb710d8bcd2947e7e77');
+                setContractAddress(DEFAULT_MANDATE_MANAGER_ADDRESS);
+                setExpectedMandateId('0');
+                setExpectedTarget('0x0758fdc78e20f748fa89e2d53f84748697cb177f');
+                setExpectedSelector('0xa6b206bf');
+                setExpectedMaxMon('0.05');
+                setValidationError(null);
+              }}
+            >
+              ✅ Allowed Action (0.02 MON)
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ padding: '0.35rem 0.65rem', fontSize: '0.72rem' }}
+              onClick={() => {
+                setTxHash('0x83df0f92e51350248df49713c9a19c6a9b2b2d0e7eb40dca6dd8155318228c7a');
+                setContractAddress(DEFAULT_MANDATE_MANAGER_ADDRESS);
+                setExpectedMandateId('0');
+                setExpectedTarget('');
+                setExpectedSelector('');
+                setExpectedMaxMon('');
+                setValidationError(null);
+              }}
+            >
+              🛡️ Rogue Target Revert
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ padding: '0.35rem 0.65rem', fontSize: '0.72rem' }}
+              onClick={() => {
+                setTxHash('0x959dbe12d49225b19d1fea8344077f849b89a3dc5a1d7b38b9aa24ba3a0cc0bd');
+                setContractAddress(DEFAULT_MANDATE_MANAGER_ADDRESS);
+                setExpectedMandateId('0');
+                setExpectedTarget('');
+                setExpectedSelector('');
+                setExpectedMaxMon('');
+                setValidationError(null);
+              }}
+            >
+              💰 Over-Limit Spend Revert
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ padding: '0.35rem 0.65rem', fontSize: '0.72rem' }}
+              onClick={() => {
+                setTxHash('0xc9ca8bfa073880c6818d0b43ac023ef490a56b31a7a95e5fcc3653fe909cd691');
+                setContractAddress(DEFAULT_MANDATE_MANAGER_ADDRESS);
+                setExpectedMandateId('0');
+                setExpectedTarget('');
+                setExpectedSelector('');
+                setExpectedMaxMon('');
+                setValidationError(null);
+              }}
+            >
+              🚫 Stranger Hijack Revert
+            </button>
+          </div>
+        </div>
+
         {/* Input Form */}
-        <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.85rem' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
