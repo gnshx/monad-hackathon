@@ -20,6 +20,22 @@ fi
 cd "$WORKSPACE_DIR"
 git fetch origin main --quiet || true
 
+# Auto-sync active tunnel URL into README if rotated
+TUNNEL_FILE="$STATE_DIR/current_tunnel_url.txt"
+if [ -f "$TUNNEL_FILE" ]; then
+  TUNNEL_URL=$(cat "$TUNNEL_FILE")
+  if [ -n "$TUNNEL_URL" ]; then
+    CURRENT_README_URL=$(grep -o 'https://[a-zA-Z0-9]*\.lhr\.life' README.md | head -n1 || true)
+    if [ -n "$CURRENT_README_URL" ] && [ "$CURRENT_README_URL" != "$TUNNEL_URL" ]; then
+      echo "[TUNNEL SYNC] Updating README with active tunnel $TUNNEL_URL"
+      sed -i "s|$CURRENT_README_URL|$TUNNEL_URL|g" README.md
+      git add README.md
+      git commit -m "docs: sync active tunnel URL $TUNNEL_URL"
+      git push origin main --quiet || true
+    fi
+  fi
+fi
+
 LOCAL_DIFF=$(git status --porcelain)
 CURRENT_COMMIT=$(git rev-parse HEAD)
 REMOTE_COMMIT=$(git rev-parse origin/main)
