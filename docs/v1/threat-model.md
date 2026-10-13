@@ -27,8 +27,8 @@ The system relies on four strict trust boundaries:
 
 ## 3. Known Limitations & Roadmap
 
-1. **Testnet Wallet Funding:**
-   Due to lack of funded testnet wallet keys during hackathon development, live testnet transactions are demonstrated via verified local node Anvil transactions and precompile validation, while the UI cleanly discloses when contracts are undeployed.
+1. **Testnet Deployments & Honest Disclosures:**
+   `AgentMandates` (`0xc911e902bf3b3f532bffc1a988e2d00969a1237c`) and `MandateManager` (`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`) are deployed and active on Monad Testnet (chain 10143) with 8 mined transaction receipts verified via `npm run verify:all`. We honestly disclose that our contracts have not yet undergone a third-party security audit and currently enforce native MON and designated ERC-20 vault token bounds.
 2. **ERC-4337 Account Abstraction Integration:**
    Currently operates as an isolated mandate manager contract with dedicated vault balances. Future versions will integrate directly with ERC-7579 modular smart account execution validators.
 3. **Multi-Target Atomic Batching:**

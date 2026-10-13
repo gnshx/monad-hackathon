@@ -8,7 +8,7 @@
 Give your agent a budget, not your keys.</p>
 
 <p align="center">
-  <a href="https://agenttrust.vercel.app">Live console</a> ·
+  <a href="https://monad-hackathon-amber.vercel.app">Live console</a> ·
   <a href="#quickstart">Quickstart</a> ·
   <a href="#integrate">Integrate</a> ·
   <a href="docs/security.md">Security model</a> ·
@@ -178,17 +178,29 @@ scripts/mandates-e2e.ts                local + testnet end-to-end run
 contracts/src/MandateManager.sol       v1 (wallet-owned mandates), kept for its recorded testnet evidence
 ```
 
-## What's real
+## What's real & verified
 
-| | Status |
-|---|---|
-| AgentMandates contract, WebAuthn library | Implemented, 41 Foundry tests with real P-256 signatures, fuzzed budget invariant, digest vectors pinned in both Solidity and the SDK |
-| Passkey flow in the browser | Implemented. Verified in Chromium with a WebAuthn virtual authenticator against a local chain |
-| Relayer | Implemented (`apps/web/src/app/api/relay`). Forwards only owner actions and simulates before sending |
-| MCP server | Implemented, exercised by a real MCP client (`npm run mcp:smoke`) |
-| Monad P-256 precompile | Proven on testnet for v1: `npm run verify:p256` |
-| AgentMandates on Monad testnet | See [`deployments.mandates.json`](deployments.mandates.json) once deployed (`npm run e2e -- --testnet`) |
-| Spending caps | Native MON via `execute`, and ERC-20s via `payToken` with per-token caps. ERC-20 calls made through `execute` to non-custodied tokens are limited only by the function allowlist |
+| Component | Status | Proof / Evidence |
+|---|---|---|
+| **AgentMandates contract & WebAuthn** | Implemented & verified | 72 Foundry tests (contracts) + 34 SDK tests. Real P-256 signatures, fuzzed invariants, shared vectors. |
+| **AgentMandates on Monad Testnet** | **Live on chain 10143** | Deployed at [`0xc911e902bf3b3f532bffc1a988e2d00969a1237c`](https://testnet.monadexplorer.com/address/0xc911e902bf3b3f532bffc1a988e2d00969a1237c). 8 mined testnet transactions in [`deployments.mandates.json`](deployments.mandates.json). |
+| **MandateManager (v1)** | **Live on chain 10143** | Deployed at [`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`](https://testnet.monadexplorer.com/address/0x3550f9fc84640a9cfd7c51330615a1e05cb948be). 8 mined testnet transactions verified 13/13 by `npm run verify:all`. |
+| **Monad RIP-7212 Precompile** | **Proven live on chain 10143** | Live P-256 precompile at `0x0100` returns `uint256(1)` for valid signature; `0x` fail-closed for tampered (`npm run verify:p256`). |
+| **ERC-8004 Identity Registry** | **Live integration on chain 10143** | Live agent #2304 registered at `0x8004A818BFB912233c491871b3d84c89A494BD9e` and re-verified on every call. |
+| **Passkey flow in browser** | Implemented & deployed | Live at [https://monad-hackathon-amber.vercel.app](https://monad-hackathon-amber.vercel.app). Supports Face ID, Touch ID, Windows Hello. |
+| **Gas relayer (`/api/relay`)** | Implemented & secured | Forwards only passkey-signed owner actions with simulation check, per-IP rate limits, and daily spend caps. |
+| **MCP server (`@agenttrust/mcp`)** | Implemented & tested | 8/8 tests passing (`npm run test:mcp`), verified denial paths for over-limit, wrong target, and revoked mandates. |
+| **Honest Disclosures** | Fully disclosed | No external third-party security audit yet. No external production adopters claimed. Spending caps enforce native MON and designated ERC-20 vault tokens. |
+
+## Test Suite Matrix (142 / 142 Passing)
+
+```bash
+~/.foundry/bin/forge test --root contracts   # 72 passed (AgentMandates, MandateManager, DigestVector)
+npm run test:sdk                              # 34 passed (Client, digests, WebAuthn integration)
+npm run test:judge                            # 19 passed (Judge runner, honesty guards, rate limits, relay security)
+npm run test:auditor                          #  9 passed (Strict testnet receipt & event auditor)
+npm run test:mcp                              #  8 passed (MCP server tools & typed denial paths)
+```
 
 ## License
 

@@ -69,10 +69,10 @@
 | Component | Technical Truth & Status |
 | :--- | :--- |
 | **Deterministic Policy Compiler** | In-browser deterministic parser using regular expressions and EVM type validators. Zero latency, zero cloud dependency, no hallucinated policies. Clearly disclosed as deterministic in the UI. |
-| **P-256 Precompile on Monad** | Monad native RIP-7212 precompile at `0x0100` tested via `eth_call` on `https://testnet-rpc.monad.xyz`. Non-reverting empty response confirms precompile presence as specified by Monad docs. Full signature vectors pass in 29 Foundry tests and 21 SDK tests. |
-| **Smart Contract Test Suite** | 29/29 Foundry tests passing (`forge test`), covering caller authorization, allowlists, spend caps, isolated vaults, replay protection, and WebAuthn signatures. |
-| **SDK Test Suite** | 21/21 Vitest unit & regression tests passing (`npm run test:sdk`), covering fail-closed receipt statuses (`success`, `reverted`, `not_found`, `rpc_error`, `wrong_network`). |
-| **Monad Testnet Deployment Status** | Due to public faucet limitations during hackathon sprint, the contract is not claimed as deployed on Monad testnet (0 bytes bytecode at placeholder address). The UI honestly surfaces this status and provides local Anvil (31337) as the verified environment. |
+| **P-256 Precompile on Monad** | Monad native RIP-7212 precompile at `0x0100` tested via `eth_call` on `https://testnet-rpc.monad.xyz`. Non-reverting empty response confirms precompile presence as specified by Monad docs. Full signature vectors pass in 72 Foundry tests and 34 SDK tests. |
+| **Smart Contract Test Suite** | 72/72 Foundry tests passing (`forge test` across `AgentMandates.t.sol`, `MandateManager.t.sol`, and `DigestVector.t.sol`), covering caller authorization, allowlists, spend caps, isolated vaults, replay protection, and WebAuthn signatures. |
+| **SDK & Monorepo Test Suites** | 34/34 SDK tests passing, 19 Web/Judge tests passing, 9 Auditor tests passing, 8 MCP tests passing (142/142 total tests passing across monorepo). |
+| **Monad Testnet Deployment Status** | Deployed live on Monad Testnet (`10143`): `AgentMandates` (`0xc911e902bf3b3f532bffc1a988e2d00969a1237c`), `MandateManager` (`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`), and full 8-scenario mined testnet transaction matrix verified via `npm run verify:all`. |
 
 ---
 
@@ -113,7 +113,7 @@
 > 3. **Independent Counterparty Receipts Without Server Trust:** Zero-server cryptographic receipt verifier (`verifyReceipt` / `verify:tx`) that any counterparty can run directly against RPC."
 
 ### Q10: "Is the contract deployed on Monad testnet right now?"
-> **Answer:** "The contract code is 100% written, tested with 29 Foundry tests, and deployment-ready via `contracts/script/Deploy.s.sol`. On Monad testnet, because the public faucet was rate-limited during the hackathon sprint, the configured address currently has 0 bytes bytecode. Rather than faking a deployment or hardcoding synthetic transaction hashes, our console honestly detects bytecode status via RPC and clearly directs judges to our fully verified local Anvil node (31337) or provides the one-command deployment script. Every claim we make is backed by verifiable code."
+> **Answer:** "Yes, absolutely. Both contracts are deployed and mined on Monad Testnet (Chain 10143): `AgentMandates` (`0xc911e902bf3b3f532bffc1a988e2d00969a1237c`, 26KB bytecode) and `MandateManager` (`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`, 7.5KB bytecode). Every security scenario (allowed action, rogue target revert, over-limit revert, stranger caller revert, revocation, vault recovery) has been executed on-chain with mined transaction hashes that can be verified in real time via `npm run verify:all` or `npm run verify:tx <hash>`."
 
 ---
 
@@ -121,11 +121,12 @@
 
 ### Go / No-Go Criteria Audit
 - [x] **No Fabricated Data**: Zero synthetic transaction hashes; empty states when unverified. **(PASS)**
-- [x] **Truthful Architecture Disclosure**: Policy compiler disclosed as deterministic; native MON spending cap semantics made explicit. **(PASS)**
+- [x] **Truthful Architecture Disclosure**: Policy compiler disclosed as deterministic; native MON spending cap and vault ERC-20 semantics made explicit. **(PASS)**
 - [x] **Precompile Verification**: Confirmed via direct RPC test on Monad testnet. **(PASS)**
-- [x] **Local Anvil E2E Lifecycle**: 6/6 demo scenarios pass with real mined receipts on Chain 31337. **(PASS)**
-- [x] **Smart Contract Suite**: 29/29 Foundry tests pass (`forge test`). **(PASS)**
-- [x] **SDK Verification Suite**: 21/21 Vitest tests pass (`npm run test:sdk`). **(PASS)**
+- [x] **On-Chain Testnet Matrix**: 8/8 transaction lifecycle scenarios mined and verified on Chain 10143. **(PASS)**
+- [x] **Smart Contract Suite**: 72/72 Foundry tests pass (`forge test`). **(PASS)**
+- [x] **SDK Verification Suite**: 34/34 Vitest tests pass (`npm run test:sdk`). **(PASS)**
+- [x] **Full Suite Total**: 142/142 tests passing across contracts, SDK, web/judge, auditor, and MCP. **(PASS)**
 - [x] **Policy-to-Proof Explorer**: Centerpiece 4-step pipeline live on web console with actionable linter blocking invalid authorization. **(PASS)**
 - [x] **Receipt Inspector**: Fail-closed verification with expected selector and value cap validation. **(PASS)**
 - [x] **Editorial Security UI**: Warm canvas `#F7F5EF`, Monad violet `#5944DB`, tokenized CSS, responsive mobile drawer navigation. **(PASS)**

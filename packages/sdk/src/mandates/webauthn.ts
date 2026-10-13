@@ -166,7 +166,7 @@ export async function recoverBrowserPasskey(): Promise<{ candidates: PasskeyPubl
  * A software P-256 authenticator that produces byte-for-byte WebAuthn assertions. For scripts,
  * tests, CI and headless agents' owners; real users sign with a device passkey instead.
  */
-export function createSoftwarePasskey(privateKey?: Hex, origin = 'https://agenttrust.vercel.app') {
+export function createSoftwarePasskey(privateKey?: Hex, origin = 'https://monad-hackathon-amber.vercel.app') {
   const priv = privateKey ? hexToBytes(privateKey) : p256.utils.randomPrivateKey();
   const pub = p256.getPublicKey(priv, false);
   const publicKey: PasskeyPublicKey = { x: bytesToHex(pub.slice(1, 33)), y: bytesToHex(pub.slice(33)) };

@@ -2,7 +2,7 @@
 
 ## Before recording
 
-1. Deploy and configure the console as described in [deploy.md](deploy.md). Then open https://agenttrust.vercel.app on a laptop with Touch ID, or a phone with Face ID.
+1. Deploy and configure the console as described in [deploy.md](deploy.md). Then open https://monad-hackathon-amber.vercel.app on a laptop with Touch ID, or a phone with Face ID.
 2. Have the MCP server configured in Claude Desktop or Claude Code for the demo agent (the `mcp` snippet in the console's **Build on it** card, filled from `deployments.mandates.json`).
 3. Open a Monad explorer tab for the AgentMandates contract.
 
@@ -17,7 +17,7 @@
 | 1:45–2:10 | Ask: "Now send 0.5 MON to it" → `blockedBy: ExceedsPerCallLimit`. Ask it to send funds to another address → `PermissionDenied` | "Here I play the attacker, as if the prompt were injected. The contract refuses, and the agent gets the exact rule it broke. A compromised model can never get past what I signed." |
 | 2:10–2:30 | Console: the spend meter has moved. **Verify an agent's authority** → checkAction → green, then change the value → red | "Any app or contract can ask the chain the same question before serving an agent, with no API key and no platform in between." |
 | 2:30–2:50 | **Revoke every mandate** → Touch ID. Back in Claude: try again → `MandateInactive` | "One tap kills every mandate this passkey has issued, and the agent is cut off immediately." |
-| 2:50–3:00 | README / repo | "It's open source: a contract, an SDK and an MCP server, with 33 tests using real P-256 signatures." |
+| 2:50–3:00 | README / repo | "It's open source: a contract, an SDK and an MCP server, with 142 passing tests across contract, SDK, web, and MCP suites." |
 
 Fallback if the passkey prompt misbehaves on camera: `npm run e2e -- --testnet` runs the same lifecycle on Monad testnet and prints explorer links for every step.
 

@@ -48,7 +48,7 @@ contract AgentMandatesTest is Test {
     uint256 internal constant AGENT_ID = 7;
 
     uint256 internal constant N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
-    bytes32 internal constant RP_ID_HASH = sha256("agenttrust.vercel.app");
+    bytes32 internal constant RP_ID_HASH = sha256("monad-hackathon-amber.vercel.app");
     uint8 internal constant FLAGS_UP_UV = 0x05;
 
     function setUp() public {
@@ -89,7 +89,7 @@ contract AgentMandatesTest is Test {
         a.authenticatorData = abi.encodePacked(RP_ID_HASH, flags, uint32(1));
         a.clientDataJSON = abi.encodePacked(
             '{"type":"', typ, '","challenge":"', WebAuthnP256.base64Url(challenge),
-            '","origin":"https://agenttrust.vercel.app","crossOrigin":false}'
+            '","origin":"https://monad-hackathon-amber.vercel.app","crossOrigin":false}'
         );
         a.typeIndex = 1;
         a.challengeIndex = 11 + bytes(typ).length;

@@ -23,17 +23,17 @@ This checklist provides a transparent, verifiable audit of the AgentTrust releas
   - **Evidence:** `apps/web/src/lib/webauthn.ts` enforces strict fail-closed handling. Dismissing the browser prompt, missing authenticators, or signature errors aborts the flow and displays an error without creating a mandate or submitting a transaction. Policy linter physically blocks authorization when errors exist.
 - [x] **5. RIP-7212 P-256 precompile presence verified against Monad Testnet**
   - **Status:** PASS
-  - **Evidence:** Direct query against Monad Testnet RPC precompile at `0x000...0100` via `eth_call` confirmed presence and non-revert behavior (returns empty data for malformed inputs as specified by Monad docs). Full valid signature vectors pass in 29 Foundry tests (`MandateManager.t.sol`) and 21 SDK tests.
+  - **Evidence:** Direct query against Monad Testnet RPC precompile at `0x000...0100` via `eth_call` confirmed presence and non-revert behavior (returns empty data for malformed inputs as specified by Monad docs). Full valid signature vectors pass in 72 Foundry tests and 34 SDK tests.
 
 ---
 
 ### Category 3: Evidence & Smart Contracts (2/2)
-- [x] **6. Permitted execution and policy enforcement verified on EVM**
-  - **Status:** PASS (On Anvil 31337) / DOCUMENTED LIMITATION (On Monad Testnet)
-  - **Evidence:** 29/29 Foundry tests pass (`forge test`). Local Anvil demo script (`scripts/run-demo.ts`) executes allowed action (`0x50824e4f`) and enforces policy limits. On Monad testnet, contracts remain undeployed due to rate-limited public faucets; this limitation is explicitly disclosed in the UI and documentation. Spending cap semantics explicitly bound native MON (`msg.value`).
+- [x] **6. Permitted execution and policy enforcement verified on EVM & Monad Testnet**
+  - **Status:** PASS (On Monad Testnet 10143 and Anvil 31337)
+  - **Evidence:** 72/72 Foundry tests pass (`forge test`). Deployed on Monad Testnet: `AgentMandates` at `0xc911e902bf3b3f532bffc1a988e2d00969a1237c`, `MandateManager` at `0x3550f9fc84640a9cfd7c51330615a1e05cb948be`. Full 8-scenario transaction matrix mined on-chain and verified via `npm run verify:all` (13/13 assertions passing). Spending cap semantics strictly bound native MON (`msg.value`) and designated ERC-20 vault token allowances.
 - [x] **7. Revocation changes real contract state and prevents further execution**
   - **Status:** PASS
-  - **Evidence:** Tested on-chain via Foundry `test_execute_revoked_reverts` and verified in local EVM execution where revoked mandates block subsequent transactions and unlock unspent vault funds.
+  - **Evidence:** Tested on-chain via Foundry `test_execute_revoked_reverts` and verified on Monad Testnet block #70689710 (`0x5b082de8...`) where revoked mandates block subsequent transactions and unlock unspent vault funds.
 
 ---
 

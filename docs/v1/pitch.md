@@ -28,7 +28,7 @@ AgentTrust translates this into an immutable smart contract mandate on Monad. Th
 3. **Low-Latency Execution:** Enables high-frequency autonomous agent tool calls with instant receipt verification."
 
 ### [01:25 - 01:55] Radical Honesty & Traction Roadmap
-"We differentiate through radical transparency: our smart contracts strictly enforce native MON spend limits, allowlisted selectors, and vault isolation today with 29 passing Foundry tests and 25 passing SDK tests.
+"We differentiate through radical transparency: our smart contracts strictly enforce native MON spend limits, allowlisted selectors, and vault isolation today with 72 passing Foundry tests, 34 passing SDK tests, and 142 total tests across the repo.
 
 We've published `@agenttrust/sdk` with a 10-line quickstart so any agent framework can integrate in minutes. With our 30/60/90-day plan, AgentTrust is poised to become the standard security perimeter for autonomous finance.
 
@@ -60,8 +60,9 @@ AgentTrust: Sovereign human passkeys. Unbreakable on-chain mandates. Welcome to 
 | :--- | :--- | :--- |
 | **RIP-7212 Precompile (`0x0100`)** | **PROVEN LIVE ON MONAD TESTNET** | Verified via `cast call 0x0100` (`npm run verify:p256`); returns `0x01` on valid vector, `0x` on invalid. |
 | **ERC-8004 Identity Registry** | **PROVEN ON MONAD TESTNET** | Verified at `0x8004A818BFB912233c491871b3d84c89A494BD9e` (`npm run verify:erc8004`). |
-| **Smart Contract Suite** | **29/29 PASSING TESTS** | Complete Foundry suite passing with 1,000-run fuzz tests. |
-| **TypeScript SDK** | **25/25 PASSING TESTS** | Zero-backend client with preflight, execution, and receipt verification. |
+| **Smart Contract Suite** | **72/72 PASSING TESTS** | Complete Foundry suite passing with 1,000-run fuzz tests across all contracts. |
+| **TypeScript SDK Suite** | **34/34 PASSING TESTS** | Zero-backend client with preflight, execution, and receipt verification. |
+| **All Test Suites Total** | **142/142 PASSING TESTS** | 72 Foundry + 34 SDK + 19 Web/Judge + 9 Auditor + 8 MCP. Zero failures. |
 
 ### Slide 4: Named Adopters & Why They Won't "Roll Their Own"
 1. **ERC-8004 Agent Identity Registries**:

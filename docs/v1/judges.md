@@ -111,9 +111,11 @@ In accordance with our engineering integrity standards:
 ## 📊 5. Technical Execution & Live Testnet Evidence
 
 ### 📍 Live Monad Testnet Deployments (Chain ID: 10143)
-- **MandateManager:** [`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`](https://testnet.monadexplorer.com/address/0x3550f9fc84640a9cfd7c51330615a1e05cb948be)
-- **MockTarget Router:** [`0x0758fdc78e20f748fa89e2d53f84748697cb177f`](https://testnet.monadexplorer.com/address/0x0758fdc78e20f748fa89e2d53f84748697cb177f)
-- **ERC-8004 Registry:** [`0x8004A818BFB912233c491871b3d84c89A494BD9e`](https://testnet.monadexplorer.com/address/0x8004A818BFB912233c491871b3d84c89A494BD9e)
+- **AgentMandates (Passkey-First):** [`0xc911e902bf3b3f532bffc1a988e2d00969a1237c`](https://testnet.monadexplorer.com/address/0xc911e902bf3b3f532bffc1a988e2d00969a1237c) (26,274 bytes bytecode)
+- **MandateManager (Core Engine):** [`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`](https://testnet.monadexplorer.com/address/0x3550f9fc84640a9cfd7c51330615a1e05cb948be) (7,556 bytes bytecode)
+- **ERC-8004 Registry:** [`0x8004A818BFB912233c491871b3d84c89A494BD9e`](https://testnet.monadexplorer.com/address/0x8004A818BFB912233c491871b3d84c89A494BD9e) (Agent #2304 registered)
+- **MockTarget Router:** [`0xd856e20dbf9280299739efdc0082e431fa644e73`](https://testnet.monadexplorer.com/address/0xd856e20dbf9280299739efdc0082e431fa644e73) & [`0x0758fdc78e20f748fa89e2d53f84748697cb177f`](https://testnet.monadexplorer.com/address/0x0758fdc78e20f748fa89e2d53f84748697cb177f)
+- **Test USDC:** [`0x540564511d46e74c0ed48a6d63de8c79e61a860a`](https://testnet.monadexplorer.com/address/0x540564511d46e74c0ed48a6d63de8c79e61a860a)
 - **Native RIP-7212 Precompile:** `0x0000000000000000000000000000000000000100`
 
 ### ⛓️ Mined On-Chain Transaction Proofs (Every Scenario Executed on Monad Testnet)
@@ -134,8 +136,9 @@ In accordance with our engineering integrity standards:
 | :--- | :--- | :--- |
 | **RIP-7212 P-256 Precompile** | **PROVEN LIVE ON MONAD TESTNET** | Verified at `0x000...0100` via `npm run verify:p256`. 160B valid vector returns `uint256(1)`; corrupted vector returns `0x` fail-closed. |
 | **ERC-8004 Registry Composability** | **PROVEN LIVE ON MONAD TESTNET** | Verified at `0x8004A818BFB912233c491871b3d84c89A494BD9e` via `npm run verify:erc8004`. Correctly validates designated wallet and rejects impostors. |
-| **Smart Contract Suite** | **29/29 TESTS PASSING** | Foundry suite with 1,000-run fuzz tests, reentrancy guards, vault isolation (`forge test`). |
-| **TypeScript SDK** | **25/25 TESTS PASSING** | Vitest suite with preflight invariant checking and tiered receipt validation (`npm run test:sdk`). |
+| **Smart Contract Suite** | **72/72 TESTS PASSING** | Foundry suite across `AgentMandates.t.sol`, `MandateManager.t.sol`, and `DigestVector.t.sol` with 1,000-run fuzz tests, reentrancy guards, vault isolation (`forge test`). |
+| **TypeScript SDK** | **34/34 TESTS PASSING** | Vitest suite with preflight invariant checking, passkey signatures, and WebAuthn envelope parsing (`npm run test:sdk`). |
+| **Full Project Suite** | **142/142 TESTS PASSING** | 72 Foundry + 34 SDK + 19 Web/Judge + 9 Auditor + 8 MCP tests passing cleanly with zero failures. |
 | **1-Command Receipt Verifier** | **LIVE CLI TOOL** | `npm run verify:tx <hash>` allows anyone to independently audit any transaction against Monad RPC. |
 | **Interactive Console Hub** | **LIVE INTERACTIVE** | Deployed with in-browser zero-gas precompile test, live ERC-8004 inspector, and Attack Lab. |
 

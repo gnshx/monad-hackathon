@@ -21,7 +21,7 @@ AgentMandates is infrastructure. Its users are developers who already have agent
 
 ## Hackathon traction (Oct 13–14)
 
-- **Live, open primitive:** the contract on Monad testnet, the console at agenttrust.vercel.app, and MIT-licensed SDK and MCP packages.
+- **Live, open primitive:** the contract on Monad testnet, the console at https://monad-hackathon-amber.vercel.app, and MIT-licensed SDK and MCP packages.
 - **Integration offer to other Metropolis teams:** any team with an agent that sends transactions can drop in the MCP server or `AgentMandates.execute` in under 15 minutes. The template is below. Every team that integrates is listed here with a link to their commit.
 
 > Hey! We built AgentTrust for Metropolis: passkey-signed spending mandates for AI agents on Monad, with an ERC-8004-bound agent identity checked on every call. If your agent sends transactions, you can cap it in about 10 minutes: `npx @agenttrust/mcp` for MCP agents, or `mandates.execute(...)` from our SDK. Your users approve a budget with Face ID and can revoke in one tap. Happy to pair on it. The repo is github.com/gnshx/monad-hackathon

@@ -14,8 +14,9 @@ Instead of trusting off-chain guardrails or AI model behavior, **the smart contr
 | :--- | :--- | :--- |
 | **RIP-7212 P-256 Precompile** | **PROVEN LIVE ON MONAD TESTNET** | Queried `0x000...0100` on Monad Testnet (`10143`). Valid vector returns `0x01`; corrupted vector returns `0x`. Reproducible via `npm run verify:p256`. |
 | **ERC-8004 Registry Composability** | **PROVEN LIVE ON MONAD TESTNET** | Composes with canonical registry `0x8004A818BFB912233c491871b3d84c89A494BD9e`. Validates `getAgentWallet(agentId)` on-chain. Reproducible via `npm run verify:erc8004`. |
-| **Foundry Contract Tests** | **29/29 PASSING** | 1,000-run fuzz tests, reentrancy guards, vault isolation, caller hijacking defense (`forge test`). |
-| **TypeScript SDK Tests** | **25/25 PASSING** | Vitest suite covering preflight verification, receipt auditing, and WebAuthn envelope parsing (`npm run test:sdk`). |
+| **Foundry Contract Tests** | **72/72 PASSING** | 1,000-run fuzz tests, reentrancy guards, vault isolation, caller hijacking defense (`forge test` across `AgentMandates.t.sol`, `MandateManager.t.sol`, and `DigestVector.t.sol`). |
+| **TypeScript SDK Tests** | **34/34 PASSING** | Vitest suite covering preflight verification, receipt auditing, and WebAuthn envelope parsing (`npm run test:sdk`). |
+| **Full Suite Total** | **142/142 PASSING** | 72 Foundry + 34 SDK + 19 Web/Judge + 9 Auditor + 8 MCP. Zero failures. |
 | **Web Console Audit Hub** | **LIVE INTERACTIVE** | Embedded Evidence Hub in console allows 1-click live testing of precompile and registry in-browser. |
 
 ---
@@ -84,7 +85,7 @@ npm run verify:tx 0xdf928824bddee386bac134559d4148ac88fa5d79fdf9dcb710d8bcd2947e
 To make evaluation frictionless for judges, **judges do not need to hold testnet MON or connect funded personal wallets**:
 
 1. **Interactive In-Browser Evidence Testing:**
-   - Open the web console at **[https://agenttrust.vercel.app](https://agenttrust.vercel.app)** (or locally at `http://localhost:3000`).
+   - Open the web console at **[https://monad-hackathon-amber.vercel.app](https://monad-hackathon-amber.vercel.app)** (or locally at `http://localhost:3000`).
    - Click the **"Evidence & Proofs"** tab in the sidebar.
    - Click **"Run Live Precompile Verification Test"** to witness an interactive RPC call to Monad Testnet's precompile returning `0x01` in real-time.
    - Query any agent ID on Monad Testnet's live ERC-8004 Identity Registry.

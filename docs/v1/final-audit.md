@@ -17,7 +17,7 @@ The fundamental security claim of AgentTrust is:
 
 ### Key Outcomes:
 - **Zero False Guarantees:** All verification and assertion checks were audited from source code and executable tests.
-- **Contract Enforcement Proven:** Contract policy enforcement (target allowlisting, selector matching, per-action caps, cumulative caps, nonce sequencing, vault balance isolation, caller authentication, and revocation) was validated with **29 Foundry tests** (including 1,000 fuzz runs) and **13 SDK unit tests**.
+- **Contract Enforcement Proven:** Contract policy enforcement (target allowlisting, selector matching, per-action caps, cumulative caps, nonce sequencing, vault balance isolation, caller authentication, and revocation) was validated with **72 Foundry tests** (including 1,000 fuzz runs) and **34 SDK unit tests** (142 total passing tests across monorepo).
 - **Cryptographic Malleability Fixed:** Enforced strict SECP256R1/P-256 curve bounds ($s \le n/2$, non-zero coordinates, field prime checks).
 - **WebAuthn Verification Enforced:** Implemented genuine WebAuthn assertion envelope checking with on-chain base64url challenge binding and authenticator User Presence verification.
 - **Production Builds Clean:** SDK (`@agenttrust/sdk`), AI demo agent (`@agenttrust/demo-agent`), and Next.js 15 dashboard (`@agenttrust/web`) all compile cleanly with zero errors.
@@ -28,9 +28,9 @@ The fundamental security claim of AgentTrust is:
 
 | Check | Command | Result | Evidence / Notes |
 | ----- | ------- | ------ | ---------------- |
-| **Solidity Compiler & Test Suite** | `~/.foundry/bin/forge test` in `contracts/` | **PASS (29/29)** | 29 passed, 0 failed, 1,000 fuzz runs in ~20ms |
+| **Solidity Compiler & Test Suite** | `~/.foundry/bin/forge test` in `contracts/` | **PASS (72/72)** | 72 passed, 0 failed across 3 suites, 1,000 fuzz runs |
 | **Solidity Production Build** | `~/.foundry/bin/forge build` in `contracts/` | **PASS** | Solc 0.8.24 via IR, bytecode & ABI generated |
-| **SDK Unit Test Suite** | `npm test` in `packages/sdk/` | **PASS (13/13)** | 13 passed in 412ms with Vitest |
+| **SDK Unit Test Suite** | `npm run test:sdk` | **PASS (34/34)** | 34 passed across 3 test files with Vitest |
 | **SDK TypeScript Compilation** | `npm run build:sdk` | **PASS** | `tsc` exit code 0; `dist/` ESM modules generated |
 | **Demo Agent Compilation** | `npm run build:agent` | **PASS** | `tsc` exit code 0; `dist/index.js` generated |
 | **Frontend Production Build** | `npm run build:web` | **PASS** | Next.js 15.5.27 static build compiled in 3.3s |
@@ -187,14 +187,14 @@ The fundamental security claim of AgentTrust is:
 To reproduce the complete verification suite from repository root:
 
 ```bash
-# 1. Run Foundry contract test suite (29 tests, 1000 fuzz runs)
+# 1. Run Foundry contract test suite (72 tests, 1000 fuzz runs)
 cd contracts
 ~/.foundry/bin/forge test -vvv
 
 # 2. Build contracts
 ~/.foundry/bin/forge build
 
-# 3. Run SDK unit tests (13 tests)
+# 3. Run SDK unit tests (34 tests)
 cd ../packages/sdk
 npm test
 
