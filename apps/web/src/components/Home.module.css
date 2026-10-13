@@ -26,6 +26,9 @@
 .livePill { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; color: var(--accent-emerald);
   padding: 0.28rem 0.6rem; border-radius: 999px; background: var(--accent-emerald-subtle); border: 1px solid var(--accent-emerald-border); }
 .liveDot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-emerald); animation: blink 1.6s infinite; }
+.examplePill { display: inline-flex; align-items: center; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; color: var(--text-secondary);
+  padding: 0.28rem 0.6rem; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px dashed var(--border-default); }
+.visualNote { position: relative; z-index: 1; margin-top: 0.75rem; text-align: center; font-size: 0.74rem; color: var(--text-faint); }
 @keyframes blink { 50% { opacity: 0.3; } }
 .limits { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-top: 1.2rem; }
 .limits div { background: rgba(255,255,255,0.04); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.15rem; }

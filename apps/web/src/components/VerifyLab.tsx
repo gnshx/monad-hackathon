@@ -35,6 +35,15 @@ const DEMO_TARGET = (process.env.NEXT_PUBLIC_DEMO_TARGET || DEFAULT_MOCK_TARGET_
 const DEAD: Address = '0x000000000000000000000000000000000000dEaD';
 const STRANGER: Address = '0x91c4b2e3a7d0f6c1c9e58ab2fe1d3c4b5a6e7f80';
 const CALL = encodeFunctionData({ abi: TARGET_ABI, functionName: 'doSomething', args: [1n] });
+const TRANSFER_CALL = encodeFunctionData({ abi: TARGET_ABI, functionName: 'transfer', args: [DEAD, 1n] });
+const sel = (data: Hex) => data.slice(0, 10).toLowerCase();
+
+/** Names for selectors the demo target knows; anything else is shown as its 4-byte selector. */
+const KNOWN_FNS: Record<string, string> = { [sel(CALL)]: 'doSomething()', [sel(TRANSFER_CALL)]: 'transfer()' };
+const fnLabel = (selector: string) => KNOWN_FNS[selector.toLowerCase()] || selector;
+
+/** Calls the 'Wrong function' card tries, in order, until one is not on the mandate's allowlist. */
+const OFF_LIST_CALLS: Hex[] = [TRANSFER_CALL, CALL, `0x12345678${'0'.repeat(64)}`];
 
 /** Plain-English meaning of every reason checkAction() can return. */
 const REASONS: Record<string, string> = {
@@ -62,13 +71,47 @@ type Scenario = {
   value: string;
 };
 
-function buildScenarios(agent: Address, target: Address, okValue: string, anyFn = false): Scenario[] {
+/** The mandate under test, as read from chain (or the demo defaults when the read fails). */
+type Subject = {
+  agent: Address;
+  target: Address;
+  okValue: string;
+  /** isActive() result; null when the mandate could not be read. */
+  live: boolean | null;
+  /** False when the chain says no mandate has this ID. */
+  found: boolean;
+  source: 'chain' | 'demo';
+  /** Selectors the owner signed for `target`; empty when unknown. */
+  selectors: Hex[];
+  /** The owner signed ANY_SELECTOR for `target`, so every function on it is allowed. */
+  anyFn: boolean;
+};
+
+function buildScenarios(sub: Subject): Scenario[] {
+  const { agent, target, okValue } = sub;
+  const signed = sub.selectors.filter((x) => x !== ANY_SELECTOR).map((x) => x.toLowerCase());
+  // 'Normal call' uses a function the owner actually signed. checkAction() only reads the first 4 bytes.
+  const okSel = sub.anyFn ? undefined : signed[0];
+  const okData: Hex = !okSel || okSel === sel(CALL) ? CALL : (`${okSel}${'0'.repeat(64)}` as Hex);
+  const okDesc = okSel
+    ? `Agent calls ${fnLabel(okSel)}, the function the owner signed, inside every limit`
+    : sub.anyFn
+    ? 'Agent calls doSomething() on the allowed contract, inside every limit'
+    : 'Agent calls the allowed function, inside every limit';
+  // 'Wrong function' uses a function the owner did not sign for this contract.
+  const offData = OFF_LIST_CALLS.find((d) => !signed.includes(sel(d))) || OFF_LIST_CALLS[OFF_LIST_CALLS.length - 1];
+  // A missing, revoked or expired mandate refuses every call.
+  const usable = sub.found && sub.live !== false;
+  const allowIfUsable = usable ? 'allow' : 'deny';
+  const fnCase: Scenario = sub.anyFn
+    ? { id: 'fn', title: 'Any function', desc: `The owner signed any function on this contract, so ${fnLabel(sel(offData))} is allowed too`, icon: FunctionSquare, expect: allowIfUsable, agent, target, data: offData, value: '0' }
+    : { id: 'fn', title: 'Wrong function', desc: `Allowed contract, but ${fnLabel(sel(offData))}, a function the owner did not sign`, icon: FunctionSquare, expect: 'deny', agent, target, data: offData, value: '0' };
   return [
-    { id: 'ok', title: 'Normal call', desc: 'Agent calls the allowed function, inside every limit', icon: Bot, expect: 'allow', agent, target, data: CALL, value: okValue },
-    { id: 'overspend', title: 'Overspend', desc: 'Same call, but tries to send 1 MON', icon: Flame, expect: 'deny', agent, target, data: CALL, value: '1' },
+    { id: 'ok', title: 'Normal call', desc: okDesc, icon: Bot, expect: allowIfUsable, agent, target, data: okData, value: okValue },
+    { id: 'overspend', title: 'Overspend', desc: 'Same call, but tries to send 1 MON', icon: Flame, expect: 'deny', agent, target, data: okData, value: '1' },
     { id: 'rogue', title: 'Rogue target', desc: 'Prompt-injected agent sends funds to 0x…dEaD', icon: Crosshair, expect: 'deny', agent, target: DEAD, data: '0x', value: '0.001' },
-    { id: 'fn', title: 'Wrong function', desc: 'Allowed contract, but a function nobody approved', icon: FunctionSquare, expect: anyFn ? 'allow' : 'deny', agent, target, data: encodeFunctionData({ abi: TARGET_ABI, functionName: 'transfer', args: [DEAD, 1n] }), value: '0' },
-    { id: 'stranger', title: 'Impostor agent', desc: 'A different wallet tries to use the mandate', icon: UserX, expect: 'deny', agent: STRANGER, target, data: CALL, value: '0' },
+    fnCase,
+    { id: 'stranger', title: 'Impostor agent', desc: 'A different wallet tries to use the mandate', icon: UserX, expect: 'deny', agent: STRANGER, target, data: okData, value: '0' },
   ];
 }
 
@@ -87,12 +130,15 @@ export function VerifyLab() {
   const [running, setRunning] = useState<string | null>(null);
   const [custom, setCustom] = useState({ agent: DEMO_AGENT as string, target: DEMO_TARGET as string, data: CALL as string, value: '0.001' });
   const [showCustom, setShowCustom] = useState(false);
-  const [subject, setSubject] = useState<{ agent: Address; target: Address; okValue: string; live: boolean | null; source: string; anyFn?: boolean }>({
+  const [subject, setSubject] = useState<Subject>({
     agent: DEMO_AGENT,
     target: DEMO_TARGET,
     okValue: '0',
     live: null,
+    found: true,
     source: 'demo',
+    selectors: [],
+    anyFn: false,
   });
 
   // Prefer the mandate this browser just granted on the Passkey page.
@@ -112,15 +158,28 @@ export function VerifyLab() {
         const id = BigInt(mandateId);
         const [m, perms, active] = await Promise.all([client.getMandate(id), client.getPermissions(id), client.isActive(id)]);
         if (stale) return;
+        // getMandate() returns an all-zero struct for an ID that was never created.
+        const found = !/^0x0*$/i.test(m.ownerKey);
         const perm = perms.find((p) => p.selector !== ANY_SELECTOR) || perms[0];
+        const target = (perm?.target || DEMO_TARGET) as Address;
+        const selectors = perms.filter((p) => p.target.toLowerCase() === target.toLowerCase()).map((p) => p.selector);
         let ok = m.maxPerCall;
         if (m.budget - m.spent < ok) ok = m.budget - m.spent;
         if (m.balance < ok) ok = m.balance;
         ok = ok / 2n;
-        setSubject({ agent: m.agent, target: (perm?.target || DEMO_TARGET) as Address, okValue: formatEther(ok), live: active, source: 'chain', anyFn: perms.every((p) => p.selector === ANY_SELECTOR) });
+        setSubject({
+          agent: m.agent,
+          target,
+          okValue: formatEther(ok),
+          live: active,
+          found,
+          source: 'chain',
+          selectors,
+          anyFn: selectors.includes(ANY_SELECTOR),
+        });
         setResults({});
       } catch {
-        if (!stale) setSubject((x) => ({ ...x, live: null, source: 'demo' }));
+        if (!stale) setSubject((x) => ({ ...x, live: null, found: true, source: 'demo' }));
       }
     })();
     return () => {
@@ -128,7 +187,7 @@ export function VerifyLab() {
     };
   }, [client, mandateId]);
 
-  const SCENARIOS = useMemo(() => buildScenarios(subject.agent, subject.target, subject.okValue, subject.anyFn), [subject]);
+  const SCENARIOS = useMemo(() => buildScenarios(subject), [subject]);
 
   const check = async (agent: string, target: string, data: string, value: string): Promise<Result> => {
     try {
@@ -191,10 +250,14 @@ export function VerifyLab() {
           <input className={s.input} value={mandateId} onChange={(e) => setMandateId(e.target.value)} inputMode="numeric" />
         </div>
         <div className={v.barInfo}>
-          <span><Bot size={14} /> Agent <b className={s.mono}>{subject.agent ? short(subject.agent) : 'not set'}</b></span>
-          <span><Crosshair size={14} /> Allowed contract <b className={s.mono}>{short(subject.target)}</b></span>
-          {subject.live !== null && (
-            <span className={subject.live ? v.liveOk : v.liveNo}>{subject.live ? 'Mandate active' : 'Mandate revoked or expired'}</span>
+          <span><Bot size={14} /> Agent <b className={s.mono}>{subject.found && subject.agent ? short(subject.agent) : 'not set'}</b></span>
+          <span><Crosshair size={14} /> Allowed contract <b className={s.mono}>{subject.found ? short(subject.target) : 'none'}</b></span>
+          {!subject.found ? (
+            <span className={v.liveNo}>Mandate does not exist</span>
+          ) : (
+            subject.live !== null && (
+              <span className={subject.live ? v.liveOk : v.liveNo}>{subject.live ? 'Mandate active' : 'Mandate revoked or expired'}</span>
+            )
           )}
         </div>
         {done.length > 0 && (
@@ -209,14 +272,25 @@ export function VerifyLab() {
         )}
       </div>
 
-      {subject.live === false && (
+      {!subject.found ? (
         <div className={s.notice} style={{ marginTop: 0 }}>
           <AlertTriangle size={16} />
           <span>
-            Mandate #{mandateId} is no longer active, so every check will say <code>MandateInactive</code>. Grant a fresh one on{' '}
+            There is no mandate #{mandateId} on this contract, so every check returns <code>MandateNotFound</code>. Grant one on{' '}
             <a href="#passkey">Passkey Mandates</a> and it will show up here automatically.
           </span>
         </div>
+      ) : (
+        subject.live === false && (
+          <div className={s.notice} style={{ marginTop: 0 }}>
+            <AlertTriangle size={16} />
+            <span>
+              Mandate #{mandateId} is revoked or expired. The contract now refuses every call from its agent with{' '}
+              <code>MandateInactive</code>. The impostor check still says <code>NotAgent</code>, because the agent check runs
+              first. Grant a fresh one on <a href="#passkey">Passkey Mandates</a> and it will show up here automatically.
+            </span>
+          </div>
+        )
       )}
 
       <div className={v.grid}>
@@ -326,8 +400,8 @@ export function VerifyLab() {
       <div className={v.footnote}>
         <Info size={14} />
         <span>
-          These are reads against the deployed AgentMandates contract. In Judge Mode the same blocked calls are sent as real
-          transactions so the reverts are on the explorer.
+          These are free reads against the deployed AgentMandates contract. Judge Mode sends an overspend, a rogue target and a
+          call after revoke as real transactions, so those reverts are on the explorer.
         </span>
       </div>
     </div>

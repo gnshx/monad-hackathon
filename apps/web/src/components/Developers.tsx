@@ -24,27 +24,36 @@ import d from './Developers.module.css';
 
 const REPO = 'https://github.com/gnshx/monad-hackathon';
 
-const SNIPPETS = {
+const SNIPPETS: Record<'mcp' | 'sdk' | 'sol', { label: string; code: string; note: React.ReactNode }> = {
   mcp: {
     label: 'MCP (Claude, Cursor)',
     code: `{
   "mcpServers": {
     "agenttrust": {
-      "command": "npx",
-      "args": ["-y", "@agenttrust/mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/monad-hackathon/packages/mcp/dist/index.js"],
       "env": {
         "AGENTTRUST_CONTRACT": "${AGENT_MANDATES_ADDRESS || '0x…'}",
-        "AGENTTRUST_MANDATE_ID": "1",
+        "AGENTTRUST_MANDATE_ID": "<your mandate id>",
         "AGENT_PRIVATE_KEY": "0x… (the agent's hot key)"
       }
     }
   }
 }`,
-    note: 'The agent gets mandate_status, check_action, execute_action and pay_token tools. Even a prompt-injected model can only spend what the passkey approved.',
+    note: (
+      <>
+        The MCP server is not on npm. Clone <code>github.com/gnshx/monad-hackathon</code>, run{' '}
+        <code>npm install &amp;&amp; npm run build:mcp</code>, and point <code>args</code> at that path. Use the ID of a mandate
+        you granted to this agent wallet on Passkey Mandates. The agent gets mandate_status, check_action, execute_action and
+        pay_token tools. Even a prompt-injected model can only spend what the passkey approved.
+      </>
+    ),
   },
   sdk: {
     label: 'TypeScript',
-    code: `import { AgentMandates } from '@agenttrust/sdk';
+    code: `// @agenttrust/sdk is packages/sdk in this repo, not the npm package of that name.
+// git clone https://github.com/gnshx/monad-hackathon && npm install && npm run build:sdk
+import { AgentMandates } from '@agenttrust/sdk';
 
 const mandates = new AgentMandates(address, publicClient, agentWallet);
 
@@ -53,7 +62,12 @@ await mandates.checkAction(mandateId, agent, target, data, value);
 
 // Executes through the contract; throws MandateDeniedError before spending gas
 await mandates.execute(mandateId, target, data, value);`,
-    note: 'Owner side: createChallenge() → signWithBrowserPasskey() → encode.createMandate() → any relayer.',
+    note: (
+      <>
+        The SDK is not published on npm, and <code>npm install @agenttrust/sdk</code> fetches an unrelated package. Use it from a
+        clone of this repo. Owner side: createChallenge() → signWithBrowserPasskey() → encode.createMandate() → any relayer.
+      </>
+    ),
   },
   sol: {
     label: 'Solidity',
@@ -63,13 +77,20 @@ await mandates.execute(mandateId, target, data, value);`,
     external view returns (bool allowed, bytes4 reason);
 }
 
-// In your protocol: only serve agents a human has authorized
-(bool ok, ) = mandates.checkAction(id, msg.sender, address(this), msg.data, msg.value);
-require(ok, "agent not authorized by its owner");`,
-    note: 'Composable: any contract on Monad can gate agent traffic on a live human mandate.',
+// In your protocol: only serve agent calls a human authorized.
+// AgentMandates.execute() has already checked the allowlist, per-call cap,
+// budget, expiry and ERC-8004 identity, and paid from the vault, before it
+// calls you. Inside that call msg.sender is AgentMandates, not the agent.
+require(msg.sender == address(mandates), "route through AgentMandates.execute");`,
+    note: (
+      <>
+        Composable: any contract on Monad can accept agent traffic only when it arrives through a live human mandate.
+        checkAction() takes the agent address explicitly, so use it as a free pre-flight from an app, a relayer or another
+        contract. It does not spend budget, so it is not a gate on msg.sender inside your protocol.
+      </>
+    ),
   },
 };
-
 
 const FLOW = [
   { icon: Fingerprint, title: 'Owner passkey', text: 'WebAuthn assertion over the mandate terms, chain ID, contract and nonce' },
@@ -79,14 +100,17 @@ const FLOW = [
   { icon: ScanSearch, title: 'checkAction()', text: 'Free view any app or contract can call before serving the agent' },
 ];
 
-const CHECKS = [
-  ['Caller is the mandated agent', 'NotAgent'],
-  ['Mandate not revoked or expired', 'MandateInactive'],
-  ['ERC-8004 identity still resolves to that agent', 'AgentIdentityMismatch'],
-  ['Target + function on the signed allowlist', 'PermissionDenied'],
-  ['Value within the per-call cap', 'ExceedsPerCallLimit'],
-  ['Total spend within budget', 'ExceedsBudget'],
-  ['Vault holds enough to pay', 'InsufficientBalance'],
+/** Check order in AgentMandates.sol: checkAction()/execute() and checkPayment()/payToken(). */
+const CHECKS: [string, string[]][] = [
+  ['Mandate exists', ['MandateNotFound']],
+  ['Caller is the mandated agent', ['NotAgent']],
+  ['Mandate not revoked or expired', ['MandateInactive']],
+  ['ERC-8004 identity still resolves to that agent', ['AgentIdentityMismatch']],
+  ['execute(): target is not a vault token. payToken(): token has a budget on this mandate', ['TargetIsVaultToken', 'TokenNotAllowed']],
+  ['Target + function on the signed allowlist (payToken: payee signed for any function)', ['PermissionDenied']],
+  ['Value within the per-call cap', ['ExceedsPerCallLimit']],
+  ['Total spend within budget', ['ExceedsBudget']],
+  ['Vault holds enough to pay', ['InsufficientBalance']],
 ];
 
 function CopyBtn({ text }: { text: string }) {
@@ -110,9 +134,9 @@ export function Developers() {
   const [tab, setTab] = useState<keyof typeof SNIPPETS>('mcp');
   const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`;
   const contracts: [string, string, string][] = [
-    ['AgentMandates (passkey-native)', AGENT_MANDATES_ADDRESS || '', 'The product: passkey-owned mandates'],
+    ['AgentMandates (passkey-native)', AGENT_MANDATES_ADDRESS || '', 'The product: passkey-owned mandates. Judge Mode runs here.'],
     ['ERC-8004 Identity Registry', DEFAULT_ERC8004_REGISTRY, 'Agent identities checked on every call'],
-    ['MandateManager (v1)', DEFAULT_MANDATE_MANAGER_ADDRESS, 'Wallet-owned predecessor, used by Judge Mode and the Lab'],
+    ['MandateManager (v1)', DEFAULT_MANDATE_MANAGER_ADDRESS, 'Wallet-owned predecessor, used by the Lab pages'],
   ];
 
   return (
@@ -177,13 +201,17 @@ export function Developers() {
               <ShieldCheck size={18} /> What the contract checks
             </span>
           </div>
-          <p className={s.cardSub}>On every execute() and payToken(), in this order. checkAction() returns the first failing reason without reverting.</p>
+          <p className={s.cardSub}>On every execute() and payToken(), in this order. checkAction() and checkPayment() return the first failing reason without reverting.</p>
           <ol className={d.checks}>
-            {CHECKS.map(([k, r], i) => (
-              <li key={r}>
+            {CHECKS.map(([k, codes], i) => (
+              <li key={codes[0]}>
                 <span className={d.checkNum}>{i + 1}</span>
                 <span className={d.checkText}>{k}</span>
-                <code className={d.checkCode}>{r}</code>
+                <span className={d.checkCodes}>
+                  {codes.map((r) => (
+                    <code key={r} className={d.checkCode}>{r}</code>
+                  ))}
+                </span>
               </li>
             ))}
           </ol>

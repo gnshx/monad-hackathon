@@ -23,7 +23,7 @@ import { AGENT_MANDATES_ADDRESS, EXPLORER } from '../lib/agentMandates';
 import type { NavTab } from './Sidebar';
 import h from './Home.module.css';
 
-/** Illustrative feed for the hero card. It loops the same decisions the contract makes in Judge Mode. */
+/** Illustrative feed for the hero card: example calls and the verdicts the contract gives them. Not live data. */
 const FEED = [
   { ok: true, what: 'doSomething() · 0.005 MON', why: 'Within per-call cap' },
   { ok: false, what: 'doSomething() · 0.50 MON', why: 'ExceedsPerCallLimit' },
@@ -92,10 +92,10 @@ export function HomeView({ onNavigate }: { onNavigate: (tab: NavTab) => void }) 
                 <span className={h.avatar}><Bot size={18} /></span>
                 <div>
                   <div className={h.mcardName}>Research agent</div>
-                  <div className={h.mcardSub}>ERC-8004 #2304 · 0x5C73…d64C</div>
+                  <div className={h.mcardSub}>ERC-8004 agent · example values</div>
                 </div>
               </div>
-              <span className={h.livePill}><span className={h.liveDot} /> ACTIVE</span>
+              <span className={h.examplePill}>EXAMPLE</span>
             </div>
 
             <div className={h.limits}>
@@ -110,7 +110,7 @@ export function HomeView({ onNavigate }: { onNavigate: (tab: NavTab) => void }) 
             </div>
             <div className={h.meter}><div className={h.meterFill} style={{ width: `${spentPct}%` }} /></div>
 
-            <div className={h.feedHead}>Agent calls, checked on-chain</div>
+            <div className={h.feedHead}>Example: how the contract decides each call</div>
             <div className={h.feed}>
               {visible.map((f) => (
                 <div key={f.key} className={`${h.feedRow} ${f.ok ? h.ok : h.no}`}>
@@ -125,6 +125,7 @@ export function HomeView({ onNavigate }: { onNavigate: (tab: NavTab) => void }) 
               <Fingerprint size={14} /> Signed with a passkey · verified by Monad P-256 precompile
             </div>
           </div>
+          <p className={h.visualNote}>Illustration, not live data. Judge Mode and Verify show real decisions on-chain.</p>
         </div>
       </section>
 
