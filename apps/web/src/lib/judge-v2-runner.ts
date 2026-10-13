@@ -213,7 +213,15 @@ export async function ensureAgentIdentity(
     functionName: 'register',
     args: [`${ORIGIN}/agent.json`],
   });
-  const gas = await estimate(publicClient, relayer, registry, data, 0n, 400_000n);
+  let gas: bigint;
+  try {
+    gas = await estimate(publicClient, relayer, registry, data, 0n, 400_000n);
+  } catch (err) {
+    throw new Error(
+      `The ERC-8004 registry at ${registry} would not register an identity for the relayer, so nothing was sent. Set JUDGE_AGENT_ID to an agent ID whose wallet is ${relayer}.`,
+      { cause: err }
+    );
+  }
   const hash = await walletClient.sendTransaction({ account: walletClient.account!, chain: null, to: registry, data, gas });
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   const minted = receipt.logs.find(

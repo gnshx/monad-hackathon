@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://monad-hackathon-amber.vercel.app"><img src="https://img.shields.io/badge/Production%20Console-Live%20on%20Vercel-5944DB?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Console" /></a>
   <a href="https://testnet.monadexplorer.com/address/0xc911e902bf3b3f532bffc1a988e2d00969a1237c"><img src="https://img.shields.io/badge/Monad%20Testnet-Chain%2010143-201A30?style=for-the-badge&logo=ethereum&logoColor=836EF9" alt="Monad Testnet" /></a>
-  <img src="https://img.shields.io/badge/Tests-142%2F142%20Passing-059669?style=for-the-badge&logo=checkmarx&logoColor=white" alt="Tests 142/142 Passing" />
+  <img src="https://img.shields.io/badge/Tests-200%2F200%20Passing-059669?style=for-the-badge&logo=checkmarx&logoColor=white" alt="Tests 200/200 Passing" />
   <img src="https://img.shields.io/badge/Cryptography-RIP--7212%20Precompile-0284C7?style=for-the-badge&logo=webauthn&logoColor=white" alt="RIP-7212 Precompile" />
   <img src="https://img.shields.io/badge/Agent%20Standard-ERC--8004%20%2B%20MCP-8B5CF6?style=for-the-badge&logo=anthropic&logoColor=white" alt="ERC-8004 and MCP" />
   <img src="https://img.shields.io/badge/License-MIT-334155?style=for-the-badge" alt="MIT License" />
@@ -144,7 +144,7 @@ monad-hackathon/
 │   │   └── lib/
 │   │       ├── WebAuthnP256.sol      # WebAuthn assertion checks + call to the P-256 precompile
 │   │       └── ReentrancyGuard.sol
-│   └── test/                         # 72 tests: unit, fuzz and real WebAuthn P-256 signature vectors
+│   └── test/                         # 76 tests: unit, fuzz and real WebAuthn P-256 signature vectors
 │       ├── MockTarget.sol            # Allowlisted test target (deployed on testnet as "MockTarget Router")
 │       └── utils/MockERC20.sol       # Mintable 6-decimal test ERC-20 (deployed on testnet as "Test USDC")
 ├── packages/                # Workspace packages, not published to npm (see the Integration Guide)
@@ -302,23 +302,23 @@ npm install
 npm run build:sdk
 ```
 
-### 2. Run Comprehensive Test Matrix (142 / 142 Passing)
-The monorepo enforces 100% passing suites across all five execution domains:
+### 2. Run the tests (200 / 200 passing)
+Five suites, all green:
 
 ```bash
-# 1. Solidity smart contracts, P-256 precompile & fuzz harnesses (72 tests)
+# 1. Solidity smart contracts, P-256 precompile & fuzz harnesses (76 tests)
 npm run test:contracts
 
-# 2. TypeScript SDK unit & WebAuthn digest suites (34 tests)
+# 2. TypeScript SDK unit & WebAuthn digest suites (57 tests)
 npm run test:sdk
 
-# 3. Web Console, Judge Mode & gasless relayer security suites (19 tests)
+# 3. Web Console, Judge Mode & gasless relayer security suites (38 tests)
 npm run test:judge
 
 # 4. Receipt & bytecode auditor for the v1 MandateManager testnet records (9 tests)
 npm run test:auditor
 
-# 5. Anthropic Model Context Protocol (MCP) server suite (8 tests)
+# 5. Anthropic Model Context Protocol (MCP) server suite (20 tests)
 npm run test:mcp
 ```
 
@@ -328,13 +328,13 @@ Test Suite Verification Summary:
 ----------------------------------------------------------------------------------------
 Domain                          Harness            Tests   Status    Coverage
 ----------------------------------------------------------------------------------------
-Solidity Contracts & Precompile Foundry (forge)      72    PASSED    1000 fuzz runs
-TypeScript SDK & Client API     Vitest               34    PASSED    WebAuthn digests
-Web Console & Relay Security    Node.js (tsx)        19    PASSED    Rate limit & sponsor caps
+Solidity Contracts & Precompile Foundry (forge)      76    PASSED    1000 fuzz runs
+TypeScript SDK & Client API     Vitest               57    PASSED    WebAuthn digests
+Web Console & Relay Security    Node.js (tsx)        38    PASSED    Rate limit & sponsor caps
 Testnet Auditor & Invariants    Node.js (tsx)         9    PASSED    Chain 10143 mined receipts
-Model Context Protocol (MCP)    Node.js (tsx)         8    PASSED    Agent tool schemas
+Model Context Protocol (MCP)    Node.js (tsx)        20    PASSED    Agent tool schemas
 ----------------------------------------------------------------------------------------
-TOTAL VERIFIED MONOREPO SUITE                       142    PASSED    All Systems Green
+TOTAL                                               200    PASSED
 ========================================================================================
 ```
 
@@ -485,7 +485,7 @@ AgentTrust adheres to the **STRIDE** security threat model:
 | **Elevation of Privilege** | The agent calls a contract or function it was not granted, overspends, or a stranger calls `execute()`. | `execute()` and `payToken()` check the caller, liveness, ERC-8004 identity, allowlist, per-call cap, budget and vault balance, and revert before any external call. | `test_execute_stranger_reverts`, `test_execute_wrongTarget_reverts`, `test_execute_perCallLimit_reverts`, `test_execute_budget_reverts`, `test_execute_cannotCallMandatesContract`. Mined reverts in `deployments.mandates.json`: `overLimitBlocked`, `tokenOverLimitBlocked`, `rogueTargetBlocked`, `strangerBlocked` |
 
 ### Radical Engineering Transparency & Disclosures
-- **No Third-Party Audit:** This project was developed during a hackathon sprint. While verified by 142 passing tests and on-chain testnet deployment, it has not undergone an external third-party security audit.
+- **No Third-Party Audit:** This project was developed during a hackathon sprint. While covered by 200 passing tests and on-chain testnet deployment, it has not undergone an external third-party security audit.
 - **No Enterprise Adopters Claimed:** Pilot templates and integrations are open source, but no commercial enterprise adoption is falsely claimed.
 - **Calldata Parameter Scope:** Spending caps strictly enforce native MON `msg.value` and designated ERC-20 vault token balances. They do not parse arbitrary nested calldata parameters of unindexed external protocols.
 - **A mandate proves a P-256 key signed it, not that a human did.** The contract accepts any valid P-256 public key as an owner. The UV flag is set by whoever produces the assertion, and the console registers passkeys with `attestation: 'none'`. Judge Mode and `npm run e2e` sign with software keys. So `checkAction` / `checkPayment` show that the agent holds a live mandate within these limits, signed by some P-256 key. An integrator that needs a human behind the agent must accept only owner keys it onboarded itself (`getMandate(id).ownerKey`) or verify WebAuthn attestation off-chain when it enrolls the key.
