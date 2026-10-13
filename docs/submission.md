@@ -25,23 +25,32 @@ AgentTrust is an open primitive for delegating spending authority to AI agents. 
 - Pitch video (≤2 min): `<link>`
 
 **Judge access instructions**
-1. Open https://monad-hackathon-amber.vercel.app. The **Passkey Mandates** tab is the default.
-2. Click **Create passkey** and confirm with Touch ID, Face ID, Windows Hello or a security key. No wallet, account or MON is needed.
-3. The form is prefilled with a demo agent registered in ERC-8004. Click **Sign with passkey & create**. The relayer submits it, and it appears under **Your mandates** with a link to the transaction.
-4. Click **Revoke** or **Revoke every mandate** (one more passkey tap), and watch the status change on-chain.
-5. In **Verify an agent's authority**, run `checkAction()` against any mandate. It is read-only.
-6. To reproduce everything from source with no keys: `npm install && cd contracts && forge build && cd .. && npm run e2e`.
 
-No test login credentials are needed. Passkeys are created on the judge's own device, and the relayer pays the gas.
+Nothing to install. You need no wallet, no MON and no login. Passkeys are created on your own device, and the relayer pays gas.
+
+*Fastest path (1 minute):* open https://monad-hackathon-amber.vercel.app/#judge and click **Run the live sequence**. Six real Monad testnet transactions run in order: create a passkey-signed mandate, an allowed call, an overspend (blocked), a rogue target (blocked), an owner revoke, and a call after the revoke (blocked). Each step links to the explorer.
+
+*Full path (3 minutes):*
+1. Open https://monad-hackathon-amber.vercel.app/#passkey and click **Create passkey**. Confirm with Touch ID, Face ID, Windows Hello or a security key.
+2. The form is prefilled with a demo agent registered in ERC-8004. Read the **You are signing** summary, then click **Sign with passkey & create**. The mandate appears under **Your mandates** with a link to the transaction.
+3. Open **Verify an Agent** (`/#verify`). It loads the mandate you just created. Click **Run all 5 checks**: the normal call is ALLOWED, and the overspend, rogue target, wrong function and impostor agent are BLOCKED, each with the contract's reason.
+4. Back on **Passkey Mandates**, click **Revoke** (one more passkey tap). Run Verify again and every check now says `MandateInactive`.
+5. **Developers** (`/#docs`) has the MCP config, the SDK and a Solidity snippet, plus the deployed addresses.
+6. To reproduce from source with no keys: `npm install && cd contracts && forge build && cd .. && npm run e2e`.
 
 **Tech:** Solidity 0.8.24 (Foundry), WebAuthn/P-256 via precompile `0x0100`, ERC-8004 Identity Registry `0x8004A818BFB912233c491871b3d84c89A494BD9e`, viem, Next.js 15, MCP SDK.
 
 ## Deliverables checklist
 
-- [ ] Logo: `docs/assets/agenttrust_logo.jpg` (JPG, under 3 MB)
+- [x] Logo: `docs/assets/agenttrust_logo.jpg` (JPG, under 3 MB)
+- [x] Console redesign with deep links, Judge Mode, Verify page and README product tour (`docs/assets/screens/`)
+- [x] Testnet deployment recorded in `deployments.mandates.json` (AgentMandates `0xc911e902…237c`)
 - [ ] Repository public, with access for metropolis@hackathon.monad.xyz
-- [ ] `npm run e2e -- --testnet` run, and `deployments.mandates.json` committed
-- [ ] Vercel env vars set (see `docs/deploy.md`) and the console redeployed
-- [ ] Demo video recorded from the live console + Claude with the MCP server (script: `docs/demo-and-pitch.md`)
+- [ ] Vercel env vars imported (see `docs/deploy.md`) and the console redeployed
+- [ ] Relayer funded with testnet MON. Judge Mode needs at least 0.005 MON per run, and the passkey relayer also pays gas for every grant and revoke
+- [ ] `NEXT_PUBLIC_DEMO_MANDATE_ID` set to a live mandate: grant one in the console, then copy its number. The e2e run revokes mandate #1
+- [ ] Smoke test on the live URL: `/#judge` run is green, `/#passkey` create + grant + revoke works, `/#verify` shows 5/5
+- [ ] Demo video recorded (script: `docs/demo-and-pitch.md`)
 - [ ] Pitch video recorded (script: `docs/demo-and-pitch.md`)
+- [ ] Submission form filled with the copy above and the two video links
 - [ ] Optional 30-second ad

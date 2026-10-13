@@ -92,7 +92,7 @@ export function HomeView({ onNavigate }: { onNavigate: (tab: NavTab) => void }) 
                 <span className={h.avatar}><Bot size={18} /></span>
                 <div>
                   <div className={h.mcardName}>Research agent</div>
-                  <div className={h.mcardSub}>ERC-8004 #2306 · 0x763F…3243</div>
+                  <div className={h.mcardSub}>ERC-8004 #2304 · 0x5C73…d64C</div>
                 </div>
               </div>
               <span className={h.livePill}><span className={h.liveDot} /> ACTIVE</span>

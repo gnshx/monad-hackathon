@@ -28,6 +28,19 @@
   <a href="#-threat-model--security-engineering"><strong>Security Model</strong></a>
 </p>
 
+
+---
+
+## Product Tour
+
+> **Live:** https://monad-hackathon-amber.vercel.app · every page has its own link: [`/#judge`](https://monad-hackathon-amber.vercel.app/#judge), [`/#passkey`](https://monad-hackathon-amber.vercel.app/#passkey), [`/#verify`](https://monad-hackathon-amber.vercel.app/#verify), [`/#docs`](https://monad-hackathon-amber.vercel.app/#docs)
+
+| | |
+|---|---|
+| ![Home](./docs/assets/screens/01-home.jpg) **Home.** The pitch, a live-style mandate card and three ways in. | ![Passkey Mandates](./docs/assets/screens/02-passkey-mandates.jpg) **Passkey Mandates.** Create a passkey, then sign a mandate in four guided steps. No wallet is needed. |
+| ![Your mandates](./docs/assets/screens/03-your-mandates.jpg) **Sign and manage.** A plain-English summary of what you sign, then spend meters and one-tap revoke. | ![Verify an Agent](./docs/assets/screens/04-verify-agent.jpg) **Verify an Agent.** Five `checkAction()` probes against a live mandate. Only the legitimate call passes. |
+| ![Judge Mode](./docs/assets/screens/05-judge-mode.jpg) **Judge Mode.** Six real Monad transactions in one click: 3 go through, 3 are blocked, each with an explorer link. | <img src="./docs/assets/screens/06-mobile.jpg" alt="Mobile" width="220" /> **Mobile.** The whole console works on a phone, which suits Face ID passkeys. |
+
 ---
 
 ## Executive Summary

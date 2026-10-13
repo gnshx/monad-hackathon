@@ -3,23 +3,23 @@
 ## Before recording
 
 1. Deploy and configure the console as described in [deploy.md](deploy.md). Then open https://monad-hackathon-amber.vercel.app on a laptop with Touch ID, or a phone with Face ID.
-2. Have the MCP server configured in Claude Desktop or Claude Code for the demo agent (the `mcp` snippet in the console's **Build on it** card, filled from `deployments.mandates.json`).
+2. Have the MCP server configured in Claude Desktop or Claude Code for the demo agent (the MCP snippet on the console's **Developers** page, filled from `deployments.mandates.json`).
 3. Open a Monad explorer tab for the AgentMandates contract.
 
 ## Technical demo: 3 minutes, live product only
 
 | Time | Screen | Say |
 |---|---|---|
-| 0:00–0:15 | Console hero | "AI agents need to spend money, and today that means handing them a private key. AgentTrust gives the agent a budget instead, signed with a passkey and enforced by Monad." |
-| 0:15–0:35 | Click **Create passkey** → Touch ID | "There's no wallet and no seed phrase. My passkey's public key is my on-chain identity, and the private key never leaves the secure enclave." |
-| 0:35–1:05 | Fill **Grant a mandate**: agent wallet, its ERC-8004 ID, one contract, one function, 0.005 MON per call, 0.02 MON budget, 7 days → **Sign with passkey** → Touch ID → success → open the tx in the explorer | "One tap. The relayer pays the gas, so I never need MON. On-chain, Monad's P-256 precompile verifies the WebAuthn assertion, checks it was user-verified, and binds it to these exact terms, this chain and this contract." |
+| 0:00–0:15 | **Home** page (the mandate card animates allowed and blocked calls) | "AI agents need to spend money, and today that means handing them a private key. AgentTrust gives the agent a budget instead, signed with a passkey and enforced by Monad." |
+| 0:15–0:35 | **Passkey Mandates** → **Create passkey** → Touch ID | "There's no wallet and no seed phrase. My passkey's public key is my on-chain identity, and the private key never leaves the secure enclave." |
+| 0:35–1:05 | **Grant a mandate**: pick the *Pay-per-call API agent* preset, point at the **You are signing** summary → **Sign with passkey & create** → Touch ID → the mandate card appears → open the tx in the explorer | "One tap. The relayer pays the gas, so I never need MON. On-chain, Monad's P-256 precompile verifies the WebAuthn assertion, checks it was user-verified, and binds it to these exact terms, this chain and this contract." |
 | 1:05–1:45 | Switch to Claude with the AgentTrust MCP server. Ask: "Check what you're allowed to do, then call doSomething(1) with 0.005 MON." → it calls `mandate_status`, then `execute_action` → tx hash | "My agent runs in Claude with our MCP server. It reads its mandate and acts inside it. The contract also re-checked that this wallet is still the agent's ERC-8004 identity." |
 | 1:45–2:10 | Ask: "Now send 0.5 MON to it" → `blockedBy: ExceedsPerCallLimit`. Ask it to send funds to another address → `PermissionDenied` | "Here I play the attacker, as if the prompt were injected. The contract refuses, and the agent gets the exact rule it broke. A compromised model can never get past what I signed." |
-| 2:10–2:30 | Console: the spend meter has moved. **Verify an agent's authority** → checkAction → green, then change the value → red | "Any app or contract can ask the chain the same question before serving an agent, with no API key and no platform in between." |
-| 2:30–2:50 | **Revoke every mandate** → Touch ID. Back in Claude: try again → `MandateInactive` | "One tap kills every mandate this passkey has issued, and the agent is cut off immediately." |
+| 2:10–2:30 | Console: the spend meter has moved. **Verify an Agent** → **Run all 5 checks** → one ALLOWED, four BLOCKED with reasons | "Any app or contract can ask the chain the same question before serving an agent, with no API key and no platform in between." |
+| 2:30–2:50 | **Emergency: revoke all** → Touch ID. Back in Claude: try again → `MandateInactive` | "One tap kills every mandate this passkey has issued, and the agent is cut off immediately." |
 | 2:50–3:00 | README / repo | "It's open source: a contract, an SDK and an MCP server, with 142 passing tests across contract, SDK, web, and MCP suites." |
 
-Fallback if the passkey prompt misbehaves on camera: `npm run e2e -- --testnet` runs the same lifecycle on Monad testnet and prints explorer links for every step.
+Fallback if the passkey prompt misbehaves on camera: open `/#judge` and click **Run the live sequence**. It runs the same lifecycle as six live testnet transactions with explorer links. From a terminal, `npm run e2e -- --testnet` does the same.
 
 ## Pitch: 2 minutes
 
@@ -35,4 +35,4 @@ Fallback if the passkey prompt misbehaves on camera: `npm run e2e -- --testnet` 
 
 ## 30-second ad (optional)
 
-Show a phone with Face ID, then text on screen: "Your AI agent wants your keys." → "Give it a budget instead." Tap. Cut to Claude: "Blocked: ExceedsPerCallLimit". Tap "Revoke every mandate". End card: "AgentTrust · passkey mandates on Monad."
+Show a phone with Face ID, then text on screen: "Your AI agent wants your keys." → "Give it a budget instead." Tap. Cut to Claude: "Blocked: ExceedsPerCallLimit". Tap "Emergency: revoke all". End card: "AgentTrust · passkey mandates on Monad."
