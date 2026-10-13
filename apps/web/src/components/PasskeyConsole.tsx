@@ -702,7 +702,7 @@ const SNIPPETS = {
     }
   }
 }`,
-    note: 'The agent gets mandate_status, check_action and execute_action tools. Even a prompt-injected model can only spend what the passkey approved.',
+    note: 'The agent gets mandate_status, check_action, execute_action and pay_token tools. Even a prompt-injected model can only spend what the passkey approved.',
   },
   sdk: {
     label: 'TypeScript',
