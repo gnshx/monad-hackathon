@@ -68,7 +68,7 @@ npm run demo
 To make evaluation frictionless for judges, **judges do not need to hold testnet MON or connect funded personal wallets**:
 
 1. **Interactive In-Browser Evidence Testing:**
-   - Open the web console at **[https://6bfd9aa4a2a198.lhr.life](https://6bfd9aa4a2a198.lhr.life)** (or locally at `http://localhost:3000`).
+   - Open the web console at **[https://90b8bd0cc61493.lhr.life](https://90b8bd0cc61493.lhr.life)** (or locally at `http://localhost:3000`).
    - Click the **"Evidence & Proofs"** tab in the sidebar.
    - Click **"Run Live Precompile Verification Test"** to witness an interactive RPC call to Monad Testnet's precompile returning `0x01` in real-time.
    - Query any agent ID on Monad Testnet's live ERC-8004 Identity Registry.
