@@ -11,7 +11,9 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "viem": "^2.21.0"
+    "viem": "^2.21.0",
+    "@noble/curves": "^1.9.1",
+    "@noble/hashes": "^1.8.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
