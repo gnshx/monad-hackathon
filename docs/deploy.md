@@ -35,6 +35,8 @@ In the Vercel project settings, under Environment Variables:
 | `NEXT_PUBLIC_DEMO_AGENT` | `agent` from `deployments.mandates.json` (prefills the form) |
 | `NEXT_PUBLIC_DEMO_AGENT_ID` | `agentId` |
 | `NEXT_PUBLIC_DEMO_TARGET` | `contracts.mockTarget` |
+| `NEXT_PUBLIC_DEMO_TOKEN` | `contracts.testUsdc` (prefills the stablecoin budget) |
+| `NEXT_PUBLIC_DEMO_PAYEE` | `merchant` (the payee allowed to receive the token) |
 | `RELAYER_PRIVATE_KEY` | a **separate**, lightly funded key that pays gas for passkey users (server-side only) |
 | `RELAYER_SPONSOR_MAX_WEI` | optional demo vault funding per mandate, e.g. `10000000000000000` (0.01 MON); `0` to disable |
 

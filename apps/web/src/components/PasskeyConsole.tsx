@@ -29,7 +29,9 @@ import {
 } from 'viem';
 import {
   ANY_SELECTOR,
+  AgentMandatesABI,
   createBrowserPasskey,
+  recoverBrowserPasskey,
   encode,
   ownerKeyOf,
   signWithBrowserPasskey,
@@ -121,7 +123,7 @@ export function PasskeyConsole() {
     days: PRESETS[0].days,
     sponsor: true,
     token: process.env.NEXT_PUBLIC_DEMO_TOKEN || '',
-    payee: '',
+    payee: process.env.NEXT_PUBLIC_DEMO_PAYEE || '',
     tokenPerCall: '10',
     tokenBudget: '25',
   });
@@ -217,6 +219,30 @@ export function PasskeyConsole() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(pk));
       setPasskey(pk);
       return { kind: 'ok', text: 'Passkey created on this device. Its public key is your owner identity; the private key never leaves your authenticator.' };
+    });
+
+  const useExisting = () =>
+    run('recover', async () => {
+      const isRegistered = async (c: PasskeyPublicKey) => {
+        if (!client) return false;
+        const [x] = await client.publicClient.readContract({
+          address: client.address, abi: AgentMandatesABI, functionName: 'passkeys', args: [ownerKeyOf(c)],
+        });
+        return BigInt(x) !== 0n;
+      };
+      const first = await recoverBrowserPasskey();
+      let found: PasskeyPublicKey | undefined;
+      for (const c of first.candidates) if (await isRegistered(c)) found = c;
+      if (!found) {
+        // Never used on-chain yet: a second signature pins down which candidate is the real key.
+        const second = await recoverBrowserPasskey();
+        found = first.candidates.find((c) => second.candidates.some((d) => d.x === c.x && d.y === c.y));
+      }
+      if (!found) throw new Error('Could not identify the passkey, please try again');
+      const pk = { publicKey: found, credentialId: first.credentialId };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(pk));
+      setPasskey(pk);
+      return { kind: 'ok', text: 'Passkey recognized. Its mandates are loaded below.' };
     });
 
   const grant = () =>
@@ -398,9 +424,14 @@ export function PasskeyConsole() {
                 A passkey lives in your device&apos;s secure hardware. Its public key becomes your on-chain owner identity, so
                 no wallet vendor or platform holds it.
               </p>
-              <button className={s.btn} onClick={createPasskey} disabled={!!busy}>
-                <Fingerprint size={16} /> {busy === 'passkey' ? 'Waiting for your device…' : 'Create passkey'}
-              </button>
+              <div className={s.btnRow} style={{ marginTop: 0 }}>
+                <button className={s.btn} onClick={createPasskey} disabled={!!busy}>
+                  <Fingerprint size={16} /> {busy === 'passkey' ? 'Waiting for your device…' : 'Create passkey'}
+                </button>
+                <button className={s.btnGhost} onClick={useExisting} disabled={!!busy}>
+                  {busy === 'recover' ? 'Waiting for your device…' : 'I already have one'}
+                </button>
+              </div>
             </>
           )}
         </section>

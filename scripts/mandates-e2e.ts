@@ -208,6 +208,7 @@ async function main() {
         mandateId: Number(mandateId),
         agentId: Number(agentId),
         agent: agentAccount.address,
+        merchant,
         ownerKey,
         transactions: record,
       };

@@ -137,6 +137,32 @@ export async function signWithBrowserPasskey(challenge: Hex, credentialId?: Hex)
 }
 
 /**
+ * Recover an existing passkey's public key on a device that doesn't have it stored, from one
+ * assertion. ECDSA recovery yields up to two candidate keys; pick the one registered on-chain
+ * (`passkeys(ownerKeyOf(candidate))`), or call again and intersect the candidates.
+ */
+export async function recoverBrowserPasskey(): Promise<{ candidates: PasskeyPublicKey[]; credentialId: Hex }> {
+  const nav = (globalThis as any).navigator;
+  if (!nav?.credentials?.get) throw new Error('WebAuthn is not available in this environment');
+  const challenge = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(challenge);
+  const cred = await nav.credentials.get({ publicKey: { challenge, userVerification: 'required', timeout: 60_000 } });
+  if (!cred) throw new Error('Passkey prompt was dismissed');
+  const res = cred.response;
+  const authData = new Uint8Array(res.authenticatorData);
+  const message = sha256(new Uint8Array([...authData, ...sha256(new Uint8Array(res.clientDataJSON))]));
+  const sig = p256.Signature.fromDER(new Uint8Array(res.signature));
+  const candidates: PasskeyPublicKey[] = [];
+  for (const bit of [0, 1]) {
+    try {
+      const point = sig.addRecoveryBit(bit).recoverPublicKey(message).toRawBytes(false);
+      candidates.push({ x: bytesToHex(point.slice(1, 33)), y: bytesToHex(point.slice(33)) });
+    } catch {}
+  }
+  return { candidates, credentialId: bytesToHex(new Uint8Array(cred.rawId)) };
+}
+
+/**
  * A software P-256 authenticator that produces byte-for-byte WebAuthn assertions. For scripts,
  * tests, CI and headless agents' owners; real users sign with a device passkey instead.
  */

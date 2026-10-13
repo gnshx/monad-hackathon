@@ -113,3 +113,15 @@ describe('WebAuthn helpers', () => {
     expect(Object.values(MANDATE_ERRORS)).toContain('TargetIsVaultToken');
   });
 });
+
+describe('passkey recovery math', () => {
+  it('one of the two recovered keys is the signer', () => {
+    const priv = p256.utils.randomPrivateKey();
+    const pub = p256.getPublicKey(priv, false);
+    const msg = sha256(new Uint8Array([9, 9, 9]));
+    const der = p256.sign(msg, priv, { prehash: false }).toDERRawBytes();
+    const sig = p256.Signature.fromDER(der);
+    const keys = [0, 1].map((b) => toHex(sig.addRecoveryBit(b).recoverPublicKey(msg).toRawBytes(false)));
+    expect(keys).toContain(toHex(pub));
+  });
+});
