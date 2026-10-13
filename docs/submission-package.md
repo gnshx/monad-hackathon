@@ -133,13 +133,16 @@ npm run verify:p256
 # 3. Verify Monad Testnet ERC-8004 Agent Identity Registry
 npm run verify:erc8004
 
-# 4. Audit any transaction hash independently on Monad Testnet
+# 4. Audit all 7 on-chain mined transactions across all scenarios in 5s
+npm run verify:all
+
+# 5. Audit any specific transaction hash independently on Monad Testnet
 npm run verify:tx 0xdf928824bddee386bac134559d4148ac88fa5d79fdf9dcb710d8bcd2947e7e77
 
-# 5. Run full testnet deployment & 6-scenario execution suite
+# 6. Run full testnet deployment & 6-scenario execution suite
 npm run deploy:testnet
 
-# 6. Run Smart Contract & SDK Test Suites
+# 7. Run Smart Contract & SDK Test Suites
 npm run test:sdk
 forge test --root contracts
 ```

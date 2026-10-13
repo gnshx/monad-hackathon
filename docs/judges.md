@@ -8,8 +8,8 @@
 - 🏆 **Official Submission Package & Portal Copy:** [`docs/submission-package.md`](submission-package.md)
 - 🎬 **Video Storyboards & Integration Outreach:** [`docs/storyboard-and-outreach.md`](storyboard-and-outreach.md)
 - 📊 **Claim vs. Evidence Matrix:** [`docs/claim-vs-evidence.md`](claim-vs-evidence.md)
-- 🎙️ **Interview Defense Brief & Rehearsed Answers:** [`docs/interview-brief.md`](interview-brief.md)
-- ⚡ **1-Command Independent Verifier:** `npm run verify:tx <txHash>`
+- ⚡ **1-Command All-Scenario Verifier:** `npm run verify:all`
+- 🔍 **Single Tx Receipt Verifier:** `npm run verify:tx <txHash>`
 
 ---
 

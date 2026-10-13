@@ -89,8 +89,9 @@ This runs `scripts/run-demo.ts` on a local Anvil EVM node (Chain ID 31337), exec
 
 ### 7. Where can I verify deployment / transactions?
 - **Deployed Contracts (Chain 10143):** `MandateManager` at [`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`](https://testnet.monadexplorer.com/address/0x3550f9fc84640a9cfd7c51330615a1e05cb948be), `MockTarget` at [`0x0758fdc78e20f748fa89e2d53f84748697cb177f`](https://testnet.monadexplorer.com/address/0x0758fdc78e20f748fa89e2d53f84748697cb177f).
-- **1-Command Independent Verifier:** Run `npm run verify:tx <txHash>` to independently audit any on-chain receipt directly against Monad Testnet RPC.
-- **P-256 Precompile Verification:** Run `npm run verify:p256` or `cast call 0x0000000000000000000000000000000000000100 <vector> --rpc-url https://testnet-rpc.monad.xyz` to verify Monad's live precompile.
+- **All-in-One On-Chain Matrix Audit:** Run `npm run verify:all` to audit and verify all 7 on-chain mined transactions across all scenarios directly against Monad RPC in 5 seconds.
+- **Single Tx Receipt Verifier:** Run `npm run verify:tx <txHash>` to independently audit any specific transaction receipt.
+- **P-256 Precompile Verification:** Run `npm run verify:p256` to test Monad's live precompile math with a NIST P-256 test vector. (For human biometric passkeys, use the WebAuthn flow in `apps/web`).
 - **ERC-8004 Identity Registry Binding:** Run `npm run verify:erc8004` to verify on-chain agent identity binding against Monad Testnet registry `0x8004A818BFB912233c491871b3d84c89A494BD9e`.
 - **Receipt Auditor Tool:** Integrated in the live console under the **Receipts** tab with fail-closed checks against Monad Testnet or any specified EVM RPC.
 

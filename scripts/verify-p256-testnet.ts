@@ -16,7 +16,10 @@ async function main() {
   const chainId = await client.getChainId();
   console.log(`🌐 Connected to RPC: ${RPC_URL}`);
   console.log(`⛓️  Chain ID: ${chainId} (Expected: 10143)`);
-  console.log(`📍 Precompile Address: ${P256_PRECOMPILE}\n`);
+  console.log(`📍 Precompile Address: ${P256_PRECOMPILE}`);
+  console.log(`ℹ️  Scope Note: This script validates Monad's live precompile math using a real`);
+  console.log(`    NIST P-256 (secp256r1) test vector. For end-user biometric passkeys (TouchID/FaceID),`);
+  console.log(`    use the WebAuthn creation flow in the web console (apps/web).\n`);
 
   // 1. Generate real SECP256R1 (P-256) keypair
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', {
