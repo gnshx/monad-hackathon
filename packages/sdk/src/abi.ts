@@ -1,3 +1,5 @@
+import type { Address } from 'viem';
+
 export const MandateManagerABI = [
   {
     "type": "constructor",
@@ -883,3 +885,38 @@ export const MandateManagerABI = [
     "inputs": []
   }
 ] as const;
+
+export const MONAD_TESTNET_ERC8004_REGISTRY: Address =
+  '0x8004A818BFB912233c491871b3d84c89A494BD9e';
+
+export const ERC8004_IDENTITY_REGISTRY_ABI = [
+  {
+    type: 'function',
+    name: 'getAgentWallet',
+    inputs: [{ name: 'agentId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'ownerOf',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'register',
+    inputs: [{ name: 'agentURI', type: 'string' }],
+    outputs: [{ name: 'agentId', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'register',
+    inputs: [],
+    outputs: [{ name: 'agentId', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+  },
+] as const;
+

@@ -7,6 +7,7 @@ import {
   FileText,
   Shield,
   SearchCode,
+  ShieldCheck,
   BookOpen,
   Menu,
   X,
@@ -19,6 +20,7 @@ export type NavTab =
   | 'copilot'
   | 'attack-lab'
   | 'inspector'
+  | 'evidence'
   | 'activity'
   | 'docs';
 
@@ -71,6 +73,12 @@ export function Sidebar({
       id: 'inspector' as NavTab,
       label: 'Receipts',
       icon: SearchCode,
+    },
+    {
+      id: 'evidence' as NavTab,
+      label: 'Evidence & Proofs',
+      icon: ShieldCheck,
+      badge: 'Live',
     },
     {
       id: 'docs' as NavTab,

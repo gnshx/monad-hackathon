@@ -5,3 +5,5 @@ export * from './mandate.js';
 export * from './execute.js';
 export * from './verify.js';
 export * from './client.js';
+export * from './guard.js';
+

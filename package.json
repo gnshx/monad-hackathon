@@ -11,6 +11,9 @@
     "test:sdk": "npm run --workspace=@agenttrust/sdk test",
     "build:agent": "npm run --workspace=@agenttrust/demo-agent build",
     "build:web": "npm run --workspace=@agenttrust/web build",
-    "demo": "npx -y tsx scripts/run-demo.ts"
+    "demo": "npx -y tsx scripts/run-demo.ts",
+    "verify:p256": "npx -y tsx scripts/verify-p256-testnet.ts",
+    "verify:erc8004": "npx -y tsx scripts/verify-erc8004-testnet.ts",
+    "deploy:testnet": "npx -y tsx scripts/deploy-and-run-testnet.ts"
   }
 }

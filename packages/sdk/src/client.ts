@@ -12,8 +12,10 @@ import {
   revokeMandate,
 } from './mandate.js';
 import { executeAction, type ExecuteResult } from './execute.js';
-import { verifyActionPreflight, verifyReceipt } from './verify.js';
+import { verifyActionPreflight, verifyReceipt, verifyAgentIdentity } from './verify.js';
+import { MONAD_TESTNET_ERC8004_REGISTRY } from './abi.js';
 import type {
+  AgentIdentityVerification,
   AllowedTarget,
   CreateMandateParams,
   CreateMandateWithWebAuthnParams,
@@ -214,4 +216,20 @@ export class AgentTrustClient {
   ): Promise<ExecutionReceiptVerification> {
     return verifyReceipt(this.publicClient, this.contractAddress, transactionHash, options);
   }
+
+  /**
+   * Independently verifies an agent ID against the ERC-8004 Identity Registry.
+   */
+  async verifyAgentIdentity(
+    agentId: bigint,
+    expectedAgentAddress: Address,
+    registryAddress?: Address
+  ): Promise<AgentIdentityVerification> {
+    const reg =
+      registryAddress ||
+      this.network?.identityRegistryAddress ||
+      MONAD_TESTNET_ERC8004_REGISTRY;
+    return verifyAgentIdentity(this.publicClient, agentId, expectedAgentAddress, reg);
+  }
 }
+

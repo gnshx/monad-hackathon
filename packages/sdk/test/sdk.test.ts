@@ -3,7 +3,7 @@ import {
   computeMandateHash,
   MANDATE_DOMAIN_TAG,
 } from '../src/mandate.js';
-import { verifyActionPreflight, verifyReceipt } from '../src/verify.js';
+import { verifyActionPreflight, verifyReceipt, verifyAgentIdentity } from '../src/verify.js';
 import type { AllowedTarget, Mandate } from '../src/types.js';
 import { encodeEventTopics, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { MandateManagerABI } from '../src/abi.js';
@@ -449,4 +449,91 @@ describe('AgentTrust SDK', () => {
       expect(res.revertReason).toContain('exceeds expected maximum');
     });
   });
+
+  describe('verifyAgentIdentity (ERC-8004 Registry)', () => {
+    const dummyRegistry = '0x8004A818BFB912233c491871b3d84c89A494BD9e' as const;
+    const agentId = 1n;
+    const registeredWallet = '0x133603465aDdE7C39fa0E6E34b264E1573e1FD08' as const;
+
+    it('returns verified: true when getAgentWallet matches expectedAgentAddress', async () => {
+      const mockPublicClient = {
+        readContract: vi.fn(async ({ functionName }) => {
+          if (functionName === 'getAgentWallet') return registeredWallet;
+          if (functionName === 'ownerOf') return registeredWallet;
+          throw new Error('Unknown function');
+        }),
+      } as any;
+
+      const result = await verifyAgentIdentity(
+        mockPublicClient,
+        agentId,
+        registeredWallet,
+        dummyRegistry
+      );
+
+      expect(result.verified).toBe(true);
+      expect(result.agentWallet?.toLowerCase()).toBe(registeredWallet.toLowerCase());
+      expect(result.error).toBeUndefined();
+    });
+
+    it('returns verified: true when ownerOf matches expectedAgentAddress', async () => {
+      const mockPublicClient = {
+        readContract: vi.fn(async ({ functionName }) => {
+          if (functionName === 'getAgentWallet') return '0x0000000000000000000000000000000000000000';
+          if (functionName === 'ownerOf') return registeredWallet;
+          throw new Error('Unknown function');
+        }),
+      } as any;
+
+      const result = await verifyAgentIdentity(
+        mockPublicClient,
+        agentId,
+        registeredWallet,
+        dummyRegistry
+      );
+
+      expect(result.verified).toBe(true);
+      expect(result.owner?.toLowerCase()).toBe(registeredWallet.toLowerCase());
+    });
+
+    it('returns verified: false when addresses mismatch', async () => {
+      const otherAddress = '0x9999999999999999999999999999999999999999' as const;
+      const mockPublicClient = {
+        readContract: vi.fn(async ({ functionName }) => {
+          if (functionName === 'getAgentWallet') return registeredWallet;
+          if (functionName === 'ownerOf') return registeredWallet;
+          throw new Error('Unknown function');
+        }),
+      } as any;
+
+      const result = await verifyAgentIdentity(
+        mockPublicClient,
+        agentId,
+        otherAddress,
+        dummyRegistry
+      );
+
+      expect(result.verified).toBe(false);
+      expect(result.error).toContain('does not match expected agent address');
+    });
+
+    it('returns verified: false when agent is not registered in registry', async () => {
+      const mockPublicClient = {
+        readContract: vi.fn(async () => {
+          throw new Error('ERC721NonexistentToken(404)');
+        }),
+      } as any;
+
+      const result = await verifyAgentIdentity(
+        mockPublicClient,
+        404n,
+        registeredWallet,
+        dummyRegistry
+      );
+
+      expect(result.verified).toBe(false);
+      expect(result.error).toContain('is not registered in ERC-8004 registry');
+    });
+  });
 });
+

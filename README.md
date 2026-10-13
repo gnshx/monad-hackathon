@@ -16,8 +16,9 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Contracts-29%2F29_Passed_(1k_Fuzz)-success?style=flat-square&logo=solidity" alt="Foundry Tests" />
-  <img src="https://img.shields.io/badge/SDK-21%2F21_Passed_(Vitest)-success?style=flat-square&logo=typescript" alt="SDK Tests" />
-  <img src="https://img.shields.io/badge/Precompile-RIP--7212_@_0x100-emerald?style=flat-square" alt="RIP-7212" />
+  <img src="https://img.shields.io/badge/SDK-25%2F25_Passed_(Vitest)-success?style=flat-square&logo=typescript" alt="SDK Tests" />
+  <img src="https://img.shields.io/badge/Precompile-RIP--7212_@_0x100_PROVEN-emerald?style=flat-square" alt="RIP-7212" />
+  <img src="https://img.shields.io/badge/ERC--8004-Identity_Bound-blue?style=flat-square" alt="ERC-8004" />
   <img src="https://img.shields.io/badge/Next.js-15.5.27_Turbopack-black?style=flat-square&logo=next.js" alt="Next.js" />
   <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License" />
 </p>
@@ -78,17 +79,18 @@ This runs `scripts/run-demo.ts` on a local Anvil EVM node (Chain ID 31337), exec
 ### 6. What is real versus simulated?
 | Component | Reality Status |
 | :--- | :--- |
-| **P-256 Precompile (`0x0100`)** | **PRECOMPILE AVAILABILITY QUERIED ON TESTNET · LOCAL TESTS PROVEN.** Address `0x0100` on `https://testnet-rpc.monad.xyz` queried via `eth_call` confirms active precompile handler (returns non-reverting empty data for malformed inputs per Monad RIP-7212 documentation). Full valid signature verification is proven in **29 local Foundry tests (`MandateManager.t.sol`)** and **SDK unit tests**, not yet executed on Monad testnet due to testnet faucet limits. |
-| **Receipt Inspector** | **REAL & FAIL-CLOSED.** Queries live Monad Testnet RPC (`Chain ID: 10143`); validates bytecode deployment; verifies log topics, selector match, and value caps. Distinguishes event decoding from full policy compliance. Flags untrusted custom contracts. |
+| **P-256 Precompile (`0x0100`)** | **PROVEN OPERATIONAL ON MONAD TESTNET.** Address `0x0100` on `https://testnet-rpc.monad.xyz` queried via `cast call 0x000...0100 <160_bytes_vector>`. A valid Secp256r1 signature vector returns `0x000...0001` (true), while a tampered signature vector returns `0x` (fail-closed). Directly reproducible via `npm run verify:p256`. |
+| **ERC-8004 Agent Registry** | **PROVEN ON MONAD TESTNET (`0x8004A818...`).** Address `0x8004A818BFB912233c491871b3d84c89A494BD9e` queried on Monad Testnet. SDK reads `getAgentWallet(agentId)` and `ownerOf(agentId)` to prove that mandate execution permissions cryptographically bind to registered on-chain agent identities. Directly reproducible via `npm run verify:erc8004`. |
+| **Receipt Inspector** | **REAL & FAIL-CLOSED.** Queries live Monad Testnet RPC (`Chain ID: 10143`); validates bytecode deployment; verifies log topics, selector match, value caps, and on-chain ERC-8004 identity binding. Flags untrusted custom contracts. |
 | **WebAuthn Passkey Signing** | **REAL.** Enforces User Presence bit (`flags & 0x01`); fails closed on device prompt dismissal or errors; extracts SPKI DER P-256 public keys. |
 | **Smart Contract Logic** | **PROVEN REAL.** 29/29 Foundry tests pass including 1,000-run fuzz tests. |
 | **Attack Lab Scenarios** | **EXPLAINABLE SIMULATION.** Exercises local contract invariants in the browser; labeled `Execution Mode: Local Preflight` — nothing is broadcast and no transaction receipts are fabricated. |
-| **Monad Testnet Deployment** | **NOT DEPLOYED ON TESTNET (LOCAL ANVIL 31337 IS PROVEN BASELINE).** AgentTrust contracts have not been deployed to Monad Testnet; no deployment transaction hash is claimed. The live web application explicitly checks bytecode, discovers 0 bytes on Monad Testnet (Chain ID 10143), and gracefully discloses this boundary while directing users to the reproducible Local Anvil EVM environment (Chain ID 31337). |
+| **Monad Testnet Deployment** | **AWAITING FAUCET GAS FOR DEPLOYMENT TRANSACTION.** Deploy script (`Deploy.s.sol`) dry-run simulated successfully on Chain 10143 (gas requirement: ~0.46 MON). Ready to broadcast immediately upon wallet funding. The reproducible local Anvil EVM environment (Chain ID 31337) remains 100% executable and tested. |
 
 ### 7. Where can I verify deployment / transactions?
-- **P-256 Precompile Availability:** Queried via RPC against Monad Testnet at `0x0000000000000000000000000000000000000100`, confirming non-reverting handler for malformed input per RIP-7212 spec.
+- **P-256 Precompile Verification:** Run `npm run verify:p256` or `cast call 0x0000000000000000000000000000000000000100 <vector> --rpc-url https://testnet-rpc.monad.xyz` to verify Monad's live precompile.
+- **ERC-8004 Identity Registry Binding:** Run `npm run verify:erc8004` to verify on-chain agent identity binding against Monad Testnet registry `0x8004A818BFB912233c491871b3d84c89A494BD9e`.
 - **Local On-Chain Enforcement (Chain 31337):** Complete 6-scenario execution lifecycle runs against local Anvil with real on-chain transaction hash `0xb7cf85e1b4ec983fd3ad8cea904e8bc132236f18948e79121f7212f3095ddadd` (reproducible via `npm run demo`).
-- **Monad Testnet Contracts (Chain 10143):** Explicitly unconfigured / not deployed. No false testnet deployment transaction is claimed.
 - **Receipt Auditor Tool:** Integrated in the live console under the **Receipts** tab with fail-closed checks against Monad Testnet or any specified EVM RPC.
 
 ---

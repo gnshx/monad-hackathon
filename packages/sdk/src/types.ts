@@ -110,3 +110,13 @@ export interface MonadNetworkConfig {
   p256VerifierAddress?: Address;
   identityRegistryAddress?: Address;
 }
+
+export interface AgentIdentityVerification {
+  verified: boolean;
+  agentId: bigint;
+  registryAddress: Address;
+  agentWallet?: Address;
+  owner?: Address;
+  error?: string;
+}
+

@@ -26,8 +26,16 @@ import {
   isAddress,
   isHex,
 } from 'viem';
-import { verifyReceipt, type ReceiptVerificationStatus } from '@agenttrust/sdk';
-import { DEFAULT_MANDATE_MANAGER_ADDRESS } from '../lib/contracts';
+import {
+  verifyReceipt,
+  verifyAgentIdentity,
+  getMandate,
+  type ReceiptVerificationStatus,
+} from '@agenttrust/sdk';
+import {
+  DEFAULT_MANDATE_MANAGER_ADDRESS,
+  DEFAULT_ERC8004_REGISTRY,
+} from '../lib/contracts';
 
 interface VerificationCheck {
   title: string;
@@ -281,6 +289,48 @@ export function ReceiptInspector() {
           });
         }
 
+        // 5. ERC-8004 Agent Identity Binding Check
+        let agentIdVal: number | null = null;
+        let agentVerificationNoteVal =
+          'Unverified from event log (Agent authorization is enforced on-chain by MandateManager at execution time)';
+
+        if (res.mandateId !== undefined && !isCustomContract) {
+          try {
+            const mandate = await getMandate(client, cleanContract as Address, res.mandateId);
+            if (mandate && mandate.agentId > 0n) {
+              const agentCheck = await verifyAgentIdentity(
+                client,
+                mandate.agentId,
+                mandate.agentAddress,
+                DEFAULT_ERC8004_REGISTRY
+              );
+
+              agentIdVal = Number(mandate.agentId);
+              if (agentCheck.verified) {
+                checks.push({
+                  title: '5. ERC-8004 Agent Identity Verified',
+                  description: `Agent #${mandate.agentId.toString()} confirmed in on-chain ERC-8004 Identity Registry`,
+                  status: 'passed',
+                  evidence: `Registry ${DEFAULT_ERC8004_REGISTRY.slice(0, 10)}... confirmed designated wallet ${mandate.agentAddress.slice(0, 8)}... matches mandate agent.`,
+                });
+                agentVerificationNoteVal = `Verified on-chain via ERC-8004 Registry (${DEFAULT_ERC8004_REGISTRY.slice(0, 10)}...): Designated wallet matches authorized mandate agent.`;
+              } else {
+                checks.push({
+                  title: '5. ERC-8004 Agent Identity Notice',
+                  description: agentCheck.error || 'Agent wallet mismatch on ERC-8004 registry',
+                  status: 'warning',
+                  evidence: agentCheck.error || `Agent #${mandate.agentId.toString()} unconfirmed on-chain.`,
+                });
+                agentVerificationNoteVal = `ERC-8004 Identity Warning: ${agentCheck.error || 'Wallet mismatch'}`;
+              }
+            } else if (mandate && mandate.agentId === 0n) {
+              agentVerificationNoteVal = 'Unbound Agent (No ERC-8004 ID specified in mandate definition)';
+            }
+          } catch {
+            // Non-critical fallback if mandate lookup fails
+          }
+        }
+
         setAuditResult({
           verified: true,
           fullPolicyCompliance: isFullPolicyCompliance,
@@ -293,8 +343,8 @@ export function ReceiptInspector() {
           contractAddress: cleanContract,
           isCanonicalContract: !isCustomContract,
           mandateId: Number(res.mandateId ?? 0n),
-          agentId: null, // Unverified: ActionExecuted event does not emit agentId; enforced on-chain during execution
-          agentVerificationNote: 'Unverified from event log (Agent authorization is enforced on-chain by MandateManager at execution time)',
+          agentId: agentIdVal,
+          agentVerificationNote: agentVerificationNoteVal,
           target: res.target,
           selector: res.selector,
           value: res.value ? `${formatEther(res.value)} MON` : '0 MON',

@@ -7,6 +7,7 @@ import { PolicyToProofExplorer } from '../components/PolicyToProofExplorer';
 import { AiPolicyCopilot } from '../components/AiPolicyCopilot';
 import { AttackLab, type AttackScenario } from '../components/AttackLab';
 import { ReceiptInspector } from '../components/ReceiptInspector';
+import { EvidenceHub } from '../components/EvidenceHub';
 import { SecurityActivityFeed } from '../components/SecurityActivityFeed';
 import { CreateMandateModal } from '../components/CreateMandateModal';
 import type { MandateItem } from '../components/MandateCard';
@@ -1477,6 +1478,11 @@ export default function SecurityConsoleDashboard() {
 
               <ReceiptInspector />
             </div>
+          )}
+
+          {/* TAB: EVIDENCE & TESTNET PROOFS */}
+          {activeTab === 'evidence' && (
+            <EvidenceHub />
           )}
 
           {/* TAB: DOCS */}

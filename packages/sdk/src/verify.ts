@@ -4,9 +4,14 @@ import {
   type PublicClient,
   decodeEventLog,
 } from 'viem';
-import { MandateManagerABI } from './abi.js';
+import {
+  MandateManagerABI,
+  ERC8004_IDENTITY_REGISTRY_ABI,
+  MONAD_TESTNET_ERC8004_REGISTRY,
+} from './abi.js';
 import { getMandate, getAllowedTargets, getMandateBalance } from './mandate.js';
 import type {
+  AgentIdentityVerification,
   ExecutionReceiptVerification,
   VerificationResult,
   VerifyReceiptOptions,
@@ -301,3 +306,76 @@ export async function verifyReceipt(
     revertReason: 'Transaction succeeded but no ActionExecuted event was emitted by MandateManager',
   };
 }
+
+/**
+ * Independently verifies an agent ID against the on-chain ERC-8004 Trustless Agent Identity Registry.
+ * Queries getAgentWallet(agentId) and ownerOf(agentId) to verify whether the agent's identity
+ * binds to the mandate's designated agent execution address.
+ */
+export async function verifyAgentIdentity(
+  publicClient: PublicClient,
+  agentId: bigint,
+  expectedAgentAddress: Address,
+  registryAddress: Address = MONAD_TESTNET_ERC8004_REGISTRY
+): Promise<AgentIdentityVerification> {
+  const expectedLower = expectedAgentAddress.toLowerCase();
+  let agentWallet: Address | undefined;
+  let owner: Address | undefined;
+
+  try {
+    agentWallet = (await publicClient.readContract({
+      address: registryAddress,
+      abi: ERC8004_IDENTITY_REGISTRY_ABI,
+      functionName: 'getAgentWallet',
+      args: [agentId],
+    })) as Address;
+  } catch {
+    // getAgentWallet might revert if agent is not registered
+  }
+
+  try {
+    owner = (await publicClient.readContract({
+      address: registryAddress,
+      abi: ERC8004_IDENTITY_REGISTRY_ABI,
+      functionName: 'ownerOf',
+      args: [agentId],
+    })) as Address;
+  } catch {
+    // ownerOf reverts if token does not exist
+  }
+
+  if (!agentWallet && !owner) {
+    return {
+      verified: false,
+      agentId,
+      registryAddress,
+      error: `Agent #${agentId.toString()} is not registered in ERC-8004 registry at ${registryAddress}`,
+    };
+  }
+
+  const isWalletMatch =
+    agentWallet &&
+    agentWallet.toLowerCase() === expectedLower &&
+    agentWallet !== '0x0000000000000000000000000000000000000000';
+  const isOwnerMatch = owner && owner.toLowerCase() === expectedLower;
+
+  if (isWalletMatch || isOwnerMatch) {
+    return {
+      verified: true,
+      agentId,
+      registryAddress,
+      agentWallet,
+      owner,
+    };
+  }
+
+  return {
+    verified: false,
+    agentId,
+    registryAddress,
+    agentWallet,
+    owner,
+    error: `ERC-8004 Agent #${agentId.toString()} wallet (${agentWallet || '0x0'}) / owner (${owner || '0x0'}) does not match expected agent address ${expectedAgentAddress}`,
+  };
+}
+
