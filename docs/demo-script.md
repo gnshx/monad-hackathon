@@ -13,9 +13,9 @@
 ---
 
 ### [0:10 - 0:25] Step 1: Draft Mandate & Actionable Policy Linter
-*(Action: Click "Run guided demo" on the overview to open Policy-to-Proof Explorer. Select Preset 1: Canonical DEX Swap.)*
-> "In Policy-to-Proof Explorer, we draft a scoped mandate: 'Swap up to 0.2 MON on this approved contract for 1 hour.'
-> Notice what happens: rather than a black-box AI score, our Actionable Policy Linter evaluates explicit EVM invariants: it confirms the target is allowlisted, checks selector specificity, enforces the per-transaction ceiling of 0.2 MON, and verifies a 1-hour expiration."
+*(Action: Click "Run guided demo" on the overview to open Policy-to-Proof Explorer. Preset 1 loads automatically: Payable Execution Router.)*
+> "In Policy-to-Proof Explorer, we draft a scoped mandate: 'Call payable execution router with selector `doSomething(uint256)` transferring up to 0.2 native MON for 1 hour.'
+> Notice what happens: rather than a black-box AI score, our Actionable Policy Linter evaluates explicit EVM invariants: it confirms the target is allowlisted, checks selector specificity, enforces the per-call native MON ceiling of 0.2 MON, and verifies a 1-hour expiration. If any blocking validation error exists, authorization is physically disabled."
 
 ---
 
@@ -27,11 +27,11 @@
 ---
 
 ### [0:40 - 0:55] Step 3: Security Invariant Tests (Allowed vs. Denied)
-*(Action: In Step 03 of Explorer, click "Run Security Invariant Tests".)*
-> "We test this exact policy against real security invariants:
-> First, the permitted DEX swap succeeds.
+*(Action: In Step 03 of Explorer, click "Run Invariant Preflight Simulation".)*
+> "We test this exact policy against real security invariants in a transparent browser preflight:
+> First, the permitted payable router call succeeds.
 > Second, when an adversarial prompt injection attempts to siphon funds to an unapproved recipient, the contract reverts with `TargetNotAllowed()`.
-> Third, when an agent attempts a 0.6 MON transaction exceeding the 0.2 MON cap, it reverts with `ExceedsPerTxLimit()`. The vault balance remains intact."
+> Third, when an agent attempts a 0.6 MON transaction exceeding the 0.2 MON native cap, it reverts with `ExceedsPerTxLimit()`. The vault balance remains intact."
 
 ---
 
@@ -44,7 +44,7 @@
 ### [1:10 - 1:25] Step 5: Independent Receipt Verification & Proof Dossier
 *(Action: In Step 04 of Explorer, click "Export Proof Bundle" and open Receipt Inspector.)*
 > "How does anyone know what actually happened? With one click, the judge can export a JSON Proof Bundle dossier. 
-> And with the Receipt Inspector—powered by our zero-backend TypeScript SDK—any counterparty can query raw Monad RPC logs to independently verify inclusion, event signatures, and mandate spending parameters without trusting our frontend."
+> And with the Receipt Inspector—powered by our zero-backend TypeScript SDK—any counterparty can query raw Monad RPC logs to independently verify inclusion, event signatures, selector matching, and value caps without trusting our frontend."
 
 ---
 

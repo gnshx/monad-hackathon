@@ -65,10 +65,10 @@ export function MandateList({
               </span>
             )}
           </div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
             Mandate Policies & Ledger
           </h2>
-          <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             Passkey-authorized policies governing AI agent execution boundaries and isolated vaults on Monad.
           </p>
         </div>
@@ -77,10 +77,10 @@ export function MandateList({
           {/* Segmented Filter Control */}
           <div
             style={{
-              background: '#f1f5f9',
+              background: 'var(--bg-canvas)',
               padding: '0.25rem',
               borderRadius: 'var(--radius-md)',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--border-subtle)',
               display: 'flex',
               gap: '0.2rem',
             }}
@@ -94,8 +94,8 @@ export function MandateList({
                   fontWeight: 600,
                   borderRadius: 'var(--radius-sm)',
                   border: 'none',
-                  background: filter === t ? '#ffffff' : 'transparent',
-                  color: filter === t ? '#111827' : '#64748b',
+                  background: filter === t ? 'var(--bg-surface)' : 'transparent',
+                  color: filter === t ? 'var(--text-primary)' : 'var(--text-secondary)',
                   boxShadow: filter === t ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none',
                   cursor: 'pointer',
                   textTransform: 'capitalize',
@@ -194,7 +194,7 @@ export function MandateList({
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#111827', fontFamily: 'var(--font-mono)' }}>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
                           Mandate #{mandate.id.toString()}
                         </span>
                         <span className={`badge ${mandate.revoked ? 'badge-rose' : 'badge-emerald'}`}>
@@ -206,7 +206,7 @@ export function MandateList({
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
                         Owner: {mandate.owner.slice(0, 6)}...{mandate.owner.slice(-4)}
                       </div>
                     </div>
@@ -228,15 +228,15 @@ export function MandateList({
                   {/* Bound Agent Identity */}
                   <div
                     style={{
-                      background: '#f8fafc',
+                      background: 'var(--bg-canvas)',
                       padding: '0.65rem 0.85rem',
                       borderRadius: 'var(--radius-md)',
-                      border: '1px solid #e2e8f0',
+                      border: '1px solid var(--border-subtle)',
                       marginBottom: '0.85rem',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                      <span style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
                         BOUND AGENT
                       </span>
                       <span className="badge badge-monad" style={{ fontSize: '0.68rem' }}>
@@ -244,18 +244,18 @@ export function MandateList({
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.785rem', fontWeight: 600, color: '#1e293b' }}>
+                      <span className="mono-value" style={{ fontSize: '0.785rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                         {mandate.agentAddress
                           ? `${mandate.agentAddress.slice(0, 10)}...${mandate.agentAddress.slice(-8)}`
                           : 'Any Authorized Agent'}
                       </span>
                       {mandate.agentAddress && (
                         <button
-                          style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '2px' }}
+                          style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '2px' }}
                           onClick={() => copyAddress(mandate.id.toString(), mandate.agentAddress!)}
                           title="Copy Address"
                         >
-                          {copiedId === mandate.id.toString() ? <Check size={14} color="#059669" /> : <Copy size={14} />}
+                          {copiedId === mandate.id.toString() ? <Check size={14} color="var(--accent-emerald)" /> : <Copy size={14} />}
                         </button>
                       )}
                     </div>
@@ -264,8 +264,8 @@ export function MandateList({
                   {/* Budget Progress Meter */}
                   <div style={{ marginBottom: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.35rem' }}>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Cumulative Spending</span>
-                      <span style={{ fontSize: '0.825rem', fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#111827' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Cumulative Spending</span>
+                      <span className="mono-value" style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                         {formatEther(mandate.spentValue)} / {formatEther(mandate.maxTotalValue)} MON
                       </span>
                     </div>
@@ -276,10 +276,10 @@ export function MandateList({
                           width: `${Math.min(100, spentRatio)}%`,
                           background:
                             spentRatio > 80
-                              ? '#dc2626'
+                              ? 'var(--accent-rose)'
                               : spentRatio > 50
-                              ? '#d97706'
-                              : '#4f46e5',
+                              ? 'var(--accent-amber)'
+                              : 'var(--accent-primary)',
                         }}
                       />
                     </div>
@@ -287,15 +287,15 @@ export function MandateList({
 
                   {/* Vault & Per-Tx Caps Grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
-                    <div style={{ background: '#f8fafc', padding: '0.55rem 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid #e2e8f0' }}>
-                      <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', fontWeight: 600 }}>ISOLATED VAULT</span>
-                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#059669', fontFamily: 'var(--font-mono)' }}>
+                    <div style={{ background: 'var(--bg-canvas)', padding: '0.55rem 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', fontWeight: 600 }}>ISOLATED VAULT</span>
+                      <span className="mono-value" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-emerald)' }}>
                         {formatEther(mandate.balance || 0n)} MON
                       </span>
                     </div>
-                    <div style={{ background: '#f8fafc', padding: '0.55rem 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid #e2e8f0' }}>
-                      <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', fontWeight: 600 }}>PER-TX LIMIT</span>
-                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#111827', fontFamily: 'var(--font-mono)' }}>
+                    <div style={{ background: 'var(--bg-canvas)', padding: '0.55rem 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', fontWeight: 600 }}>PER-CALL CAP (NATIVE MON)</span>
+                      <span className="mono-value" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                         {formatEther(mandate.maxValuePerTx)} MON
                       </span>
                     </div>
@@ -303,7 +303,7 @@ export function MandateList({
 
                   {/* Allowed Targets & Selectors */}
                   <div>
-                    <span style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: '0.35rem' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: '0.35rem' }}>
                       ALLOWLISTED TARGETS ({mandate.targets.length})
                     </span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -311,18 +311,17 @@ export function MandateList({
                         <div
                           key={i}
                           style={{
-                            background: '#f8fafc',
+                            background: 'var(--bg-canvas)',
                             padding: '0.35rem 0.65rem',
                             borderRadius: 'var(--radius-sm)',
-                            border: '1px solid #e2e8f0',
+                            border: '1px solid var(--border-subtle)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            fontFamily: 'var(--font-mono)',
                             fontSize: '0.75rem',
                           }}
                         >
-                          <span style={{ color: '#334155', fontWeight: 500 }}>
+                          <span className="mono-value" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
                             {t.target.slice(0, 8)}...{t.target.slice(-6)}
                           </span>
                           <span className={`badge ${t.selector === '0x00000000' ? 'badge-amber' : 'badge-monad'}`} style={{ fontSize: '0.68rem' }}>
@@ -337,20 +336,20 @@ export function MandateList({
                 {/* Card Footer */}
                 <div
                   style={{
-                    borderTop: '1px solid #e2e8f0',
+                    borderTop: '1px solid var(--border-subtle)',
                     paddingTop: '0.75rem',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     fontSize: '0.725rem',
-                    color: '#64748b',
+                    color: 'var(--text-secondary)',
                   }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <Clock size={12} />
                     {mandate.expiresAt === 0n ? 'Permanent' : 'Expires on policy schedule'}
                   </span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>Nonce #{mandate.nonce.toString()}</span>
+                  <span className="mono-value" style={{ fontWeight: 600 }}>Nonce #{mandate.nonce.toString()}</span>
                 </div>
               </div>
             );

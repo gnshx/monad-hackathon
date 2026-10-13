@@ -53,7 +53,7 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
       {/* Top Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111827' }}>
+          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
             Mandate #{mandate.id.toString()}
           </span>
           <span className="badge badge-monad" style={{ fontSize: '0.72rem' }}>
@@ -82,7 +82,7 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.45rem' }}>
           <span style={{ color: 'var(--text-muted)' }}>Cumulative Budget Used</span>
-          <span style={{ fontWeight: 600, color: '#111827' }}>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
             {spentEth.toFixed(4)} / {totalEth.toFixed(4)} MON ({percentSpent}%)
           </span>
         </div>
@@ -92,26 +92,29 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
       </div>
 
       {/* Constraints Grid */}
+      {/* Constraints Grid */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
           gap: '0.75rem',
-          background: '#f8fafc',
+          background: 'var(--bg-canvas)',
           padding: '0.85rem 1rem',
           borderRadius: 'var(--radius-md)',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--border-subtle)',
         }}
       >
         <div>
-          <div style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: 500 }}>Per-Action Cap</div>
-          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827', marginTop: '2px' }}>
+          <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+            Per-Action Cap (Native MON)
+          </div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
             {formatEther(mandate.maxValuePerTx)} MON
           </div>
         </div>
         <div>
-          <div style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: 500 }}>Expires</div>
-          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#111827', marginTop: '2px' }}>
+          <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', fontWeight: 500 }}>Expires</div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
             {expiryDateString}
           </div>
         </div>
@@ -119,7 +122,7 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
 
       {/* Permissions / Allowed Targets */}
       <div>
-        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', marginBottom: '0.5rem' }}>
+        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
           Allowlisted Operations ({mandate.targets.length})
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -131,18 +134,18 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 fontSize: '0.785rem',
-                background: '#f8fafc',
+                background: 'var(--bg-canvas)',
                 padding: '0.45rem 0.65rem',
                 borderRadius: 'var(--radius-sm)',
-                border: '1px solid #e2e8f0',
+                border: '1px solid var(--border-subtle)',
               }}
             >
-              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500, color: '#334155' }}>
+              <span className="mono-value" style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
                 {t.target.slice(0, 8)}...{t.target.slice(-6)}
               </span>
-              <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <ArrowRight size={12} />
-                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#4f46e5' }}>
+                <span className="mono-value" style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>
                   {t.selector}
                 </span>
               </span>

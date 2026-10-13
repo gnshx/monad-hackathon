@@ -345,5 +345,108 @@ describe('AgentTrust SDK', () => {
       expect(res.verified).toBe(false);
       expect(res.revertReason).toContain('Receipt emitted for Mandate #1, expected #99');
     });
+
+    it('rejects with wrong_network when chain ID mismatches', async () => {
+      const mockPublicClient = {
+        getChainId: vi.fn(async () => 1), // Mainnet instead of Monad testnet
+      } as any;
+
+      const res = await verifyReceipt(
+        mockPublicClient,
+        dummyContract,
+        '0xabc1230000000000000000000000000000000000000000000000000000000000',
+        {
+          expectedChainId: 10143,
+        }
+      );
+
+      expect(res.verified).toBe(false);
+      expect(res.status).toBe('wrong_network');
+      expect(res.revertReason).toContain('Chain ID mismatch');
+    });
+
+    it('classifies missing receipt as not_found rather than reverted', async () => {
+      const mockPublicClient = {
+        waitForTransactionReceipt: vi.fn(async () => {
+          throw new Error('Transaction receipt not found');
+        }),
+      } as any;
+
+      const res = await verifyReceipt(
+        mockPublicClient,
+        dummyContract,
+        '0xabc1230000000000000000000000000000000000000000000000000000000000'
+      );
+
+      expect(res.verified).toBe(false);
+      expect(res.status).toBe('not_found');
+      expect(res.revertReason).toContain('Transaction receipt not found');
+    });
+
+    it('rejects when expected selector mismatches', async () => {
+      const topics = encodeEventTopics({
+        abi: MandateManagerABI,
+        eventName: 'ActionExecuted',
+        args: { mandateId: 1n, target: dummyTarget },
+      });
+
+      const data = encodeAbiParameters(
+        parseAbiParameters('bytes4 selector, uint256 value, bytes returnData'),
+        ['0xa9059cbb', 100n, '0x']
+      );
+
+      const mockPublicClient = {
+        waitForTransactionReceipt: vi.fn(async () => ({
+          status: 'success',
+          blockNumber: 54321n,
+          logs: [{ address: dummyContract, topics, data }],
+        })),
+      } as any;
+
+      const res = await verifyReceipt(
+        mockPublicClient,
+        dummyContract,
+        '0xabc1230000000000000000000000000000000000000000000000000000000000',
+        {
+          expectedSelector: '0x38ed1739', // Uniswap swap selector expected, but transfer found
+        }
+      );
+
+      expect(res.verified).toBe(false);
+      expect(res.revertReason).toContain('Receipt selector 0xa9059cbb does not match expected 0x38ed1739');
+    });
+
+    it('rejects when executed value exceeds expected maximum value', async () => {
+      const topics = encodeEventTopics({
+        abi: MandateManagerABI,
+        eventName: 'ActionExecuted',
+        args: { mandateId: 1n, target: dummyTarget },
+      });
+
+      const data = encodeAbiParameters(
+        parseAbiParameters('bytes4 selector, uint256 value, bytes returnData'),
+        ['0xa9059cbb', 500n, '0x']
+      );
+
+      const mockPublicClient = {
+        waitForTransactionReceipt: vi.fn(async () => ({
+          status: 'success',
+          blockNumber: 54321n,
+          logs: [{ address: dummyContract, topics, data }],
+        })),
+      } as any;
+
+      const res = await verifyReceipt(
+        mockPublicClient,
+        dummyContract,
+        '0xabc1230000000000000000000000000000000000000000000000000000000000',
+        {
+          expectedMaxValue: 200n, // Transferred 500n > 200n
+        }
+      );
+
+      expect(res.verified).toBe(false);
+      expect(res.revertReason).toContain('exceeds expected maximum');
+    });
   });
 });

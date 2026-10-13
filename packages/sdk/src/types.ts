@@ -74,15 +74,25 @@ export interface VerificationResult {
   mandateBalance?: bigint;
 }
 
+export type ReceiptVerificationStatus =
+  | 'success'
+  | 'reverted'
+  | 'not_found'
+  | 'rpc_error'
+  | 'wrong_network';
+
 export interface VerifyReceiptOptions {
   expectedMandateId?: bigint;
   expectedTarget?: Address;
   expectedSelector?: Hex;
+  expectedMaxValue?: bigint;
+  expectedValue?: bigint;
+  expectedChainId?: number;
 }
 
 export interface ExecutionReceiptVerification {
   verified: boolean;
-  status: 'success' | 'reverted';
+  status: ReceiptVerificationStatus;
   mandateId?: bigint;
   target?: Address;
   selector?: Hex;

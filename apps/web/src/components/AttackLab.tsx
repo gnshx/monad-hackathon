@@ -50,11 +50,11 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
   const [scenarios, setScenarios] = useState<AttackScenario[]>([
     {
       id: 'scenario-1',
-      name: '1. Permitted Action (Authorized Swap)',
+      name: '1. Permitted Action (Authorized Payable Call)',
       category: 'Allowed',
-      description: 'Agent initiates a 0.10 MON swap against allowlisted Uniswap router within the per-transaction limit.',
-      target: '0x3333333333333333333333333333333333333333',
-      selector: '0xa9059cbb',
+      description: 'Agent initiates a 0.10 MON native call against allowlisted Payable MockTarget router within the per-call cap.',
+      target: '0x2222222222222222222222222222222222222222',
+      selector: '0x50824e4f',
       value: '0.10',
       caller: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Bound Agent)',
       expectedResult: 'Success',
@@ -65,9 +65,9 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
       id: 'scenario-2',
       name: '2. Rogue Destination (Unwhitelisted Target)',
       category: 'Policy Attack',
-      description: 'A prompt-injected agent attempts to siphon vault funds to an unapproved recipient address.',
+      description: 'A prompt-injected agent attempts to siphon native vault funds to an unapproved recipient address.',
       target: '0xDeadDeAdDeADdeAdDeaddeadDEADdeAdDeadbEEf',
-      selector: '0xa9059cbb',
+      selector: '0x50824e4f',
       value: '0.10',
       caller: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Bound Agent)',
       expectedResult: 'Reverts',
@@ -78,9 +78,9 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
       id: 'scenario-3',
       name: '3. Ceiling Violation (Spending Limit Exceeded)',
       category: 'Accounting Attack',
-      description: 'Agent attempts an emergency transaction of 2.50 MON exceeding the 0.25 MON per-transaction limit.',
-      target: '0x3333333333333333333333333333333333333333',
-      selector: '0xa9059cbb',
+      description: 'Agent attempts an emergency transaction of 2.50 MON exceeding the 0.25 MON per-call native MON cap.',
+      target: '0x2222222222222222222222222222222222222222',
+      selector: '0x50824e4f',
       value: '2.50',
       caller: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Bound Agent)',
       expectedResult: 'Reverts',
@@ -92,8 +92,8 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
       name: '4. Caller Identity Hijack (Unauthorized Stranger)',
       category: 'Identity Attack',
       description: 'An arbitrary stranger address attempts to invoke execution on behalf of Agent #42.',
-      target: '0x3333333333333333333333333333333333333333',
-      selector: '0xa9059cbb',
+      target: '0x2222222222222222222222222222222222222222',
+      selector: '0x50824e4f',
       value: '0.05',
       caller: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC (Unauthorized Stranger)',
       expectedResult: 'Reverts',
@@ -105,8 +105,8 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
       name: '5. Post-Revocation Action (Revoked Authority)',
       category: 'Lifecycle Attack',
       description: 'Agent attempts to spend from a mandate whose authorization was previously revoked by the human owner.',
-      target: '0x3333333333333333333333333333333333333333',
-      selector: '0xa9059cbb',
+      target: '0x2222222222222222222222222222222222222222',
+      selector: '0x50824e4f',
       value: '0.10',
       caller: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Bound Agent)',
       expectedResult: 'Reverts',
@@ -160,27 +160,27 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
               </span>
               <span className="badge badge-simulation">Execution Mode: Local Preflight</span>
             </div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
               Attack Simulation Lab
             </h2>
-            <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '720px', marginTop: '0.25rem', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '720px', marginTop: '0.25rem', lineHeight: 1.5 }}>
               Exercise the policy rules the <code>MandateManager</code> contract enforces. Each scenario is evaluated locally in your browser as a preflight: rogue destinations, over-limit transactions, caller impersonations, and revoked mandates fail the policy check. To prove enforcement with real on-chain evidence, deploy the contract and verify receipts in the Receipt Explorer.
             </p>
           </div>
 
           <div
             style={{
-              background: '#f8fafc',
+              background: 'var(--bg-canvas)',
               padding: '0.65rem 0.95rem',
               borderRadius: 'var(--radius-md)',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--border-subtle)',
               fontSize: '0.75rem',
             }}
           >
-            <span style={{ color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>
+            <span style={{ color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>
               Consensus Invariant
             </span>
-            <div style={{ color: '#059669', fontWeight: 700, marginTop: '2px' }}>
+            <div style={{ color: 'var(--accent-emerald)', fontWeight: 700, marginTop: '2px' }}>
               Zero Execution on Policy Revert
             </div>
           </div>
@@ -200,7 +200,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
               className="security-card"
               style={{
                 borderLeft: `4px solid ${
-                  isAllowed ? '#059669' : '#dc2626'
+                  isAllowed ? 'var(--accent-emerald)' : 'var(--accent-rose)'
                 }`,
                 padding: '1.5rem',
               }}
@@ -208,7 +208,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: '280px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
-                    <strong style={{ fontSize: '1rem', color: '#111827', fontWeight: 700 }}>{scenario.name}</strong>
+                    <strong style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 700 }}>{scenario.name}</strong>
                     <span className={`badge ${isAllowed ? 'badge-emerald' : 'badge-rose'}`}>
                       Expected: {scenario.expectedResult}
                     </span>
@@ -216,7 +216,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                       {scenario.category}
                     </span>
                   </div>
-                  <p style={{ fontSize: '0.85rem', color: '#4b5563' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                     {scenario.description}
                   </p>
                 </div>
@@ -301,7 +301,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                   style={{
                     marginTop: '1rem',
                     paddingTop: '1rem',
-                    borderTop: '1px solid #e2e8f0',
+                    borderTop: '1px solid var(--border-subtle)',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.75rem',
@@ -316,21 +316,21 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                   >
                     <div className="mono-box">
                       <span className="kpi-label">ATTEMPTED CALLER</span>
-                      <div style={{ color: '#111827', fontWeight: 600, marginTop: '2px' }}>{scenario.caller}</div>
+                      <div className="mono-value" style={{ color: 'var(--text-primary)', fontWeight: 600, marginTop: '2px' }}>{scenario.caller}</div>
                     </div>
                     <div className="mono-box">
                       <span className="kpi-label">TARGET ADDRESS</span>
-                      <div style={{ color: '#111827', fontWeight: 600, marginTop: '2px' }}>{scenario.target}</div>
+                      <div className="mono-value" style={{ color: 'var(--text-primary)', fontWeight: 600, marginTop: '2px' }}>{scenario.target}</div>
                     </div>
                     <div className="mono-box">
-                      <span className="kpi-label">SELECTOR & VALUE</span>
-                      <div style={{ color: '#111827', fontWeight: 600, marginTop: '2px' }}>
+                      <span className="kpi-label">SELECTOR & VALUE (NATIVE MON)</span>
+                      <div className="mono-value" style={{ color: 'var(--text-primary)', fontWeight: 600, marginTop: '2px' }}>
                         {scenario.selector} · {scenario.value} MON
                       </div>
                     </div>
                     <div className="mono-box">
                       <span className="kpi-label">REVERT SIGNATURE</span>
-                      <div style={{ color: isAllowed ? '#059669' : '#dc2626', fontWeight: 700, marginTop: '2px' }}>
+                      <div className="mono-value" style={{ color: isAllowed ? 'var(--accent-emerald)' : 'var(--accent-rose)', fontWeight: 700, marginTop: '2px' }}>
                         {scenario.revertError}
                       </div>
                     </div>
@@ -340,7 +340,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                   <div
                     style={{
                       fontSize: '0.75rem',
-                      color: '#64748b',
+                      color: 'var(--text-secondary)',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem',

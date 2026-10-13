@@ -82,6 +82,9 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
           selector = '0x00000000';
           selectorName = '0x00000000 (Wildcard / Native Call)';
           isWildcard = true;
+        } else if (/dosomething|router|payable/.test(lower)) {
+          selector = '0x50824e4f';
+          selectorName = 'doSomething(uint256)';
         } else if (/mint/.test(lower)) {
           selector = '0xa0712d68';
           selectorName = 'mint(uint256)';

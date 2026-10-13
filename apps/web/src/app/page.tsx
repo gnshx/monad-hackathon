@@ -932,26 +932,27 @@ export default function SecurityConsoleDashboard() {
 
                   <div
                     style={{
-                      background: '#f3f4f8',
+                      background: 'var(--bg-canvas)',
                       borderRadius: 'var(--radius-lg)',
                       padding: '2rem 1.75rem',
                       display: 'flex',
                       alignItems: 'flex-start',
                       gap: '1rem',
+                      border: '1px solid var(--border-subtle)',
                     }}
                   >
                     <div style={{ flexShrink: 0, marginTop: '2px' }}>
-                      <Sparkles size={20} color="#4f46e5" />
+                      <Sparkles size={20} color="var(--accent-primary)" />
                     </div>
                     <div
                       style={{
                         fontSize: '1.15rem',
                         fontWeight: 600,
-                        color: '#1e293b',
+                        color: 'var(--text-primary)',
                         lineHeight: 1.4,
                       }}
                     >
-                      Swap up to 0.2 MON on the approved contract for 1 hour.
+                      Call payable execution router with selector <code>doSomething(uint256)</code> transferring up to 0.2 native MON for 1 hour.
                     </div>
                   </div>
                 </div>
@@ -975,7 +976,7 @@ export default function SecurityConsoleDashboard() {
                       top: 0,
                       bottom: 0,
                       width: '1px',
-                      background: '#e5e7eb',
+                      background: 'var(--border-subtle)',
                       zIndex: 1,
                     }}
                   />
@@ -986,12 +987,12 @@ export default function SecurityConsoleDashboard() {
                       width: '42px',
                       height: '42px',
                       borderRadius: '50%',
-                      background: '#4f46e5',
+                      background: 'var(--accent-primary)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: '#ffffff',
-                      boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)',
+                      boxShadow: '0 4px 10px rgba(89, 68, 219, 0.3)',
                       zIndex: 2,
                     }}
                   >
@@ -1001,18 +1002,18 @@ export default function SecurityConsoleDashboard() {
                   <div
                     style={{
                       fontSize: '0.68rem',
-                      color: '#6b7280',
+                      color: 'var(--text-secondary)',
                       textAlign: 'center',
                       marginTop: '0.5rem',
                       zIndex: 2,
-                      background: '#ffffff',
+                      background: 'var(--bg-surface)',
                       padding: '0 4px',
                       lineHeight: 1.25,
                       fontWeight: 500,
                     }}
                   >
                     Enforced by<br />
-                    <span style={{ color: '#374151', fontWeight: 600 }}>MandateManager</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>MandateManager</span>
                   </div>
                 </div>
 
@@ -1023,7 +1024,7 @@ export default function SecurityConsoleDashboard() {
                       fontSize: '0.725rem',
                       fontWeight: 700,
                       letterSpacing: '0.08em',
-                      color: '#6b7280',
+                      color: 'var(--text-secondary)',
                       textTransform: 'uppercase',
                       marginBottom: '1rem',
                     }}
@@ -1039,53 +1040,53 @@ export default function SecurityConsoleDashboard() {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         paddingBottom: '0.65rem',
-                        borderBottom: '1px solid #f1f5f9',
+                        borderBottom: '1px solid var(--border-subtle)',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#6b7280', fontSize: '0.85rem' }}>
-                        <Target size={16} color="#6b7280" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        <Target size={16} />
                         <span>Target</span>
                       </div>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#111827' }}>
-                        Approved contract
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        Payable MockTarget Router (0x3333...3333)
                       </div>
                     </div>
 
-                    {/* Row 2: Method */}
+                    {/* Row 2: Method & Selector */}
                     <div
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         paddingBottom: '0.65rem',
-                        borderBottom: '1px solid #f1f5f9',
+                        borderBottom: '1px solid var(--border-subtle)',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#6b7280', fontSize: '0.85rem' }}>
-                        <Code size={16} color="#6b7280" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        <Code size={16} />
                         <span>Method</span>
                       </div>
-                      <div style={{ fontSize: '0.825rem', fontFamily: 'var(--font-mono)', fontWeight: 500, color: '#111827' }}>
-                        swapExactTokensForTokens
+                      <div className="mono-value" style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--accent-primary)' }}>
+                        doSomething(uint256) [0x50824e4f]
                       </div>
                     </div>
 
-                    {/* Row 3: Per transaction */}
+                    {/* Row 3: Native Value Cap per call */}
                     <div
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         paddingBottom: '0.65rem',
-                        borderBottom: '1px solid #f1f5f9',
+                        borderBottom: '1px solid var(--border-subtle)',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#6b7280', fontSize: '0.85rem' }}>
-                        <Coins size={16} color="#6b7280" />
-                        <span>Per transaction</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        <Coins size={16} />
+                        <span>Native msg.value Cap</span>
                       </div>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#111827' }}>
-                        0.2 MON
+                      <div className="mono-value" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        0.2 MON per call
                       </div>
                     </div>
 
@@ -1096,15 +1097,15 @@ export default function SecurityConsoleDashboard() {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         paddingBottom: '0.65rem',
-                        borderBottom: '1px solid #f1f5f9',
+                        borderBottom: '1px solid var(--border-subtle)',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#6b7280', fontSize: '0.85rem' }}>
-                        <CreditCard size={16} color="#6b7280" />
-                        <span>Total budget</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        <CreditCard size={16} />
+                        <span>Cumulative Budget</span>
                       </div>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 500, color: '#6b7280' }}>
-                        Not set
+                      <div className="mono-value" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        1.0 MON
                       </div>
                     </div>
 
@@ -1116,11 +1117,11 @@ export default function SecurityConsoleDashboard() {
                         justifyContent: 'space-between',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#6b7280', fontSize: '0.85rem' }}>
-                        <Clock size={16} color="#6b7280" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        <Clock size={16} />
                         <span>Expiry</span>
                       </div>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 500, color: '#111827' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)' }}>
                         1 hour after authorization
                       </div>
                     </div>
@@ -1142,8 +1143,8 @@ export default function SecurityConsoleDashboard() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                    <FileText size={18} color="#111827" />
-                    <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>
+                    <FileText size={18} color="var(--text-primary)" />
+                    <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                       Latest policy decisions
                     </h2>
                   </div>
@@ -1165,20 +1166,20 @@ export default function SecurityConsoleDashboard() {
                           width: '48px',
                           height: '48px',
                           borderRadius: '10px',
-                          background: '#f3f4f6',
+                          background: 'var(--bg-canvas)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: '#9ca3af',
+                          color: 'var(--text-muted)',
                           marginBottom: '0.75rem',
                         }}
                       >
                         <FileText size={24} />
                       </div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#111827' }}>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                         No live decisions yet
                       </div>
-                      <p style={{ fontSize: '0.825rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                      <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
                         Connect wallet or run local simulation
                       </p>
                     </div>
@@ -1192,9 +1193,9 @@ export default function SecurityConsoleDashboard() {
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             padding: '0.6rem 0.85rem',
-                            background: '#f8fafc',
+                            background: 'var(--bg-canvas)',
                             borderRadius: 'var(--radius-md)',
-                            border: '1px solid #f1f5f9',
+                            border: '1px solid var(--border-subtle)',
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
@@ -1210,11 +1211,11 @@ export default function SecurityConsoleDashboard() {
                             >
                               {act.type.toUpperCase()}
                             </span>
-                            <span style={{ fontSize: '0.825rem', fontWeight: 600, color: '#111827' }}>
+                            <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                               Agent #{act.agentId.toString()}
                             </span>
                           </div>
-                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{act.timestamp}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{act.timestamp}</span>
                         </div>
                       ))}
                     </div>
@@ -1244,8 +1245,8 @@ export default function SecurityConsoleDashboard() {
                 >
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
-                      <ShieldCheck size={18} color="#111827" />
-                      <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>
+                      <ShieldCheck size={18} color="var(--text-primary)" />
+                      <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                         Evidence you can verify
                       </h2>
                     </div>
@@ -1263,58 +1264,58 @@ export default function SecurityConsoleDashboard() {
                       {/* Step 1 */}
                       <div
                         style={{
-                          background: '#eef2ff',
+                          background: 'var(--bg-lavender-pill)',
                           borderRadius: 'var(--radius-md)',
                           padding: '0.55rem 0.85rem',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '0.5rem',
                           fontSize: '0.785rem',
-                          color: '#1e293b',
+                          color: 'var(--text-primary)',
                           fontWeight: 500,
                         }}
                       >
-                        <FileText size={15} color="#4f46e5" />
+                        <FileText size={15} color="var(--accent-primary)" />
                         <span>Transaction receipt</span>
                       </div>
 
-                      <ArrowRight size={14} color="#94a3b8" />
+                      <ArrowRight size={14} color="var(--text-muted)" />
 
                       {/* Step 2 */}
                       <div
                         style={{
-                          background: '#eef2ff',
+                          background: 'var(--bg-lavender-pill)',
                           borderRadius: 'var(--radius-md)',
                           padding: '0.55rem 0.85rem',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '0.5rem',
                           fontSize: '0.785rem',
-                          color: '#1e293b',
+                          color: 'var(--text-primary)',
                           fontWeight: 500,
                         }}
                       >
-                        <Code size={15} color="#4f46e5" />
+                        <Code size={15} color="var(--accent-primary)" />
                         <span>Contract event</span>
                       </div>
 
-                      <ArrowRight size={14} color="#94a3b8" />
+                      <ArrowRight size={14} color="var(--text-muted)" />
 
                       {/* Step 3 */}
                       <div
                         style={{
-                          background: '#eef2ff',
+                          background: 'var(--bg-lavender-pill)',
                           borderRadius: 'var(--radius-md)',
                           padding: '0.55rem 0.85rem',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '0.5rem',
                           fontSize: '0.785rem',
-                          color: '#1e293b',
+                          color: 'var(--text-primary)',
                           fontWeight: 500,
                         }}
                       >
-                        <Shield size={15} color="#4f46e5" />
+                        <Shield size={15} color="var(--accent-primary)" />
                         <span>Policy fields</span>
                       </div>
                     </div>

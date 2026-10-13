@@ -53,10 +53,10 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
               </span>
             )}
           </div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
             Security Activity Feed
           </h2>
-          <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             Chronological audit of passkey authorizations, executed transactions, blocked contract reverts, and revocations.
           </p>
         </div>
@@ -64,10 +64,10 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
         {/* Filter Buttons */}
         <div
           style={{
-            background: '#f1f5f9',
+            background: 'var(--bg-canvas)',
             padding: '0.25rem',
             borderRadius: 'var(--radius-md)',
-            border: '1px solid #e2e8f0',
+            border: '1px solid var(--border-subtle)',
             display: 'flex',
             gap: '0.2rem',
           }}
@@ -81,8 +81,8 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
                 fontWeight: 600,
                 borderRadius: 'var(--radius-sm)',
                 border: 'none',
-                background: filter === t ? '#ffffff' : 'transparent',
-                color: filter === t ? '#111827' : '#64748b',
+                background: filter === t ? 'var(--bg-surface)' : 'transparent',
+                color: filter === t ? 'var(--text-primary)' : 'var(--text-secondary)',
                 boxShadow: filter === t ? '0 1px 2px rgba(0, 0, 0, 0.05)' : 'none',
                 cursor: 'pointer',
                 textTransform: 'capitalize',
@@ -99,7 +99,7 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
       {/* Empty State */}
       {filtered.length === 0 && (
         <div className="empty-state">
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#f3f4f6', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem', color: '#9ca3af' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--bg-canvas)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem', color: 'var(--text-muted)' }}>
             <Activity size={24} />
           </div>
           <div className="empty-state-title">No Activity Recorded</div>
@@ -129,10 +129,10 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
                   padding: '1rem 1.25rem',
                   borderLeft: `4px solid ${
                     isExecuted
-                      ? '#059669'
+                      ? 'var(--accent-emerald)'
                       : isBlocked
-                      ? '#dc2626'
-                      : '#d97706'
+                      ? 'var(--accent-rose)'
+                      : 'var(--accent-amber)'
                   }`,
                   display: 'flex',
                   alignItems: 'center',
@@ -148,10 +148,10 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
                       height: '32px',
                       borderRadius: 'var(--radius-sm)',
                       background: isExecuted
-                        ? '#ecfdf5'
+                        ? 'var(--bg-emerald-pill)'
                         : isBlocked
-                        ? '#fef2f2'
-                        : '#fffbeb',
+                        ? 'var(--bg-rose-pill)'
+                        : 'var(--bg-amber-pill)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -159,14 +159,14 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
                       marginTop: '2px',
                     }}
                   >
-                    {isExecuted && <CheckCircle2 size={18} color="#059669" />}
-                    {isBlocked && <XCircle size={18} color="#dc2626" />}
-                    {isRevoked && <Ban size={18} color="#d97706" />}
+                    {isExecuted && <CheckCircle2 size={18} color="var(--accent-emerald)" />}
+                    {isBlocked && <XCircle size={18} color="var(--accent-rose)" />}
+                    {isRevoked && <Ban size={18} color="var(--accent-amber)" />}
                   </div>
 
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <strong style={{ fontSize: '0.9rem', color: '#111827', fontWeight: 700 }}>
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: 700 }}>
                         {isExecuted
                           ? `Approved Action · Mandate #${item.mandateId?.toString() || '0'}`
                           : isBlocked
@@ -195,12 +195,12 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
                       </span>
                     </div>
 
-                    <p style={{ fontSize: '0.8rem', color: '#4b5563', marginTop: '0.25rem' }}>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
                       {isExecuted && item.value && (
                         <>Executed {formatEther(item.value)} MON transfer to allowlisted target {item.target?.slice(0, 8)}...</>
                       )}
                       {isBlocked && (
-                        <span style={{ color: '#dc2626', fontWeight: 500 }}>{item.reason || 'Smart contract halted policy violation'}</span>
+                        <span style={{ color: 'var(--accent-rose)', fontWeight: 500 }}>{item.reason || 'Smart contract halted policy violation'}</span>
                       )}
                       {isRevoked && (
                         <>Human owner revoked passkey mandate authority on Monad contract</>
@@ -214,32 +214,31 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
                   {item.txHash && (
                     <div
                       style={{
-                        fontFamily: 'var(--font-mono)',
                         fontSize: '0.75rem',
-                        background: '#f8fafc',
+                        background: 'var(--bg-canvas)',
                         padding: '0.25rem 0.6rem',
                         borderRadius: 'var(--radius-sm)',
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid var(--border-subtle)',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.4rem',
                       }}
                     >
-                      <span style={{ color: '#64748b' }}>
+                      <span className="mono-value" style={{ color: 'var(--text-secondary)' }}>
                         {item.txHash.slice(0, 8)}...{item.txHash.slice(-6)}
                       </span>
                       <button
-                        style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0 }}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0 }}
                         onClick={() => copyHash(item.id, item.txHash!)}
                         title="Copy Tx Hash"
                         aria-label="Copy transaction hash"
                       >
-                        {isCopied ? <Check size={13} color="#059669" /> : <Copy size={13} />}
+                        {isCopied ? <Check size={13} color="var(--accent-emerald)" /> : <Copy size={13} />}
                       </button>
                     </div>
                   )}
 
-                  <span style={{ fontSize: '0.75rem', color: '#64748b', minWidth: '65px', textAlign: 'right' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', minWidth: '65px', textAlign: 'right' }}>
                     {item.timestamp}
                   </span>
                 </div>

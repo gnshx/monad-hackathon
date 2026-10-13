@@ -125,19 +125,49 @@ export async function verifyReceipt(
   transactionHash: Hex,
   options?: VerifyReceiptOptions
 ): Promise<ExecutionReceiptVerification> {
+  // 1. Network / Chain ID verification if expectedChainId provided
+  if (options?.expectedChainId !== undefined) {
+    try {
+      const liveChainId = await publicClient.getChainId();
+      if (liveChainId !== options.expectedChainId) {
+        return {
+          verified: false,
+          status: 'wrong_network',
+          transactionHash,
+          blockNumber: 0n,
+          revertReason: `Chain ID mismatch: RPC returned ${liveChainId}, expected ${options.expectedChainId}`,
+        };
+      }
+    } catch (err: any) {
+      return {
+        verified: false,
+        status: 'rpc_error',
+        transactionHash,
+        blockNumber: 0n,
+        revertReason: `Failed to query chain ID: ${err.message || String(err)}`,
+      };
+    }
+  }
+
+  // 2. Query transaction receipt
   let receipt;
   try {
     receipt = await publicClient.waitForTransactionReceipt({ hash: transactionHash });
   } catch (err: any) {
+    const errMsg = err.message || String(err);
+    const isNotFound = /not found|could not find|timeout|unknown transaction/i.test(errMsg);
     return {
       verified: false,
-      status: 'reverted',
+      status: isNotFound ? 'not_found' : 'rpc_error',
       transactionHash,
       blockNumber: 0n,
-      revertReason: `Failed to query transaction receipt: ${err.message || String(err)}`,
+      revertReason: isNotFound
+        ? `Transaction receipt not found on chain: ${errMsg}`
+        : `RPC communication error while querying receipt: ${errMsg}`,
     };
   }
 
+  // 3. Check for reverted status
   if (receipt.status === 'reverted') {
     return {
       verified: false,
@@ -150,7 +180,7 @@ export async function verifyReceipt(
 
   const contractAddressLower = contractAddress.toLowerCase();
 
-  // Search logs strictly for ActionExecuted event emitted by MandateManager contract
+  // 4. Search logs strictly for ActionExecuted event emitted by MandateManager contract
   for (const log of receipt.logs) {
     if (log.address.toLowerCase() !== contractAddressLower) continue;
 
@@ -213,6 +243,36 @@ export async function verifyReceipt(
             transactionHash,
             blockNumber: receipt.blockNumber,
             revertReason: `Receipt selector ${selector} does not match expected ${options.expectedSelector}`,
+          };
+        }
+
+        if (options?.expectedMaxValue !== undefined && value > options.expectedMaxValue) {
+          return {
+            verified: false,
+            status: 'success',
+            mandateId,
+            target,
+            selector: selector as Hex,
+            value,
+            returnData,
+            transactionHash,
+            blockNumber: receipt.blockNumber,
+            revertReason: `Receipt transferred value ${value.toString()} exceeds expected maximum ${options.expectedMaxValue.toString()}`,
+          };
+        }
+
+        if (options?.expectedValue !== undefined && value !== options.expectedValue) {
+          return {
+            verified: false,
+            status: 'success',
+            mandateId,
+            target,
+            selector: selector as Hex,
+            value,
+            returnData,
+            transactionHash,
+            blockNumber: receipt.blockNumber,
+            revertReason: `Receipt transferred value ${value.toString()} does not match expected ${options.expectedValue.toString()}`,
           };
         }
 

@@ -209,21 +209,21 @@ export function CreateMandateModal({
         {/* Security Scope Explanation Box */}
         <div
           style={{
-            background: '#eef2ff',
-            border: '1px solid #e0e7ff',
+            background: 'var(--bg-lavender-subtle)',
+            border: '1px solid var(--border-default)',
             borderRadius: 'var(--radius-md)',
             padding: '0.75rem 1rem',
             marginBottom: '1.25rem',
             fontSize: '0.8rem',
-            color: '#334155',
+            color: 'var(--text-secondary)',
             display: 'flex',
             alignItems: 'flex-start',
             gap: '0.65rem',
           }}
         >
-          <Info size={16} color="#4f46e5" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <Info size={16} color="var(--accent-primary)" style={{ flexShrink: 0, marginTop: '2px' }} />
           <div>
-            <strong style={{ color: '#1e293b' }}>Scoped Delegation, Not Key Handover: </strong>
+            <strong style={{ color: 'var(--text-primary)' }}>Scoped Delegation, Not Key Handover: </strong>
             You are authorizing an immutable smart contract mandate with exact method allowlists and spending caps. The AI agent never receives your private key, and cannot execute any transaction outside these bounds.
           </div>
         </div>
@@ -285,7 +285,7 @@ export function CreateMandateModal({
             </div>
             <div>
               <label className="input-label" htmlFor="input-deposit-amount">
-                Vault Deposit (MON)
+                Vault Deposit (Native MON)
               </label>
               <input
                 id="input-deposit-amount"
@@ -303,7 +303,7 @@ export function CreateMandateModal({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', marginBottom: '1rem' }}>
             <div>
               <label className="input-label" htmlFor="input-max-per-tx">
-                Max Per Transaction (MON)
+                Max Native MON Per Call (msg.value)
               </label>
               <input
                 id="input-max-per-tx"
@@ -318,7 +318,7 @@ export function CreateMandateModal({
             </div>
             <div>
               <label className="input-label" htmlFor="input-max-total">
-                Max Cumulative Cap (MON)
+                Max Cumulative Cap (Native MON)
               </label>
               <input
                 id="input-max-total"

@@ -143,6 +143,23 @@ body {
   flex-shrink: 0;
 }
 
+.sidebar-brand-wrapper {
+  padding: 1.5rem 1.25rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-mobile-toggle {
+  display: none;
+}
+
+.sidebar-nav-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
 .main-content {
   flex: 1;
   min-width: 0;
@@ -611,14 +628,69 @@ body {
   .sidebar {
     width: 100%;
     height: auto;
-    position: relative;
+    position: sticky;
+    top: 0;
+    z-index: 50;
     border-right: none;
     border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-canvas);
+  }
+  .sidebar-brand-wrapper {
+    padding: 0.85rem 1.25rem;
+  }
+  .sidebar-mobile-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 0.4rem;
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+  .sidebar-mobile-toggle:hover {
+    background: var(--bg-surface-hover);
+    border-color: var(--border-hover);
+  }
+  .sidebar-nav-container {
+    display: none;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-canvas);
+    box-shadow: 0 12px 24px -4px rgba(23, 23, 36, 0.08);
+    animation: drawerDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .sidebar-nav-container.open {
+    display: flex;
+    flex-direction: column;
   }
   .top-bar {
     padding: 0 1rem;
+    min-height: 56px;
   }
   .page-container {
     padding: 1.25rem 1rem;
   }
+}
+
+@keyframes drawerDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Monospace & Text Wrapping Helpers */
+.mono-value,
+.hash-truncate,
+.address-truncate {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }

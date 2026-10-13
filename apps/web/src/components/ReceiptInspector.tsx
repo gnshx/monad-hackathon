@@ -14,17 +14,20 @@ import {
   Layers,
   ArrowRight,
   RotateCcw,
+  Info,
 } from 'lucide-react';
 import {
   type Hex,
   type Address,
   formatEther,
+  parseEther,
   createPublicClient,
   http,
   isAddress,
   isHex,
 } from 'viem';
-import { verifyReceipt } from '@agenttrust/sdk';
+import { verifyReceipt, type ReceiptVerificationStatus } from '@agenttrust/sdk';
+import { DEFAULT_MANDATE_MANAGER_ADDRESS } from '../lib/contracts';
 
 interface VerificationCheck {
   title: string;
@@ -35,11 +38,13 @@ interface VerificationCheck {
 
 interface AuditResult {
   verified: boolean;
+  statusCategory: ReceiptVerificationStatus;
   networkName: string;
   chainId: number;
   txHash: string;
   blockNumber: number;
   contractAddress: string;
+  isCanonicalContract: boolean;
   mandateId?: number;
   agentId?: number;
   target?: string;
@@ -54,13 +59,18 @@ const MONAD_TESTNET_CHAIN_ID = 10143;
 
 export function ReceiptInspector() {
   const [txHash, setTxHash] = useState('');
-  const [contractAddress, setContractAddress] = useState('');
+  const [contractAddress, setContractAddress] = useState<string>(DEFAULT_MANDATE_MANAGER_ADDRESS);
   const [expectedMandateId, setExpectedMandateId] = useState('');
   const [expectedTarget, setExpectedTarget] = useState('');
+  const [expectedSelector, setExpectedSelector] = useState('');
+  const [expectedMaxMon, setExpectedMaxMon] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [copied, setCopied] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
+
+  const isCustomContract =
+    contractAddress.trim().toLowerCase() !== DEFAULT_MANDATE_MANAGER_ADDRESS.toLowerCase();
 
   const handleVerify = async () => {
     setValidationError(null);
@@ -76,11 +86,16 @@ export function ReceiptInspector() {
       return;
     }
     if (!cleanContract) {
-      setValidationError('MandateManager contract address is required.');
+      setValidationError('Contract address is required.');
       return;
     }
     if (!isAddress(cleanContract)) {
       setValidationError('Invalid contract address format. Must be a 42-character Ethereum address (0x...).');
+      return;
+    }
+
+    if (expectedSelector.trim() && !/^0x[0-9a-fA-F]{8}$/.test(expectedSelector.trim())) {
+      setValidationError('Expected selector must be a 4-byte hex string (e.g. 0x50824e4f or 0xa9059cbb).');
       return;
     }
 
@@ -119,17 +134,21 @@ export function ReceiptInspector() {
         });
         setAuditResult({
           verified: false,
+          statusCategory: 'rpc_error',
           networkName: 'Monad Testnet',
           chainId: MONAD_TESTNET_CHAIN_ID,
           txHash: cleanTx,
           blockNumber: 0,
           contractAddress: cleanContract,
+          isCanonicalContract: !isCustomContract,
           checks,
         });
         setIsVerifying(false);
         return;
       }
 
+      // Check contract bytecode
+      let isBytecodePresent = false;
       try {
         const bytecode = await client.getBytecode({ address: cleanContract as Address });
         if (!bytecode || bytecode === '0x') {
@@ -137,25 +156,19 @@ export function ReceiptInspector() {
             title: 'Contract Deployment Verification',
             description: 'No bytecode found at specified contract address',
             status: 'failed',
-            evidence: `Address ${cleanContract} is an empty account on Chain ID ${liveChainId}. Deploy contract first.`,
+            evidence: `Address ${cleanContract} is an empty account (0 bytes bytecode) on Chain ID ${liveChainId}.`,
           });
-          setAuditResult({
-            verified: false,
-            networkName: 'Monad Testnet',
-            chainId: liveChainId,
-            txHash: cleanTx,
-            blockNumber: 0,
-            contractAddress: cleanContract,
-            checks,
-          });
-          setIsVerifying(false);
-          return;
         } else {
+          isBytecodePresent = true;
           checks.push({
             title: 'Contract Deployment Verification',
-            description: 'Target address contains deployed MandateManager bytecode',
-            status: 'passed',
-            evidence: `Bytecode verified (${(bytecode.length - 2) / 2} bytes) at ${cleanContract}`,
+            description: isCustomContract
+              ? 'Custom contract address contains deployed bytecode (Origin Uncertified)'
+              : 'Target address contains deployed MandateManager bytecode',
+            status: isCustomContract ? 'warning' : 'passed',
+            evidence: `Bytecode verified (${(bytecode.length - 2) / 2} bytes) at ${cleanContract}${
+              isCustomContract ? ' [CUSTOM AUDIT]' : ' [CANONICAL]'
+            }`,
           });
         }
       } catch (err: any) {
@@ -167,14 +180,18 @@ export function ReceiptInspector() {
         });
       }
 
+      // Prepare verifyReceipt options
       const verifyOpts = {
-        expectedMandateId: expectedMandateId ? BigInt(expectedMandateId) : undefined,
-        expectedTarget: expectedTarget ? (expectedTarget as Address) : undefined,
+        expectedChainId: MONAD_TESTNET_CHAIN_ID,
+        expectedMandateId: expectedMandateId.trim() ? BigInt(expectedMandateId.trim()) : undefined,
+        expectedTarget: expectedTarget.trim() ? (expectedTarget.trim() as Address) : undefined,
+        expectedSelector: expectedSelector.trim() ? (expectedSelector.trim() as Hex) : undefined,
+        expectedMaxValue: expectedMaxMon.trim() ? parseEther(expectedMaxMon.trim()) : undefined,
       };
 
       const res = await verifyReceipt(client, cleanContract as Address, cleanTx as Hex, verifyOpts);
 
-      if (res.status === 'success' && res.verified) {
+      if (res.status === 'success' && res.verified && isBytecodePresent) {
         checks.push({
           title: 'Transaction On-Chain Inclusion',
           description: `Confirmed on-chain in Block #${res.blockNumber.toString()}`,
@@ -184,7 +201,7 @@ export function ReceiptInspector() {
 
         checks.push({
           title: 'Canonical ActionExecuted Event Signature',
-          description: 'Event emitted strictly by configured MandateManager contract',
+          description: 'Event emitted strictly by specified contract address',
           status: 'passed',
           evidence: `Topic0: ActionExecuted(uint256,address,bytes4,uint256,bytes) verified`,
         });
@@ -193,16 +210,18 @@ export function ReceiptInspector() {
           title: 'Mandate Constraints & Spending Audit',
           description: 'Execution parameters decoded and matched against policy',
           status: 'passed',
-          evidence: `Mandate #${res.mandateId?.toString()} · Target: ${res.target} · Selector: ${res.selector} · Value: ${res.value ? formatEther(res.value) : '0'} MON`,
+          evidence: `Mandate #${res.mandateId?.toString()} · Target: ${res.target} · Selector: ${res.selector} · Native MON: ${res.value ? formatEther(res.value) : '0'} MON`,
         });
 
         setAuditResult({
           verified: true,
+          statusCategory: 'success',
           networkName: 'Monad Testnet',
           chainId: liveChainId,
           txHash: cleanTx,
           blockNumber: Number(res.blockNumber),
           contractAddress: cleanContract,
+          isCanonicalContract: !isCustomContract,
           mandateId: Number(res.mandateId ?? 0n),
           agentId: 42,
           target: res.target,
@@ -211,20 +230,34 @@ export function ReceiptInspector() {
           checks,
         });
       } else {
+        // Fail closed on any failure or missing bytecode
+        const failureTitle =
+          res.status === 'not_found'
+            ? 'Transaction Receipt Not Found'
+            : res.status === 'rpc_error'
+            ? 'RPC Query Error'
+            : res.status === 'wrong_network'
+            ? 'Network Chain Mismatch'
+            : res.status === 'reverted'
+            ? 'Transaction Reverted on Monad'
+            : 'Policy Verification Mismatch';
+
         checks.push({
-          title: 'Transaction Verification Status',
-          description: res.revertReason || (res.status === 'reverted' ? 'Transaction reverted on-chain' : 'ActionExecuted event not found in logs'),
+          title: failureTitle,
+          description: res.revertReason || (res.status === 'reverted' ? 'Transaction reverted on-chain' : 'Execution requirements failed'),
           status: 'failed',
-          evidence: `Status: ${res.status} · Revert reason: ${res.revertReason || 'Policy rejected or not found'}`,
+          evidence: `Status: ${res.status} · ${res.revertReason || 'Policy rejected or not confirmed'}`,
         });
 
         setAuditResult({
           verified: false,
+          statusCategory: res.status,
           networkName: 'Monad Testnet',
           chainId: liveChainId,
           txHash: cleanTx,
           blockNumber: Number(res.blockNumber),
           contractAddress: cleanContract,
+          isCanonicalContract: !isCustomContract,
           revertReason: res.revertReason,
           checks,
         });
@@ -239,11 +272,13 @@ export function ReceiptInspector() {
 
       setAuditResult({
         verified: false,
+        statusCategory: 'rpc_error',
         networkName: 'Monad Testnet',
         chainId: MONAD_TESTNET_CHAIN_ID,
         txHash: cleanTx,
         blockNumber: 0,
         contractAddress: cleanContract,
+        isCanonicalContract: !isCustomContract,
         revertReason: err.message || 'Transaction not found on chain',
         checks,
       });
@@ -271,26 +306,60 @@ export function ReceiptInspector() {
               </span>
               <span className="badge badge-monad">Zero-Backend SDK</span>
             </div>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
               Trust & Receipt Explorer
             </h2>
-            <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '680px', marginTop: '0.25rem' }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '680px', marginTop: '0.25rem' }}>
               Independently audit execution receipts directly against raw blockchain event logs and contract bytecode. Fails closed on unconfirmed or mismatched evidence.
             </p>
           </div>
 
           {/* Network Badge */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.85rem', background: '#ede9fe', borderRadius: 'var(--radius-md)', fontSize: '0.785rem', fontWeight: 600, color: '#4f46e5', border: '1px solid #ddd6fe' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.85rem', background: 'var(--bg-lavender-subtle)', borderRadius: 'var(--radius-md)', fontSize: '0.785rem', fontWeight: 600, color: 'var(--accent-primary)', border: '1px solid var(--border-default)' }}>
             <span>Monad Testnet</span>
-            <span style={{ fontFamily: 'var(--font-mono)', background: '#ffffff', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid #c7d2fe' }}>Chain ID: 10143</span>
+            <span style={{ fontFamily: 'var(--font-mono)', background: '#ffffff', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid var(--border-default)' }}>Chain ID: 10143</span>
           </div>
         </div>
+
+        {/* Custom Contract Warning Banner */}
+        {isCustomContract && (
+          <div
+            style={{
+              marginTop: '1.25rem',
+              padding: '0.75rem 1rem',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--accent-amber-subtle)',
+              border: '1px solid var(--accent-amber-border)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.65rem',
+              fontSize: '0.8rem',
+              color: 'var(--accent-amber)',
+            }}
+          >
+            <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong>Custom Contract Audit: </strong>
+              The specified contract address differs from canonical AgentTrust MandateManager ({DEFAULT_MANDATE_MANAGER_ADDRESS.slice(0, 10)}...). Logs will be decoded against ABI specs, but origin bytecode is uncertified.
+            </div>
+          </div>
+        )}
 
         {/* Input Form */}
         <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.85rem' }}>
             <div>
-              <label className="input-label">MandateManager Contract Address *</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label className="input-label" style={{ marginBottom: 0 }}>MandateManager Contract Address *</label>
+                {isCustomContract && (
+                  <button
+                    onClick={() => setContractAddress(DEFAULT_MANDATE_MANAGER_ADDRESS)}
+                    style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Reset to Canonical
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 className="input-field mono"
@@ -308,12 +377,12 @@ export function ReceiptInspector() {
                 style={{ width: '100%' }}
                 value={txHash}
                 onChange={(e) => { setTxHash(e.target.value); setValidationError(null); }}
-                placeholder="0x..."
+                placeholder="0x... (66-char hex transaction hash)"
               />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem' }}>
             <div>
               <label className="input-label">Expected Mandate ID (Optional)</label>
               <input
@@ -336,10 +405,32 @@ export function ReceiptInspector() {
                 placeholder="0x..."
               />
             </div>
+            <div>
+              <label className="input-label">Expected Selector (Optional)</label>
+              <input
+                type="text"
+                className="input-field mono"
+                style={{ width: '100%' }}
+                value={expectedSelector}
+                onChange={(e) => setExpectedSelector(e.target.value)}
+                placeholder="e.g. 0x50824e4f"
+              />
+            </div>
+            <div>
+              <label className="input-label">Max Native MON (Optional)</label>
+              <input
+                type="text"
+                className="input-field mono"
+                style={{ width: '100%' }}
+                value={expectedMaxMon}
+                onChange={(e) => setExpectedMaxMon(e.target.value)}
+                placeholder="e.g. 0.2"
+              />
+            </div>
           </div>
 
           {validationError && (
-            <div style={{ padding: '0.65rem 0.85rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--radius-md)', color: '#dc2626', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ padding: '0.65rem 0.85rem', background: 'var(--accent-rose-subtle)', border: '1px solid var(--accent-rose-border)', borderRadius: 'var(--radius-md)', color: 'var(--accent-rose)', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <AlertTriangle size={15} />
               <span>{validationError}</span>
             </div>
@@ -355,8 +446,8 @@ export function ReceiptInspector() {
               {isVerifying ? 'Auditing On-Chain Evidence...' : 'Audit On-Chain Evidence'}
             </button>
 
-            <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'var(--font-mono)' }}>
-              Active RPC: https://testnet-rpc.monad.xyz
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              Target RPC: https://testnet-rpc.monad.xyz (10143)
             </span>
           </div>
         </div>
@@ -368,78 +459,132 @@ export function ReceiptInspector() {
           className="security-card"
           style={{
             border: auditResult.verified
-              ? '1px solid #a7f3d0'
-              : '1px solid #fecaca',
+              ? '1px solid var(--accent-emerald-border)'
+              : '1px solid var(--accent-rose-border)',
             padding: '1.75rem',
           }}
         >
           {/* Header Status */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <div
                 style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '10px',
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
                   background: auditResult.verified
-                    ? '#ecfdf5'
-                    : '#fef2f2',
-                  border: auditResult.verified
-                    ? '1px solid #a7f3d0'
-                    : '1px solid #fecaca',
+                    ? 'var(--accent-emerald-subtle)'
+                    : 'var(--accent-rose-subtle)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
                 {auditResult.verified ? (
-                  <ShieldCheck size={24} color="#059669" />
+                  <ShieldCheck size={20} color="var(--accent-emerald)" />
                 ) : (
-                  <ShieldAlert size={24} color="#dc2626" />
+                  <ShieldAlert size={20} color="var(--accent-rose)" />
                 )}
               </div>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#111827' }}>
-                    {auditResult.verified
-                      ? 'Receipt Audit: Cryptographically Verified'
-                      : 'Receipt Audit: Verification Failed'}
-                  </h3>
-                  <span className={auditResult.verified ? 'badge badge-emerald' : 'badge badge-rose'}>
-                    {auditResult.verified ? 'Consensus Verified' : 'Unverified / Reverted'}
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.785rem', color: '#64748b', fontFamily: 'var(--font-mono)' }}>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                   {auditResult.verified
-                    ? `Confirmed in ${auditResult.networkName} Block #${auditResult.blockNumber}`
-                    : `Network: ${auditResult.networkName} (Chain ID: ${auditResult.chainId})`}
-                </div>
+                    ? 'Cryptographically Verified Receipt'
+                    : auditResult.statusCategory === 'not_found'
+                    ? 'Transaction Not Found / Pending'
+                    : auditResult.statusCategory === 'reverted'
+                    ? 'Transaction Reverted on Monad'
+                    : 'Receipt Verification Failed'}
+                </h3>
+                <span style={{ fontSize: '0.785rem', color: 'var(--text-secondary)' }}>
+                  {auditResult.verified
+                    ? `ActionExecuted event decoded from Monad block #${auditResult.blockNumber}`
+                    : auditResult.revertReason || 'Failed to establish cryptographic validity against mandate'}
+                </span>
               </div>
             </div>
 
-            <button
-              className="btn-secondary"
-              style={{ padding: '0.45rem 0.85rem', fontSize: '0.785rem' }}
-              onClick={() => copyToClipboard(auditResult.txHash)}
-            >
-              {copied ? <Check size={14} color="#059669" /> : <Copy size={14} />}
-              {copied ? 'Copied Hash' : 'Copy Hash'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span
+                className={
+                  auditResult.verified
+                    ? 'badge badge-emerald'
+                    : auditResult.statusCategory === 'not_found'
+                    ? 'badge badge-amber'
+                    : 'badge badge-rose'
+                }
+              >
+                {auditResult.verified ? 'PASSED VERIFICATION' : auditResult.statusCategory.toUpperCase()}
+              </span>
+              <button
+                className="btn-secondary"
+                style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem' }}
+                onClick={() => copyToClipboard(JSON.stringify(auditResult, null, 2))}
+              >
+                {copied ? <Check size={12} color="var(--accent-emerald)" /> : <Copy size={12} />}
+                {copied ? 'Copied' : 'Copy JSON'}
+              </button>
+            </div>
           </div>
 
-          {/* Detailed Verification Checks */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {/* Key Parameters Table if Verified */}
+          {auditResult.verified && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '0.75rem',
+                marginBottom: '1.5rem',
+                background: 'var(--bg-inset)',
+                padding: '1rem',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              <div>
+                <span className="kpi-label">MANDATE ID</span>
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
+                  #{auditResult.mandateId}
+                </div>
+              </div>
+              <div>
+                <span className="kpi-label">TARGET CONTRACT</span>
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', wordBreak: 'break-all' }}>
+                  {auditResult.target}
+                </div>
+              </div>
+              <div>
+                <span className="kpi-label">METHOD SELECTOR</span>
+                <div style={{ fontWeight: 600, color: 'var(--accent-primary)', marginTop: '2px', fontFamily: 'var(--font-mono)' }}>
+                  {auditResult.selector}
+                </div>
+              </div>
+              <div>
+                <span className="kpi-label">NATIVE MON TRANSFERRED</span>
+                <div style={{ fontWeight: 700, color: 'var(--accent-emerald)', marginTop: '2px' }}>
+                  {auditResult.value}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Detailed Verification Checks Pipeline */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Verification Checks Pipeline ({checksPassedCount(auditResult.checks)} / {auditResult.checks.length})
+            </span>
+
             {auditResult.checks.map((check, idx) => (
               <div
                 key={idx}
                 style={{
-                  background: '#f8fafc',
+                  background: '#ffffff',
                   border:
                     check.status === 'passed'
-                      ? '1px solid #a7f3d0'
+                      ? '1px solid var(--accent-emerald-border)'
                       : check.status === 'warning'
-                      ? '1px solid #fde68a'
-                      : '1px solid #fecaca',
+                      ? '1px solid var(--accent-amber-border)'
+                      : '1px solid var(--accent-rose-border)',
                   borderRadius: 'var(--radius-md)',
                   padding: '0.85rem 1rem',
                   display: 'flex',
@@ -448,15 +593,15 @@ export function ReceiptInspector() {
                 }}
               >
                 {check.status === 'passed' ? (
-                  <CheckCircle2 size={18} color="#059669" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <CheckCircle2 size={18} color="var(--accent-emerald)" style={{ marginTop: '2px', flexShrink: 0 }} />
                 ) : check.status === 'warning' ? (
-                  <AlertTriangle size={18} color="#d97706" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <AlertTriangle size={18} color="var(--accent-amber)" style={{ marginTop: '2px', flexShrink: 0 }} />
                 ) : (
-                  <XCircle size={18} color="#dc2626" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <XCircle size={18} color="var(--accent-rose)" style={{ marginTop: '2px', flexShrink: 0 }} />
                 )}
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <strong style={{ fontSize: '0.875rem', color: '#111827' }}>{check.title}</strong>
+                    <strong style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{check.title}</strong>
                     <span
                       className={
                         check.status === 'passed'
@@ -470,10 +615,10 @@ export function ReceiptInspector() {
                       {check.status === 'passed' ? 'Passed' : check.status === 'warning' ? 'Notice' : 'Failed'}
                     </span>
                   </div>
-                  <p style={{ fontSize: '0.8rem', color: '#4b5563', marginTop: '0.2rem' }}>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
                     {check.description}
                   </p>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem', wordBreak: 'break-all' }}>
                     {check.evidence}
                   </div>
                 </div>
@@ -482,25 +627,29 @@ export function ReceiptInspector() {
           </div>
 
           {/* Technical Context Footer */}
-          <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', background: '#eef2ff', border: '1px solid #e0e7ff', fontSize: '0.785rem', color: '#334155' }}>
-            <strong style={{ color: '#4338ca' }}>Independent Verification Proof:</strong> Receipts are decoded against the canonical ABI without trusting web frontend state. If an event origin does not match the target contract address or has been tampered with, the audit fails closed.
+          <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', background: 'var(--bg-lavender-subtle)', border: '1px solid var(--border-default)', fontSize: '0.785rem', color: 'var(--text-primary)' }}>
+            <strong style={{ color: 'var(--accent-primary)' }}>Fail-Closed Verification: </strong> Receipts are decoded against the canonical ABI without trusting web frontend state. If event origin, selector, or value expectations do not match, the audit fails closed.
           </div>
         </div>
       ) : (
         /* Empty Actionable State Before Audit */
         <div className="empty-state">
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#f3f4f6', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem', color: '#9ca3af' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--bg-inset)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem', color: 'var(--text-muted)' }}>
             <SearchCode size={24} />
           </div>
           <h3 className="empty-state-title">No Active Receipt Audit</h3>
           <p className="empty-state-desc">
-            Provide a Monad transaction hash and MandateManager contract address above to independently verify on-chain consensus, event topics, and spending constraints.
+            Provide a Monad transaction hash and contract address above to independently verify on-chain consensus, event topics, and spending constraints.
           </p>
-          <p style={{ fontSize: '0.785rem', color: '#dc2626', fontFamily: 'var(--font-mono)', marginTop: '0.5rem' }}>
-            Note: This auditor queries Monad Testnet (Chain ID 10143) directly.
+          <p style={{ fontSize: '0.785rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.5rem' }}>
+            Note: This auditor queries Monad Testnet (Chain ID 10143) directly without server intermediaries.
           </p>
         </div>
       )}
     </div>
   );
+}
+
+function checksPassedCount(checks: VerificationCheck[]) {
+  return checks.filter((c) => c.status === 'passed').length;
 }
