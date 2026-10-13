@@ -253,8 +253,8 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                     marginTop: '1rem',
                     padding: '0.85rem 1rem',
                     borderRadius: 'var(--radius-md)',
-                    background: isAllowed ? '#ecfdf5' : '#fef2f2',
-                    border: `1px solid ${isAllowed ? '#a7f3d0' : '#fecaca'}`,
+                    background: isAllowed ? 'var(--accent-emerald-subtle)' : 'var(--accent-rose-subtle)',
+                    border: `1px solid ${isAllowed ? 'var(--accent-emerald-border)' : 'var(--accent-rose-border)'}`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -264,15 +264,15 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {isAllowed ? (
-                      <CheckCircle2 size={16} color="#059669" />
+                      <CheckCircle2 size={16} color="#34D399" />
                     ) : (
-                      <XCircle size={16} color="#dc2626" />
+                      <XCircle size={16} color="#FB7185" />
                     )}
                     <span
                       style={{
                         fontSize: '0.825rem',
                         fontWeight: 700,
-                        color: isAllowed ? '#065f46' : '#991b1b',
+                        color: isAllowed ? 'var(--accent-emerald)' : 'var(--accent-rose)',
                       }}
                     >
                       {isAllowed
@@ -280,17 +280,17 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                         : `Local preflight: contract would revert with ${scenario.resultData.errorName}`}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: '#64748b' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
                     {scenario.resultData.txHash ? (
-                      <span title={scenario.resultData.txHash} style={{ color: '#059669', fontWeight: 600 }}>
+                      <span title={scenario.resultData.txHash} style={{ color: 'var(--accent-emerald)', fontWeight: 600 }}>
                         Tx: {scenario.resultData.txHash.slice(0, 10)}...{scenario.resultData.txHash.slice(-6)}
                       </span>
                     ) : (
-                      <span style={{ color: '#64748b' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>
                         [Browser preflight only · nothing broadcast · no receipt mined]
                       </span>
                     )}
-                    <span style={{ fontWeight: 600, color: '#111827' }}>Vault: {scenario.resultData.vaultRemaining}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Vault: {scenario.resultData.vaultRemaining}</span>
                   </div>
                 </div>
               )}

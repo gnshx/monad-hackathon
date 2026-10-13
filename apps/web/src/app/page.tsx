@@ -1,7 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sidebar, type NavTab } from '../components/Sidebar';
+import { Sidebar, NAV_TABS, LAB_TABS, type NavTab } from '../components/Sidebar';
+import { PageHead, LegacyNote } from '../components/PageHead';
+import { HomeView } from '../components/HomeView';
+import { VerifyLab } from '../components/VerifyLab';
+import { Developers } from '../components/Developers';
 import { MandateList } from '../components/MandateList';
 import { PolicyToProofExplorer } from '../components/PolicyToProofExplorer';
 import { AiPolicyCopilot } from '../components/AiPolicyCopilot';
@@ -38,6 +42,7 @@ import {
   DEFAULT_MANDATE_MANAGER_ADDRESS,
   MONAD_TESTNET_CONFIG,
 } from '../lib/contracts';
+import { RPC_URL } from '../lib/agentMandates';
 import {
   Shield,
   ShieldCheck,
@@ -52,6 +57,7 @@ import {
   Radio,
   ExternalLink,
   ChevronDown,
+  X,
   ArrowRight,
   Target,
   Code,
@@ -67,16 +73,38 @@ import {
 } from 'lucide-react';
 
 export default function SecurityConsoleDashboard() {
-  const [activeTab, setActiveTab] = useState<NavTab>('passkey');
+  const [activeTab, setActiveTabState] = useState<NavTab>('home');
 
-  // Persisted runtime mode (LOCAL_SIMULATION | MONAD_TESTNET)
-  const [networkMode, setNetworkMode] = useState<'LOCAL_SIMULATION' | 'MONAD_TESTNET'>(() => {
+  // Every tab has a shareable URL: /#judge, /#passkey, ...
+  const setActiveTab = useCallback((tab: NavTab) => {
+    setActiveTabState(tab);
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('agenttrust.networkMode') as 'LOCAL_SIMULATION' | 'MONAD_TESTNET' | null;
-      if (stored === 'LOCAL_SIMULATION' || stored === 'MONAD_TESTNET') return stored;
+      const hash = tab === 'home' ? '' : `#${tab}`;
+      if (window.location.hash !== hash) history.pushState(null, '', hash || window.location.pathname);
+      window.scrollTo({ top: 0 });
     }
-    return 'MONAD_TESTNET';
-  });
+  }, []);
+
+  useEffect(() => {
+    const fromHash = () => {
+      const h = window.location.hash.replace('#', '') as NavTab;
+      setActiveTabState(NAV_TABS.includes(h) ? h : 'home');
+    };
+    fromHash();
+    window.addEventListener('popstate', fromHash);
+    window.addEventListener('hashchange', fromHash);
+    return () => {
+      window.removeEventListener('popstate', fromHash);
+      window.removeEventListener('hashchange', fromHash);
+    };
+  }, []);
+
+  // Persisted runtime mode (LOCAL_SIMULATION | MONAD_TESTNET), read after mount to keep SSR and client in sync
+  const [networkMode, setNetworkMode] = useState<'LOCAL_SIMULATION' | 'MONAD_TESTNET'>('MONAD_TESTNET');
+  useEffect(() => {
+    const stored = localStorage.getItem('agenttrust.networkMode');
+    if (stored === 'LOCAL_SIMULATION' || stored === 'MONAD_TESTNET') setNetworkMode(stored);
+  }, []);
 
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [connectedChainId, setConnectedChainId] = useState<number | null>(null);
@@ -130,14 +158,14 @@ export default function SecurityConsoleDashboard() {
       setIsCheckingContract(true);
       const client = createPublicClient({
         chain: MONAD_TESTNET_CONFIG as any,
-        transport: http('https://testnet-rpc.monad.xyz'),
+        transport: http(RPC_URL),
       });
       const code = await client.getBytecode({ address: DEFAULT_MANDATE_MANAGER_ADDRESS });
       const deployed = !!code && code !== '0x' && code.length > 2;
       setIsContractDeployed(deployed);
       return deployed;
     } catch (err) {
-      console.error('Failed to query Monad testnet bytecode:', err);
+      console.warn('Could not read MandateManager bytecode:', err);
       setIsContractDeployed(false);
       return false;
     } finally {
@@ -146,10 +174,11 @@ export default function SecurityConsoleDashboard() {
   }, []);
 
   useEffect(() => {
-    if (networkMode === 'MONAD_TESTNET') {
+    // Only the v1 lab views need this, so the product pages never wait on it
+    if (networkMode === 'MONAD_TESTNET' && LAB_TABS.includes(activeTab) && isContractDeployed === null) {
       checkContractOnTestnet();
     }
-  }, [networkMode, checkContractOnTestnet]);
+  }, [networkMode, activeTab, isContractDeployed, checkContractOnTestnet]);
 
   // Connect Wallet Handler
   const handleConnectWallet = async () => {
@@ -554,30 +583,26 @@ export default function SecurityConsoleDashboard() {
     }
   };
 
-  const breadcrumbTitle =
-    activeTab === 'passkey'
-      ? 'PASSKEY MANDATES'
-      : activeTab === 'judge'
-      ? 'JUDGE MODE (LIVE TESTNET)'
-      : activeTab === 'overview'
-      ? 'OVERVIEW'
-      : activeTab === 'policy-to-proof'
-      ? 'POLICY-TO-PROOF EXPLORER'
-      : activeTab === 'mandates'
-      ? 'MANDATES'
-      : activeTab === 'attack-lab'
-      ? 'ATTACK LAB'
-      : activeTab === 'inspector'
-      ? 'RECEIPTS'
-      : activeTab === 'docs'
-      ? 'DOCUMENTATION'
-      : activeTab === 'copilot'
-      ? 'POLICY BUILDER'
-      : 'SECURITY ACTIVITY';
+  const TAB_TITLES: Record<NavTab, [string, string]> = {
+    home: ['Product', 'Home'],
+    passkey: ['Product', 'Passkey Mandates'],
+    judge: ['Product', 'Judge Mode'],
+    verify: ['Product', 'Verify an Agent'],
+    docs: ['Product', 'Developers'],
+    overview: ['Lab', 'Policy Overview'],
+    'policy-to-proof': ['Lab', 'Policy-to-Proof'],
+    mandates: ['Lab', 'Wallet Mandates'],
+    copilot: ['Lab', 'Policy Builder'],
+    'attack-lab': ['Lab', 'Attack Lab'],
+    inspector: ['Lab', 'Receipts'],
+    evidence: ['Lab', 'Evidence & Proofs'],
+    activity: ['Lab', 'Security Activity'],
+  };
+  const [crumbGroup, crumbTitle] = TAB_TITLES[activeTab];
+  const isLab = LAB_TABS.includes(activeTab);
 
   return (
     <div className="app-shell">
-      {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
@@ -594,272 +619,94 @@ export default function SecurityConsoleDashboard() {
         chainId={connectedChainId}
       />
 
-      {/* Main Content Area */}
       <div className="main-content">
-        {/* Top Header matching reference image */}
         <header className="top-bar">
-          {/* Breadcrumb Left */}
-          <div className="top-bar-crumbs" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                letterSpacing: '0.08em',
-                color: '#64748b',
-                textTransform: 'uppercase',
-              }}
-            >
-              SECURITY CONSOLE
-            </span>
-            <span style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>/</span>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                letterSpacing: '0.08em',
-                color: '#64748b',
-                textTransform: 'uppercase',
-              }}
-            >
-              {breadcrumbTitle}
-            </span>
+          <div className="top-bar-crumbs crumbs">
+            <span>{crumbGroup}</span>
+            <span className="sep">/</span>
+            <b>{crumbTitle}</b>
           </div>
 
-          {/* Controls Right */}
-          <div className="top-bar-controls" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {activeTab === 'passkey' ? (
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.45rem',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-full)',
-                  padding: '0.4rem 0.8rem',
-                }}
-              >
-                <KeyRound size={14} /> Monad Testnet · no wallet needed
-              </span>
-            ) : (
-            <>
-            {/* Network Selector Pill Dropdown */}
-            <div style={{ position: 'relative' }} ref={dropdownRef}>
-              <button
-                onClick={() => setIsNetworkDropdownOpen(!isNetworkDropdownOpen)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  padding: '0.45rem 0.85rem',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  fontSize: '0.825rem',
-                  color: '#334155',
-                  fontWeight: 500,
-                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
-                }}
-              >
-                {/* Purple Monad Icon Mark */}
-                <div
-                  style={{
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    background: networkMode === 'MONAD_TESTNET' ? '#4f46e5' : '#d97706',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    flexShrink: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '1px',
-                      border: '1.5px solid #ffffff',
-                      transform: 'rotate(45deg)',
-                    }}
-                  />
-                </div>
-                <span>
-                  {networkMode === 'MONAD_TESTNET' ? 'Monad Testnet · 10143' : 'Local Sandbox · 31337'}
+          <div className="top-bar-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            {!isLab ? (
+              <>
+                <span className="chip-net static">
+                  <span className="net-dot" /> Monad Testnet
                 </span>
-                <ChevronDown size={14} color="#64748b" />
-              </button>
-
-              {/* Dropdown Menu */}
-              {isNetworkDropdownOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 6px)',
-                    right: 0,
-                    width: '240px',
-                    background: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: 'var(--radius-md)',
-                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)',
-                    zIndex: 100,
-                    overflow: 'hidden',
-                    padding: '0.35rem',
-                  }}
-                >
-                  <button
-                    onClick={() => handleToggleNetworkMode('MONAD_TESTNET')}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '0.55rem 0.75rem',
-                      border: 'none',
-                      borderRadius: 'var(--radius-sm)',
-                      background: networkMode === 'MONAD_TESTNET' ? '#ede9fe' : 'transparent',
-                      color: networkMode === 'MONAD_TESTNET' ? '#4f46e5' : '#1e293b',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className="status-dot emerald" style={{ width: '6px', height: '6px' }} />
-                      <span>Monad Testnet (10143)</span>
-                    </div>
-                    {networkMode === 'MONAD_TESTNET' && <Check size={14} color="#4f46e5" />}
+                <span className="chip-net static">
+                  <KeyRound size={13} /> No wallet needed
+                </span>
+              </>
+            ) : (
+              <>
+                <div style={{ position: 'relative' }} ref={dropdownRef}>
+                  <button className="chip-net" onClick={() => setIsNetworkDropdownOpen(!isNetworkDropdownOpen)}>
+                    <span className={`status-dot ${networkMode === 'MONAD_TESTNET' ? 'emerald' : 'amber'}`} />
+                    <span>{networkMode === 'MONAD_TESTNET' ? 'Monad Testnet · 10143' : 'Local Sandbox · 31337'}</span>
+                    <ChevronDown size={14} />
                   </button>
-
-                  <button
-                    onClick={() => handleToggleNetworkMode('LOCAL_SIMULATION')}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '0.55rem 0.75rem',
-                      border: 'none',
-                      borderRadius: 'var(--radius-sm)',
-                      background: networkMode === 'LOCAL_SIMULATION' ? '#ede9fe' : 'transparent',
-                      color: networkMode === 'LOCAL_SIMULATION' ? '#4f46e5' : '#1e293b',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      marginTop: '2px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className="status-dot amber" style={{ width: '6px', height: '6px' }} />
-                      <span>Local Simulation (Sandbox)</span>
+                  {isNetworkDropdownOpen && (
+                    <div className="dropdown">
+                      <button
+                        className={`dropdown-item ${networkMode === 'MONAD_TESTNET' ? 'on' : ''}`}
+                        onClick={() => handleToggleNetworkMode('MONAD_TESTNET')}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span className="status-dot emerald" /> Monad Testnet (10143)
+                        </span>
+                        {networkMode === 'MONAD_TESTNET' && <Check size={14} />}
+                      </button>
+                      <button
+                        className={`dropdown-item ${networkMode === 'LOCAL_SIMULATION' ? 'on' : ''}`}
+                        onClick={() => handleToggleNetworkMode('LOCAL_SIMULATION')}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span className="status-dot amber" /> Local Simulation (Sandbox)
+                        </span>
+                        {networkMode === 'LOCAL_SIMULATION' && <Check size={14} />}
+                      </button>
                     </div>
-                    {networkMode === 'LOCAL_SIMULATION' && <Check size={14} color="#4f46e5" />}
-                  </button>
+                  )}
                 </div>
-              )}
-            </div>
-
-            {/* Connect Wallet Button */}
-            <button
-              className="btn-outline-purple"
-              onClick={handleConnectWallet}
-              style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
-            >
-              <Wallet size={16} />
-              <span>
-                {walletAddress
-                  ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-                  : 'Connect wallet'}
-              </span>
-            </button>
-            </>
+                <button className="btn-outline-purple" onClick={handleConnectWallet} style={{ fontSize: '0.8rem', padding: '0.42rem 0.9rem', borderRadius: 999 }}>
+                  <Wallet size={15} />
+                  <span>{walletAddress ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}` : 'Connect wallet'}</span>
+                </button>
+              </>
             )}
           </div>
         </header>
 
-        {/* Global Toast Alert */}
         {statusAlert && (
-          <div
-            style={{
-              margin: '1.25rem 2rem 0',
-              padding: '0.75rem 1.25rem',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '0.85rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '0.75rem',
-              background:
-                statusAlert.type === 'error'
-                  ? '#fef2f2'
-                  : statusAlert.type === 'success'
-                  ? '#ecfdf5'
-                  : statusAlert.type === 'warning'
-                  ? '#fffbeb'
-                  : '#eef2ff',
-              border: `1px solid ${
-                statusAlert.type === 'error'
-                  ? '#fecaca'
-                  : statusAlert.type === 'success'
-                  ? '#a7f3d0'
-                  : statusAlert.type === 'warning'
-                  ? '#fde68a'
-                  : '#c7d2fe'
-              }`,
-              color:
-                statusAlert.type === 'error'
-                  ? '#991b1b'
-                  : statusAlert.type === 'success'
-                  ? '#065f46'
-                  : statusAlert.type === 'warning'
-                  ? '#92400e'
-                  : '#3730a3',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <AlertCircle size={16} />
+          <div className={`toast toast-${statusAlert.type}`} role="status">
+            <div>
+              {statusAlert.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
               <span>{statusAlert.message}</span>
             </div>
-            <button
-              style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '0.9rem' }}
-              onClick={() => setStatusAlert(null)}
-            >
-              ✕
+            <button onClick={() => setStatusAlert(null)} aria-label="Dismiss">
+              <X size={15} />
             </button>
           </div>
         )}
 
-        {/* Main Content Area */}
-        <main className="page-container">
-          {activeTab === 'passkey' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              <JudgeMode />
-              <PasskeyConsole />
-            </div>
-          )}
+        <main className="page-container page-enter" key={activeTab}>
+          {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
 
-          {activeTab === 'judge' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              <JudgeMode />
-            </div>
-          )}
+          {activeTab === 'passkey' && <PasskeyConsole />}
+
+          {activeTab === 'judge' && <JudgeMode />}
+
+          {activeTab === 'verify' && <VerifyLab />}
 
           {/* TAB: OVERVIEW */}
           {activeTab === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              <JudgeMode />
+              <LegacyNote onGo={() => setActiveTab('passkey')} />
               {/* Notification Banner matching reference */}
               <div
                 style={{
-                  background: '#eef2ff',
-                  border: '1px solid #e0e7ff',
+                  background: 'var(--accent-primary-light)',
+                  border: '1px solid var(--accent-monad-border)',
                   borderRadius: 'var(--radius-md)',
                   padding: '0.75rem 1.25rem',
                   display: 'flex',
@@ -872,8 +719,8 @@ export default function SecurityConsoleDashboard() {
                     width: '18px',
                     height: '18px',
                     borderRadius: '50%',
-                    background: '#4f46e5',
-                    color: '#ffffff',
+                    background: 'var(--accent-primary)',
+                    color: '#FFFFFF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -884,12 +731,12 @@ export default function SecurityConsoleDashboard() {
                 >
                   i
                 </div>
-                <div style={{ fontSize: '0.85rem', color: '#1e293b' }}>
-                  <strong style={{ color: '#4338ca', fontWeight: 700, letterSpacing: '0.02em' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                  <strong style={{ color: 'var(--accent-monad)', fontWeight: 700, letterSpacing: '0.02em' }}>
                     {walletAddress ? 'ACTIVE SESSION' : 'READ-ONLY'}
                   </strong>
-                  <span style={{ margin: '0 0.5rem', color: '#818cf8' }}>·</span>
-                  <span style={{ color: '#4b5563' }}>
+                  <span style={{ margin: '0 0.5rem', color: 'var(--accent-monad)' }}>·</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>
                     {walletAddress
                       ? `Wallet ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} connected on ${networkMode === 'MONAD_TESTNET' ? 'Monad Testnet (10143)' : 'Local Sandbox'}.`
                       : 'Connect a wallet to load live mandates.'}
@@ -903,7 +750,7 @@ export default function SecurityConsoleDashboard() {
                   style={{
                     fontSize: '2.5rem',
                     fontWeight: 800,
-                    color: '#111827',
+                    color: 'var(--text-primary)',
                     letterSpacing: '-0.03em',
                     lineHeight: 1.15,
                   }}
@@ -913,7 +760,7 @@ export default function SecurityConsoleDashboard() {
                 <p
                   style={{
                     fontSize: '1.1rem',
-                    color: '#4b5563',
+                    color: 'var(--text-secondary)',
                     marginTop: '0.45rem',
                     fontWeight: 400,
                   }}
@@ -964,7 +811,7 @@ export default function SecurityConsoleDashboard() {
                       fontSize: '0.725rem',
                       fontWeight: 700,
                       letterSpacing: '0.08em',
-                      color: '#6b7280',
+                      color: 'var(--text-muted)',
                       textTransform: 'uppercase',
                       marginBottom: '1rem',
                     }}
@@ -1033,7 +880,7 @@ export default function SecurityConsoleDashboard() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#ffffff',
+                      color: '#FFFFFF',
                       boxShadow: '0 4px 10px rgba(89, 68, 219, 0.3)',
                       zIndex: 2,
                     }}
@@ -1387,7 +1234,7 @@ export default function SecurityConsoleDashboard() {
                   <div
                     style={{
                       fontSize: '0.725rem',
-                      color: '#94a3b8',
+                      color: 'var(--text-muted)',
                       marginTop: '1.25rem',
                       display: 'flex',
                       gap: '0.5rem',
@@ -1420,21 +1267,14 @@ export default function SecurityConsoleDashboard() {
           {activeTab === 'mandates' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
-                    Mandates Ledger
-                  </h1>
-                  <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
-                    Cryptographically authorized delegation bounds enforced by Monad smart contracts.
-                  </p>
-                </div>
+                <PageHead eyebrow="Lab · v1" title={'Mandates Ledger'} sub={'Cryptographically authorized delegation bounds enforced by Monad smart contracts.'} />
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <button
                     className="btn-secondary"
                     onClick={() => setActiveTab('copilot')}
                     style={{ fontSize: '0.85rem' }}
                   >
-                    <Sparkles size={14} color="#4f46e5" />
+                    <Sparkles size={14} color="#A08FFF" />
                     Policy Builder Draft
                   </button>
                   <button
@@ -1456,22 +1296,22 @@ export default function SecurityConsoleDashboard() {
                   className="security-card"
                   style={{
                     padding: '1.25rem',
-                    borderLeft: '4px solid #f59e0b',
+                    borderLeft: '4px solid var(--accent-amber-border)',
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: '0.85rem',
-                    background: '#fffbeb',
+                    background: 'var(--accent-amber-subtle)',
                   }}
                 >
-                  <AlertCircle size={20} color="#d97706" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <AlertCircle size={20} color="#FBBF24" style={{ marginTop: '2px', flexShrink: 0 }} />
                   <div>
-                    <strong style={{ fontSize: '0.9rem', color: '#92400e' }}>
+                    <strong style={{ fontSize: '0.9rem', color: 'var(--accent-amber)' }}>
                       Contract Bytecode Not Deployed on Monad Testnet
                     </strong>
-                    <p style={{ fontSize: '0.825rem', color: '#78350f', marginTop: '0.25rem' }}>
+                    <p style={{ fontSize: '0.825rem', color: 'var(--accent-amber)', marginTop: '0.25rem' }}>
                       The configured address <code style={{ fontWeight: 600 }}>{DEFAULT_MANDATE_MANAGER_ADDRESS}</code> currently has 0 bytes bytecode on Monad Testnet RPC.
                     </p>
-                    <p style={{ fontSize: '0.8rem', color: '#b45309', marginTop: '0.35rem' }}>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--accent-amber)', marginTop: '0.35rem' }}>
                       You can deploy contract bytecode with <code style={{ fontWeight: 600 }}>forge script script/Deploy.s.sol</code> or switch to <strong>Local Simulation</strong> to demo the passkey authorization lifecycle instantly.
                     </p>
                   </div>
@@ -1492,14 +1332,7 @@ export default function SecurityConsoleDashboard() {
           {/* TAB: ATTACK LAB */}
           {activeTab === 'attack-lab' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
-                  Attack Simulation Lab
-                </h1>
-                <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
-                  Test contract security invariants against prompt injection, unapproved targets, ceiling violations, and stranger hijacking.
-                </p>
-              </div>
+              <PageHead eyebrow="Lab · v1" title={'Attack Simulation Lab'} sub={'Test contract security invariants against prompt injection, unapproved targets, ceiling violations, and stranger hijacking.'} />
 
               <AttackLab onScenarioExecuted={handleScenarioRun} />
             </div>
@@ -1508,14 +1341,7 @@ export default function SecurityConsoleDashboard() {
           {/* TAB: RECEIPTS (INSPECTOR) */}
           {activeTab === 'inspector' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
-                  Trust & Receipt Explorer
-                </h1>
-                <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
-                  Independently audit transaction receipts, contract logs, and cryptographic bounds against the Monad RPC.
-                </p>
-              </div>
+              <PageHead eyebrow="Lab · v1" title={'Trust & Receipt Explorer'} sub={'Independently audit transaction receipts, contract logs, and cryptographic bounds against the Monad RPC.'} />
 
               <ReceiptInspector />
             </div>
@@ -1526,87 +1352,13 @@ export default function SecurityConsoleDashboard() {
             <EvidenceHub />
           )}
 
-          {/* TAB: DOCS */}
-          {activeTab === 'docs' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
-                  AgentTrust Architecture & Documentation
-                </h1>
-                <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
-                  How AgentTrust enforces cryptographic bounds on autonomous AI agents on Monad.
-                </p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
-                <div className="security-card">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <KeyRound size={20} color="#4f46e5" />
-                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>1. Hardware Passkey Signatures</h3>
-                  </div>
-                  <p style={{ fontSize: '0.85rem', color: '#4b5563', lineHeight: 1.5 }}>
-                    Users authorize agent mandates via Apple TouchID, FaceID, or Windows Hello WebAuthn credentials. The signature challenge strictly binds the Monad Chain ID (10143), contract address, target allowlist, and per-tx spending ceiling.
-                  </p>
-                </div>
-
-                <div className="security-card">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <Shield size={20} color="#4f46e5" />
-                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>2. On-Chain MandateManager</h3>
-                  </div>
-                  <p style={{ fontSize: '0.85rem', color: '#4b5563', lineHeight: 1.5 }}>
-                    Smart contracts on Monad inspect execution calldata at runtime. Any transaction attempting unapproved selector calls, target contracts outside allowlist, or excess budget limits immediately reverts on-chain.
-                  </p>
-                </div>
-
-                <div className="security-card">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <SearchCode size={20} color="#4f46e5" />
-                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>3. Independent Receipt Auditing</h3>
-                  </div>
-                  <p style={{ fontSize: '0.85rem', color: '#4b5563', lineHeight: 1.5 }}>
-                    The AgentTrust TypeScript SDK verifies Monad transaction receipts directly via RPC. Third parties and decentralized auditors can independently prove that agent actions adhered to mandate limits without trusting server logs.
-                  </p>
-                </div>
-              </div>
-
-              <div className="security-card" style={{ padding: '2rem' }}>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>
-                  Monad Testnet Deployment Parameters
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Network Name</span>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#111827' }}>Monad Testnet</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Chain ID</span>
-                    <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#111827' }}>10143</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>RPC Endpoint</span>
-                    <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', fontWeight: 500, color: '#111827' }}>https://testnet-rpc.monad.xyz</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Configured MandateManager Address</span>
-                    <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#4f46e5' }}>{DEFAULT_MANDATE_MANAGER_ADDRESS}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* TAB: DEVELOPERS */}
+          {activeTab === 'docs' && <Developers />}
 
           {/* TAB: COPILOT */}
           {activeTab === 'copilot' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
-                  Policy Builder (rule-based parser)
-                </h1>
-                <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
-                  Translate plain English agent permissions into deterministic on-chain mandate parameters.
-                </p>
-              </div>
+              <PageHead eyebrow="Lab · v1" title={'Policy Builder (rule-based parser)'} sub={'Translate plain English agent permissions into deterministic on-chain mandate parameters.'} />
 
               <AiPolicyCopilot onDraftApproved={handleCopilotDraftApproved} />
             </div>
@@ -1615,14 +1367,7 @@ export default function SecurityConsoleDashboard() {
           {/* TAB: ACTIVITY */}
           {activeTab === 'activity' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
-                  Security Activity Feed
-                </h1>
-                <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
-                  Full audit trail of passkey creations, executed actions, and blocked invariants.
-                </p>
-              </div>
+              <PageHead eyebrow="Lab · v1" title={'Security Activity Feed'} sub={'Full audit trail of passkey creations, executed actions, and blocked invariants.'} />
 
               <SecurityActivityFeed
                 activities={currentActivities}

@@ -500,7 +500,7 @@ export function PolicyToProofExplorer({
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid',
                     borderColor: selectedPresetId === preset.id ? 'var(--accent-primary)' : 'var(--border-default)',
-                    background: selectedPresetId === preset.id ? 'var(--accent-primary-light)' : '#FFFFFF',
+                    background: selectedPresetId === preset.id ? 'var(--accent-primary-light)' : 'var(--bg-surface)',
                     color: selectedPresetId === preset.id ? 'var(--accent-primary)' : 'var(--text-secondary)',
                     fontWeight: selectedPresetId === preset.id ? 700 : 500,
                     fontSize: '0.785rem',
@@ -597,8 +597,8 @@ export function PolicyToProofExplorer({
           {/* Architectural Semantic Callout */}
           <div
             style={{
-              background: '#eef2ff',
-              border: '1px solid #e0e7ff',
+              background: 'var(--accent-primary-light)',
+              border: '1px solid var(--accent-monad-border)',
               borderRadius: 'var(--radius-md)',
               padding: '0.75rem 1rem',
               marginBottom: '1.25rem',
@@ -606,12 +606,12 @@ export function PolicyToProofExplorer({
               alignItems: 'flex-start',
               gap: '0.65rem',
               fontSize: '0.8rem',
-              color: '#334155',
+              color: 'var(--text-secondary)',
             }}
           >
             <Info size={16} color="var(--accent-primary)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <div>
-              <strong style={{ color: '#1e293b' }}>Native Value Spending Boundary: </strong>
+              <strong style={{ color: 'var(--text-primary)' }}>Native Value Spending Boundary: </strong>
               MandateManager's spending ceiling constrains <strong>native MON (<code>msg.value</code>)</strong> transferred in the execution call. It does not measure internal ERC-20 token quantities encoded in calldata arguments. Future roadmap versions will introduce ABI-aware calldata argument inspection.
             </div>
           </div>
@@ -679,7 +679,7 @@ export function PolicyToProofExplorer({
           {/* Actionable Policy Linter Findings */}
           <div
             style={{
-              background: '#FFFFFF',
+              background: 'var(--bg-surface)',
               border: '1px solid var(--border-default)',
               borderRadius: 'var(--radius-md)',
               padding: '1rem',
@@ -811,7 +811,7 @@ export function PolicyToProofExplorer({
                   <div
                     key={test.id}
                     style={{
-                      background: '#FFFFFF',
+                      background: 'var(--bg-surface)',
                       border: '1px solid var(--border-default)',
                       borderLeft: `4px solid ${isSuccessTest ? 'var(--accent-emerald)' : 'var(--accent-rose)'}`,
                       borderRadius: 'var(--radius-md)',
@@ -918,15 +918,15 @@ export function PolicyToProofExplorer({
             </div>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', fontSize: '0.8rem' }}>
-              <div style={{ padding: '0.4rem 0.75rem', background: '#FFFFFF', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', fontWeight: 600 }}>
+              <div style={{ padding: '0.4rem 0.75rem', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', fontWeight: 600 }}>
                 1. Monad RPC Receipt
               </div>
               <ArrowRight size={14} color="var(--text-muted)" />
-              <div style={{ padding: '0.4rem 0.75rem', background: '#FFFFFF', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', fontWeight: 600 }}>
+              <div style={{ padding: '0.4rem 0.75rem', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', fontWeight: 600 }}>
                 2. ActionExecuted Log
               </div>
               <ArrowRight size={14} color="var(--text-muted)" />
-              <div style={{ padding: '0.4rem 0.75rem', background: '#FFFFFF', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', fontWeight: 600 }}>
+              <div style={{ padding: '0.4rem 0.75rem', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)', fontWeight: 600 }}>
                 3. SDK Decode & Assertion
               </div>
               <ArrowRight size={14} color="var(--text-muted)" />

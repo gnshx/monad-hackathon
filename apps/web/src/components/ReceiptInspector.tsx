@@ -442,7 +442,7 @@ export function ReceiptInspector() {
           {/* Network Badge */}
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.85rem', background: 'var(--bg-lavender-subtle)', borderRadius: 'var(--radius-md)', fontSize: '0.785rem', fontWeight: 600, color: 'var(--accent-primary)', border: '1px solid var(--border-default)' }}>
             <span>Monad Testnet</span>
-            <span style={{ fontFamily: 'var(--font-mono)', background: '#ffffff', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid var(--border-default)' }}>Chain ID: 10143</span>
+            <span style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-surface)', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid var(--border-default)' }}>Chain ID: 10143</span>
           </div>
         </div>
 
@@ -800,7 +800,7 @@ export function ReceiptInspector() {
               <div
                 key={idx}
                 style={{
-                  background: '#ffffff',
+                  background: 'var(--bg-surface)',
                   border:
                     check.status === 'passed'
                       ? '1px solid var(--accent-emerald-border)'

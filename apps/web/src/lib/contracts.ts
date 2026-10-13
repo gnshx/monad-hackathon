@@ -31,6 +31,7 @@ export const DEFAULT_MANDATE_MANAGER_ADDRESS: Address =
   '0x3550f9fc84640a9cfd7c51330615a1e05cb948be';
 
 export const DEFAULT_MOCK_TARGET_ADDRESS: Address =
+  (process.env.NEXT_PUBLIC_MOCK_TARGET_ADDRESS as Address) ||
   '0x0758fdc78e20f748fa89e2d53f84748697cb177f';
 
 export const DEFAULT_ERC8004_REGISTRY: Address =

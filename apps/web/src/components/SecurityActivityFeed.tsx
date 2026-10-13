@@ -44,7 +44,7 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
             <span className="badge badge-neutral">Audit Trail</span>
             {networkMode === 'LOCAL_SIMULATION' ? (
               <span className="badge badge-simulation">
-                <Radio size={10} color="#b45309" />
+                <Radio size={10} color="#FBBF24" />
                 LOCAL SIMULATION EVENTS
               </span>
             ) : (

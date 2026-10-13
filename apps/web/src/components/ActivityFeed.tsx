@@ -26,7 +26,7 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
     <div className="glass-panel" style={{ padding: '1.75rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
         <div style={{ background: 'rgba(131, 56, 236, 0.15)', padding: '0.4rem', borderRadius: '8px' }}>
-          <Activity size={20} color="#a78bfa" />
+          <Activity size={20} color="#A08FFF" />
         </div>
         <div>
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>On-Chain Mandate Event Receipts</h3>
@@ -55,19 +55,19 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
               <div>
                 {act.type === 'executed' ? (
                   <div style={{ background: 'rgba(16, 185, 129, 0.15)', padding: '0.4rem', borderRadius: '8px' }}>
-                    <ShieldCheck size={18} color="#10b981" />
+                    <ShieldCheck size={18} color="#34D399" />
                   </div>
                 ) : act.type === 'blocked' ? (
                   <div style={{ background: 'rgba(244, 63, 94, 0.15)', padding: '0.4rem', borderRadius: '8px' }}>
-                    <Ban size={18} color="#f43f5e" />
+                    <Ban size={18} color="#FB7185" />
                   </div>
                 ) : act.type === 'revoked' ? (
                   <div style={{ background: 'rgba(245, 158, 11, 0.15)', padding: '0.4rem', borderRadius: '8px' }}>
-                    <ShieldAlert size={18} color="#f59e0b" />
+                    <ShieldAlert size={18} color="#FBBF24" />
                   </div>
                 ) : (
                   <div style={{ background: 'rgba(131, 56, 236, 0.15)', padding: '0.4rem', borderRadius: '8px' }}>
-                    <Zap size={18} color="#a78bfa" />
+                    <Zap size={18} color="#A08FFF" />
                   </div>
                 )}
               </div>
@@ -97,10 +97,10 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
                   )}
                   {act.value !== undefined && (
                     <span>
-                      Value: <strong style={{ color: '#e2e8f0' }}>{formatEther(act.value)} MON</strong>
+                      Value: <strong style={{ color: 'var(--text-faint)' }}>{formatEther(act.value)} MON</strong>
                     </span>
                   )}
-                  {act.reason && <span style={{ color: '#fda4af' }}>{act.reason}</span>}
+                  {act.reason && <span style={{ color: 'var(--accent-rose-border)' }}>{act.reason}</span>}
                   <span>{act.timestamp}</span>
                 </div>
               </div>

@@ -168,22 +168,22 @@ export function CreateMandateModal({
                 width: '36px',
                 height: '36px',
                 borderRadius: 'var(--radius-md)',
-                background: '#ede9fe',
-                border: '1px solid #ddd6fe',
+                background: 'var(--accent-primary-light)',
+                border: '1px solid var(--accent-monad-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#4f46e5',
+                color: 'var(--accent-monad)',
                 flexShrink: 0,
               }}
             >
               <ShieldCheck size={22} />
             </div>
             <div>
-              <h2 id="modal-title" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#111827' }}>
+              <h2 id="modal-title" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                 Authorize Scoped Mandate
               </h2>
-              <p style={{ fontSize: '0.785rem', color: '#64748b' }}>
+              <p style={{ fontSize: '0.785rem', color: 'var(--text-muted)' }}>
                 {networkMode === 'MONAD_TESTNET'
                   ? 'Hardware Passkey Delegation on Monad Testnet (Chain 10143)'
                   : 'Passkey Delegation Sandbox (Local Simulation)'}
@@ -196,7 +196,7 @@ export function CreateMandateModal({
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#94a3b8',
+              color: 'var(--text-muted)',
               cursor: isLoading ? 'not-allowed' : 'pointer',
               padding: '0.25rem',
             }}

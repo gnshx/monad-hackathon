@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import {
+  Home,
   LayoutDashboard,
   Route,
   FileText,
@@ -11,13 +12,18 @@ import {
   BookOpen,
   Fingerprint,
   Gavel,
+  ScanSearch,
   Menu,
   X,
+  ChevronDown,
+  Play,
 } from 'lucide-react';
 
 export type NavTab =
+  | 'home'
   | 'passkey'
   | 'judge'
+  | 'verify'
   | 'overview'
   | 'policy-to-proof'
   | 'mandates'
@@ -27,6 +33,13 @@ export type NavTab =
   | 'evidence'
   | 'activity'
   | 'docs';
+
+export const NAV_TABS: NavTab[] = [
+  'home', 'passkey', 'judge', 'verify', 'overview', 'policy-to-proof', 'mandates',
+  'copilot', 'attack-lab', 'inspector', 'evidence', 'activity', 'docs',
+];
+
+export const LAB_TABS: NavTab[] = ['overview', 'policy-to-proof', 'mandates', 'copilot', 'attack-lab', 'inspector', 'evidence', 'activity'];
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -41,236 +54,105 @@ interface SidebarProps {
   chainId?: number | null;
 }
 
-export function Sidebar({
-  activeTab,
-  onSelectTab,
-  activeMandatesCount,
-  blockedCount,
-}: SidebarProps) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+type Item = { id: NavTab; label: string; icon: React.ComponentType<any>; pill?: string | null; pillKind?: 'live' | 'brand' };
 
-  const navItems = [
-    {
-      id: 'passkey' as NavTab,
-      label: 'Passkey Mandates',
-      icon: Fingerprint,
-      badge: 'No wallet',
-    },
-    {
-      id: 'judge' as NavTab,
-      label: 'Judge Mode',
-      icon: Gavel,
-      badge: 'Live 10143',
-    },
-    {
-      id: 'overview' as NavTab,
-      label: 'Overview',
-      icon: LayoutDashboard,
-    },
-    {
-      id: 'policy-to-proof' as NavTab,
-      label: 'Policy-to-Proof',
-      icon: Route,
-      badge: 'Interactive',
-    },
-    {
-      id: 'mandates' as NavTab,
-      label: 'Mandates',
-      icon: FileText,
-      badge: activeMandatesCount > 0 ? activeMandatesCount.toString() : null,
-    },
-    {
-      id: 'attack-lab' as NavTab,
-      label: 'Attack Lab',
-      icon: Shield,
-      badge: blockedCount > 0 ? `${blockedCount}` : null,
-    },
-    {
-      id: 'inspector' as NavTab,
-      label: 'Receipts',
-      icon: SearchCode,
-    },
-    {
-      id: 'evidence' as NavTab,
-      label: 'Evidence & Proofs',
-      icon: ShieldCheck,
-      badge: 'Live',
-    },
-    {
-      id: 'docs' as NavTab,
-      label: 'Docs',
-      icon: BookOpen,
-    },
+const PRODUCT: Item[] = [
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'passkey', label: 'Passkey Mandates', icon: Fingerprint, pill: 'Try it', pillKind: 'brand' },
+  { id: 'judge', label: 'Judge Mode', icon: Gavel, pill: 'Live', pillKind: 'live' },
+  { id: 'verify', label: 'Verify an Agent', icon: ScanSearch },
+  { id: 'docs', label: 'Developers', icon: BookOpen },
+];
+
+export function Sidebar({ activeTab, onSelectTab, activeMandatesCount, blockedCount }: SidebarProps) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [labOpen, setLabOpen] = useState(true);
+
+  const lab: Item[] = [
+    { id: 'overview', label: 'Policy Overview', icon: LayoutDashboard },
+    { id: 'policy-to-proof', label: 'Policy-to-Proof', icon: Route },
+    { id: 'mandates', label: 'Wallet Mandates', icon: FileText, pill: activeMandatesCount > 0 ? String(activeMandatesCount) : null },
+    { id: 'attack-lab', label: 'Attack Lab', icon: Shield, pill: blockedCount > 0 ? String(blockedCount) : null },
+    { id: 'inspector', label: 'Receipts', icon: SearchCode },
+    { id: 'evidence', label: 'Evidence & Proofs', icon: ShieldCheck },
   ];
 
-  return (
-    <aside className="sidebar" aria-label="Security Console Navigation">
-      {/* Brand Header */}
-      <div className="sidebar-brand-wrapper">
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.65rem',
-            cursor: 'pointer',
-          }}
-          onClick={() => {
-            onSelectTab('passkey');
-            setIsMobileMenuOpen(false);
-          }}
-        >
-          {/* Exact Shield Brand Logo with Monad Violet Identity */}
-          <div
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              background: '#5944DB',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#FFFFFF',
-              boxShadow: '0 2px 4px rgba(89, 68, 219, 0.25)',
-              flexShrink: 0,
-            }}
-          >
-            <Shield size={20} strokeWidth={2.5} fill="currentColor" fillOpacity={0.15} />
-          </div>
-          <span
-            style={{
-              fontWeight: 800,
-              fontSize: '1.25rem',
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.025em',
-            }}
-          >
-            AgentTrust
-          </span>
-        </div>
+  const go = (id: NavTab) => {
+    onSelectTab(id);
+    setIsMobileMenuOpen(false);
+  };
 
-        {/* Mobile menu toggle button */}
+  const renderItem = (item: Item) => {
+    const Icon = item.icon;
+    const isActive =
+      activeTab === item.id ||
+      (item.id === 'mandates' && activeTab === 'copilot') ||
+      (item.id === 'inspector' && activeTab === 'activity');
+    return (
+      <button
+        key={item.id}
+        className={`nav-item ${isActive ? 'active' : ''}`}
+        onClick={() => go(item.id)}
+        aria-current={isActive ? 'page' : undefined}
+      >
+        <span className="nav-left">
+          <Icon size={17} className="nav-icon" style={{ flexShrink: 0 }} />
+          <span>{item.label}</span>
+        </span>
+        {item.pill && <span className={`nav-pill ${item.pillKind || ''}`}>{item.pill}</span>}
+      </button>
+    );
+  };
+
+  return (
+    <aside className="sidebar" aria-label="AgentTrust navigation">
+      <div className="sidebar-brand-wrapper">
+        <button className="brand" onClick={() => go('home')} aria-label="AgentTrust home">
+          <span className="brand-mark">
+            <Shield size={19} strokeWidth={2.4} fill="currentColor" fillOpacity={0.18} />
+          </span>
+          <span>
+            <span className="brand-name">AgentTrust</span>
+            <span className="brand-sub">Passkey mandates on Monad</span>
+          </span>
+        </button>
+
         <button
           type="button"
           className="sidebar-mobile-toggle"
           onClick={() => setIsMobileMenuOpen((prev) => !prev)}
-          aria-label={isMobileMenuOpen ? 'Close Navigation Menu' : 'Open Navigation Menu'}
+          aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
           aria-expanded={isMobileMenuOpen}
         >
           {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
-      {/* Nav items & footer container */}
       <div className={`sidebar-nav-container ${isMobileMenuOpen ? 'open' : ''}`}>
-        {/* Navigation Links */}
-        <nav
-          style={{
-            padding: '0.5rem 0.85rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.35rem',
-            flex: 1,
-          }}
-        >
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              activeTab === item.id ||
-              (item.id === 'mandates' && activeTab === 'copilot') ||
-              (item.id === 'inspector' && activeTab === 'activity');
+        <nav className="nav-scroll">
+          <div className="nav-group-label">Product</div>
+          {PRODUCT.map(renderItem)}
 
-            return (
-              <React.Fragment key={item.id}>
-              {item.id === 'overview' && (
-                <div
-                  style={{
-                    fontSize: '0.66rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                    color: 'var(--text-faint)',
-                    padding: '0.9rem 0.75rem 0.25rem',
-                  }}
-                >
-                  v1 · wallet-owned mandates
-                </div>
-              )}
-              <button
-                className={`nav-item ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  onSelectTab(item.id);
-                  setIsMobileMenuOpen(false);
-                }}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <Icon size={18} className="nav-icon" style={{ flexShrink: 0 }} />
-                  <span>{item.label}</span>
-                </div>
-                {item.badge && (
-                  <span
-                    className="badge badge-monad"
-                    style={{
-                      fontSize: '0.68rem',
-                      padding: '1px 6px',
-                      borderRadius: '9999px',
-                    }}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-              </React.Fragment>
-            );
-          })}
+          <button className="nav-group-label" onClick={() => setLabOpen((v) => !v)} aria-expanded={labOpen}>
+            <span>Lab · v1 wallet mandates</span>
+            <ChevronDown size={13} style={{ transform: labOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+          </button>
+          {labOpen && lab.map(renderItem)}
         </nav>
 
-        {/* Bottom Footer: Monad Identity & Brand Tagline */}
-        <div
-          className="sidebar-footer"
-          style={{
-            padding: '1.25rem',
-            borderTop: '1px solid var(--border-subtle)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
-            <div
-              style={{
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                background: 'var(--accent-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#FFFFFF',
-                flexShrink: 0,
-                marginTop: '1px',
-              }}
-            >
-              <div
-                style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '2px',
-                  border: '2px solid #FFFFFF',
-                  transform: 'rotate(45deg)',
-                }}
-              />
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
-              Built for a safer<br />
-              AI agent economy.
-            </div>
+        {activeTab !== 'judge' && (
+          <div className="sidebar-cta">
+            <div className="sidebar-cta-title">Judging AgentTrust?</div>
+            <div className="sidebar-cta-text">Six live Monad transactions, one click. No wallet, no MON.</div>
+            <button className="btn-primary" onClick={() => go('judge')}>
+              <Play size={13} fill="currentColor" /> Run Judge Mode
+            </button>
           </div>
+        )}
+
+        <div className="sidebar-footer">
+          <span className="net-dot" />
+          <span>Monad Testnet · chain 10143</span>
         </div>
       </div>
     </aside>

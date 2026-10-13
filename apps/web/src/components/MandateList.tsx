@@ -56,7 +56,7 @@ export function MandateList({
             <span className="badge badge-neutral">On-Chain Ledger</span>
             {networkMode === 'LOCAL_SIMULATION' ? (
               <span className="badge badge-simulation">
-                <Radio size={10} color="#b45309" />
+                <Radio size={10} color="#FBBF24" />
                 LOCAL SIMULATION DATA
               </span>
             ) : (
@@ -123,11 +123,11 @@ export function MandateList({
               width: '52px',
               height: '52px',
               borderRadius: '12px',
-              background: '#f3f4f6',
+              background: 'var(--bg-inset)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#9ca3af',
+              color: 'var(--text-muted)',
               marginBottom: '0.75rem',
             }}
           >
@@ -180,7 +180,7 @@ export function MandateList({
                 className="security-card"
                 style={{
                   borderLeft: `4px solid ${
-                    mandate.revoked ? '#dc2626' : '#059669'
+                    mandate.revoked ? 'var(--accent-rose)' : 'var(--accent-emerald)'
                   }`,
                   display: 'flex',
                   flexDirection: 'column',

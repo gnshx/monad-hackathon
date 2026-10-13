@@ -26,7 +26,7 @@ export function StatsBanner({
     {
       label: 'Active On-Chain',
       value: activeMandates.toString(),
-      icon: <ShieldCheck size={20} color="#10b981" />,
+      icon: <ShieldCheck size={20} color="#34D399" />,
       subtext: 'Hardware Passkey Protected',
     },
     {
@@ -38,7 +38,7 @@ export function StatsBanner({
     {
       label: 'Attacks / Violations Blocked',
       value: blockedAttempts.toString(),
-      icon: <Ban size={20} color="#f43f5e" />,
+      icon: <Ban size={20} color="#FB7185" />,
       subtext: 'Policy Reverted On-Chain',
     },
   ];

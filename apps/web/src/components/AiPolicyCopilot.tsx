@@ -224,10 +224,10 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
             <span className="badge badge-neutral">Step 1 of 5</span>
             <span className="badge badge-simulation">Deterministic Parser</span>
           </div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
             Give your AI agent a mandate, not unlimited power.
           </h2>
-          <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.2rem' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
             Passkey-authorized delegation. Contract-enforced limits. Independently checkable receipts.
           </p>
         </div>
@@ -235,8 +235,8 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
         {/* Accurate Disclosure Banner */}
         <div
           style={{
-            background: '#eef2ff',
-            border: '1px solid #e0e7ff',
+            background: 'var(--accent-primary-light)',
+            border: '1px solid var(--accent-monad-border)',
             borderRadius: 'var(--radius-md)',
             padding: '0.75rem 1rem',
             marginBottom: '1.25rem',
@@ -244,12 +244,12 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
             alignItems: 'flex-start',
             gap: '0.65rem',
             fontSize: '0.8rem',
-            color: '#334155',
+            color: 'var(--text-secondary)',
           }}
         >
-          <Info size={16} color="#4f46e5" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <Info size={16} color="#A08FFF" style={{ flexShrink: 0, marginTop: '2px' }} />
           <div>
-            <strong style={{ color: '#1e293b' }}>Authority Boundary Disclosure: </strong>
+            <strong style={{ color: 'var(--text-primary)' }}>Authority Boundary Disclosure: </strong>
             This composer parses your plain-English prompt with deterministic in-browser rules — there is no LLM call and no network request. It drafts EVM constraints from what you wrote and never enforces anything: the smart contract and your hardware passkey remain the sole enforcement boundary. Review every parsed value before authorizing.
           </div>
         </div>
@@ -289,7 +289,7 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
 
         {/* Presets */}
         <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem', fontWeight: 600 }}>
             <Lightbulb size={13} /> Standard Presets:
           </span>
           {promptPresets.map((p, i) => (
@@ -313,7 +313,7 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              borderBottom: '1px solid #e2e8f0',
+              borderBottom: '1px solid var(--border-subtle)',
               paddingBottom: '1rem',
               marginBottom: '1.25rem',
               flexWrap: 'wrap',
@@ -322,14 +322,14 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
           >
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.725rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>
+                <span style={{ fontSize: '0.725rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                   Structured Policy Boundary
                 </span>
                 <span className={`badge ${draft.riskScore === 'Strict' ? 'badge-emerald' : 'badge-amber'}`}>
                   {draft.riskScore === 'Strict' ? 'Strict Scope' : 'Caution: Wildcard'}
                 </span>
               </div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#111827', marginTop: '0.2rem' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.2rem' }}>
                 {draft.summary}
               </h3>
             </div>
@@ -350,8 +350,8 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
           {draft.isUnresolved && (
             <div
               style={{
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
+                background: 'var(--accent-rose-subtle)',
+                border: '1px solid var(--accent-rose-border)',
                 borderRadius: 'var(--radius-md)',
                 padding: '0.75rem 1rem',
                 marginBottom: '1rem',
@@ -359,7 +359,7 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
                 alignItems: 'flex-start',
                 gap: '0.5rem',
                 fontSize: '0.8rem',
-                color: '#dc2626',
+                color: 'var(--accent-rose)',
               }}
             >
               <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -374,8 +374,8 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
           {draft.isWildcard && (
             <div
               style={{
-                background: '#fffbeb',
-                border: '1px solid #fde68a',
+                background: 'var(--accent-amber-subtle)',
+                border: '1px solid var(--accent-amber-border)',
                 borderRadius: 'var(--radius-md)',
                 padding: '0.75rem 1rem',
                 marginBottom: '1rem',
@@ -383,7 +383,7 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
                 alignItems: 'flex-start',
                 gap: '0.5rem',
                 fontSize: '0.8rem',
-                color: '#b45309',
+                color: 'var(--accent-amber)',
               }}
             >
               <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -406,12 +406,12 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
             {/* Bound Agent Address */}
             <div className="mono-box">
               <span className="kpi-label">BOUND AGENT</span>
-              <div style={{ color: '#111827', fontWeight: 600, marginTop: '0.25rem', wordBreak: 'break-all' }}>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 600, marginTop: '0.25rem', wordBreak: 'break-all' }}>
                 {draft.agentAddress || (
-                  <span style={{ color: '#dc2626' }}>Not provided in prompt</span>
+                  <span style={{ color: 'var(--accent-rose)' }}>Not provided in prompt</span>
                 )}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
                 ERC-8004 Registry ID:{' '}
                 <input
                   type="number"
@@ -429,12 +429,12 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
             {/* Target Address */}
             <div className="mono-box">
               <span className="kpi-label">TARGET CONTRACT</span>
-              <div style={{ color: '#111827', fontWeight: 600, marginTop: '0.25rem', wordBreak: 'break-all' }}>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 600, marginTop: '0.25rem', wordBreak: 'break-all' }}>
                 {draft.targetAddress || (
-                  <span style={{ color: '#dc2626' }}>Not provided in prompt</span>
+                  <span style={{ color: 'var(--accent-rose)' }}>Not provided in prompt</span>
                 )}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                 Allowlisted Execution Destination
               </div>
             </div>
@@ -448,17 +448,17 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
                     <span className={`badge ${draft.isWildcard ? 'badge-amber' : 'badge-monad'}`}>
                       {draft.selector}
                     </span>
-                    <span style={{ color: '#111827', fontWeight: 600, fontSize: '0.785rem' }}>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.785rem' }}>
                       {draft.selectorName}
                     </span>
                   </>
                 ) : (
-                  <span style={{ color: '#dc2626', fontSize: '0.785rem' }}>
+                  <span style={{ color: 'var(--accent-rose)', fontSize: '0.785rem' }}>
                     Not resolved — state a selector or "wildcard"
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                 {draft.isWildcard ? 'Permits all target methods' : 'Strict 4-byte signature'}
               </div>
             </div>
@@ -467,14 +467,14 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
             <div className="mono-box">
               <span className="kpi-label">SPENDING BOUNDS & DURATION</span>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
-                <span style={{ color: '#059669', fontWeight: 700, fontSize: '1rem' }}>
+                <span style={{ color: 'var(--accent-emerald)', fontWeight: 700, fontSize: '1rem' }}>
                   {draft.maxPerTx || '—'} MON
                 </span>
-                <span style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                   / tx (max {draft.maxTotal || '—'} MON)
                 </span>
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                 Deposit: {draft.depositAmount} MON · Expiry: {draft.durationHours ? `${draft.durationHours}h` : '—'}
               </div>
             </div>
@@ -484,8 +484,8 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
           {approvalError && (
             <div
               style={{
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
+                background: 'var(--accent-rose-subtle)',
+                border: '1px solid var(--accent-rose-border)',
                 borderRadius: 'var(--radius-md)',
                 padding: '0.75rem 1rem',
                 marginBottom: '1rem',
@@ -493,7 +493,7 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
                 alignItems: 'flex-start',
                 gap: '0.5rem',
                 fontSize: '0.8rem',
-                color: '#dc2626',
+                color: 'var(--accent-rose)',
               }}
             >
               <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -507,15 +507,15 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
           {/* Invariant Guarantees */}
           <div
             style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
+              background: 'var(--bg-inset)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-md)',
               padding: '1rem',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
-              <ShieldCheck size={16} color="#059669" />
-              <strong style={{ fontSize: '0.85rem', color: '#111827' }}>
+              <ShieldCheck size={16} color="#34D399" />
+              <strong style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
                 Contract-Enforced Invariant Guarantees
               </strong>
             </div>
@@ -525,13 +525,13 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
                   key={idx}
                   style={{
                     fontSize: '0.8rem',
-                    color: '#4b5563',
+                    color: 'var(--text-secondary)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.45rem',
                   }}
                 >
-                  <CheckCircle2 size={14} color="#059669" style={{ flexShrink: 0 }} />
+                  <CheckCircle2 size={14} color="#34D399" style={{ flexShrink: 0 }} />
                   {g}
                 </li>
               ))}
@@ -543,7 +543,7 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
       {/* Empty State when no draft is compiled yet */}
       {!draft && (
         <div className="empty-state">
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#f3f4f6', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem', color: '#9ca3af' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--bg-inset)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem', color: 'var(--text-muted)' }}>
             <Sparkles size={24} />
           </div>
           <h4 className="empty-state-title">

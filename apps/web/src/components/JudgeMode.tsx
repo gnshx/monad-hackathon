@@ -8,15 +8,23 @@ import {
   AlertTriangle,
   ExternalLink,
   ShieldAlert,
+  ShieldCheck,
   Loader2,
   Copy,
   Check,
   RefreshCw,
   Coins,
-  ShieldCheck,
   AlertCircle,
+  Timer,
+  FileSignature,
+  Ban,
+  Crosshair,
+  Undo2,
+  Bot,
 } from 'lucide-react';
 import type { JudgeStepResult } from '@/lib/judge-mode-runner';
+import { PageHead } from './PageHead';
+import j from './Judge.module.css';
 
 interface JudgeStatus {
   deployed: boolean;
@@ -33,6 +41,22 @@ interface JudgeStatus {
   message?: string;
 }
 
+/** The fixed scenario the server runs, in order (see lib/judge-mode-runner.ts). */
+const PLAN = [
+  { icon: FileSignature, name: 'Create mandate', text: 'P-256 WebAuthn-signed mandate: 0.0001 MON per call, MockTarget only, 1 hour', expect: 'success' },
+  { icon: Bot, name: 'Allowed call', text: 'Agent spends 0.00005 MON on the allowed function', expect: 'success' },
+  { icon: Ban, name: 'Overspend', text: 'Agent tries 0.001 MON, 10x the per-call cap', expect: 'reverted' },
+  { icon: Crosshair, name: 'Rogue target', text: 'Agent calls a contract that is not on the allowlist', expect: 'reverted' },
+  { icon: Undo2, name: 'Owner revokes', text: 'The human pulls the mandate on-chain', expect: 'success' },
+  { icon: ShieldAlert, name: 'Call after revoke', text: 'Agent tries again on the dead mandate', expect: 'reverted' },
+] as const;
+
+function fmtBalance(b?: string) {
+  if (!b) return '';
+  const n = parseFloat(b);
+  return Number.isFinite(n) ? `${n.toLocaleString(undefined, { maximumFractionDigits: 4 })} MON` : b;
+}
+
 export function JudgeMode() {
   const [status, setStatus] = useState<JudgeStatus | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
@@ -41,6 +65,7 @@ export function JudgeMode() {
   const [steps, setSteps] = useState<JudgeStepResult[]>([]);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState<number>(0);
+  const [pulse, setPulse] = useState(0);
 
   const fetchStatus = async () => {
     try {
@@ -70,6 +95,14 @@ export function JudgeMode() {
     }, 1000);
     return () => clearInterval(interval);
   }, [cooldown]);
+
+  // While the server broadcasts, walk a highlight down the plan so the wait reads as progress.
+  useEffect(() => {
+    if (!running) return;
+    setPulse(0);
+    const t = setInterval(() => setPulse((p) => (p + 1) % PLAN.length), 1400);
+    return () => clearInterval(t);
+  }, [running]);
 
   const handleRun = async () => {
     if (running || cooldown > 0) return;
@@ -106,509 +139,165 @@ export function JudgeMode() {
     setTimeout(() => setCopiedHash(null), 2000);
   };
 
-  const isButtonDisabled =
-    loadingStatus ||
-    running ||
-    cooldown > 0 ||
-    !status?.deployed ||
-    status?.lowFunds;
+  const isButtonDisabled = loadingStatus || running || cooldown > 0 || !status?.deployed || status?.lowFunds;
+  const blockReason = loadingStatus
+    ? 'Checking the contracts on Monad…'
+    : !status?.deployed
+    ? 'Contracts are not deployed on this network.'
+    : status?.lowFunds
+    ? 'The demo relayer is out of testnet MON.'
+    : cooldown > 0
+    ? `Cooling down: run again in ${cooldown}s (one run per 2 minutes).`
+    : null;
+
+  const executed = steps.filter((s) => s.status === 'success').length;
+  const blocked = steps.filter((s) => s.status === 'reverted').length;
+  const asExpected = steps.filter((s) => s.status === s.expectedOutcome).length;
 
   return (
-    <div
-      style={{
-        background: 'linear-gradient(135deg, rgba(89, 68, 219, 0.08) 0%, rgba(131, 110, 249, 0.04) 100%)',
-        border: '1px solid rgba(89, 68, 219, 0.3)',
-        borderRadius: 'var(--radius-lg, 12px)',
-        padding: '1.5rem',
-        marginBottom: '2rem',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.04)',
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: '1rem',
-          flexWrap: 'wrap',
-          marginBottom: '1.25rem',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div
-            style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #5944db 0%, #836ef9 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 4px 12px rgba(89, 68, 219, 0.3)',
-            }}
-          >
-            <Gavel size={22} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h2
-                style={{
-                  fontSize: '1.25rem',
-                  fontWeight: 700,
-                  color: 'var(--text-primary, #0f172a)',
-                  margin: 0,
-                }}
-              >
-                Judge Mode — 1-Click Live Testnet Sequence
-              </h2>
-              <span
-                style={{
-                  background: 'rgba(89, 68, 219, 0.15)',
-                  color: '#5944db',
-                  fontSize: '0.7rem',
-                  fontWeight: 700,
-                  padding: '0.2rem 0.5rem',
-                  borderRadius: '9999px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                Highest Evaluator Value
+    <div className={j.wrap}>
+      <PageHead
+        eyebrow="Judge Mode"
+        icon={<Gavel size={13} />}
+        title="Six live transactions. One click."
+        sub="A sponsored relayer runs the full mandate lifecycle on Monad Testnet: sign, spend, get blocked, revoke, get blocked again. Every step is a real transaction you can open in the explorer. You need no wallet and no MON."
+      />
+
+      <section className={j.console}>
+        <div className={j.consoleTop}>
+          <div className={j.chips}>
+            <span className={`${j.chip} ${status?.deployed ? j.chipOk : status ? j.chipBad : ''}`}>
+              <span className={j.dot} />
+              {loadingStatus && !status ? 'Checking Monad…' : status?.deployed ? `Monad Testnet · ${status.chainId || 10143} · live` : 'Not deployed on Monad'}
+            </span>
+            {status?.relayerBalance && (
+              <span className={`${j.chip} ${status.lowFunds ? j.chipWarn : ''}`}>
+                <Coins size={13} /> Relayer {fmtBalance(status.relayerBalance)}
               </span>
-            </div>
-            <p
-              style={{
-                fontSize: '0.85rem',
-                color: 'var(--text-muted, #64748b)',
-                marginTop: '0.25rem',
-                marginBottom: 0,
-              }}
-            >
-              Executes a guided 6-step testnet scenario via sponsored server-side relayer. No wallet or testnet MON required.
-            </p>
+            )}
+            <button className={j.iconBtn} onClick={fetchStatus} disabled={loadingStatus || running} title="Refresh on-chain status" aria-label="Refresh status">
+              <RefreshCw size={14} className={loadingStatus ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          <div className={j.runWrap}>
+            <button className={j.run} onClick={handleRun} disabled={isButtonDisabled}>
+              {running ? (
+                <>
+                  <Loader2 size={19} className="animate-spin" /> Broadcasting to Monad…
+                </>
+              ) : (
+                <>
+                  <Play size={18} fill="currentColor" /> {steps.length ? 'Run it again' : 'Run the live sequence'}
+                </>
+              )}
+            </button>
+            {blockReason && !running && (
+              <span className={j.why}>
+                {cooldown > 0 ? <Timer size={13} /> : <AlertCircle size={13} />} {blockReason}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Live Status Indicators */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          {/* Chain Badge */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.4rem 0.75rem',
-              borderRadius: '8px',
-              background: status?.deployed ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-              border: `1px solid ${status?.deployed ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
-              fontSize: '0.785rem',
-              fontWeight: 600,
-              color: status?.deployed ? '#059669' : '#dc2626',
-            }}
-          >
-            <span
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: status?.deployed ? '#10b981' : '#ef4444',
-                display: 'inline-block',
-              }}
-            />
-            <span>{status?.deployed ? 'Monad Testnet (10143) Live' : 'Not Deployed on Monad'}</span>
-          </div>
-
-          {/* Relayer Badge */}
-          {status?.relayerBalance && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.4rem 0.75rem',
-                borderRadius: '8px',
-                background: status.lowFunds ? 'rgba(245, 158, 11, 0.1)' : 'rgba(89, 68, 219, 0.1)',
-                border: `1px solid ${status.lowFunds ? 'rgba(245, 158, 11, 0.25)' : 'rgba(89, 68, 219, 0.25)'}`,
-                fontSize: '0.785rem',
-                fontWeight: 600,
-                color: status.lowFunds ? '#d97706' : '#5944db',
-              }}
-            >
-              <Coins size={14} />
-              <span>Relayer: {status.relayerBalance}</span>
-            </div>
-          )}
-
-          <button
-            onClick={fetchStatus}
-            disabled={loadingStatus || running}
-            title="Refresh on-chain status"
-            style={{
-              padding: '0.4rem',
-              borderRadius: '8px',
-              border: '1px solid var(--border-color, #e2e8f0)',
-              background: 'var(--bg-card, #ffffff)',
-              color: 'var(--text-muted, #64748b)',
-              cursor: loadingStatus || running ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <RefreshCw size={14} className={loadingStatus ? 'animate-spin' : ''} />
-          </button>
-        </div>
-      </div>
-
-      {/* Warning / Error alerts */}
-      {status && !status.deployed && (
-        <div
-          style={{
-            background: 'rgba(239, 68, 68, 0.08)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: '8px',
-            padding: '0.75rem 1rem',
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            color: '#b91c1c',
-            fontSize: '0.825rem',
-          }}
-        >
-          <AlertCircle size={16} />
-          <span>
-            <strong>Not deployed on Monad testnet:</strong> Contract bytecode not found at configured addresses on chain 10143. Judge Mode requires active testnet contracts.
-          </span>
-        </div>
-      )}
-
-      {status?.lowFunds && status?.deployed && (
-        <div
-          style={{
-            background: 'rgba(245, 158, 11, 0.08)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            borderRadius: '8px',
-            padding: '0.75rem 1rem',
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            color: '#b45309',
-            fontSize: '0.825rem',
-          }}
-        >
-          <AlertTriangle size={16} />
-          <span>
-            <strong>Relayer low on funds:</strong> The server relayer balance is below 0.005 MON. Live execution requires testnet MON.
-          </span>
-        </div>
-      )}
-
-      {error && (
-        <div
-          style={{
-            background: 'rgba(239, 68, 68, 0.08)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: '8px',
-            padding: '0.75rem 1rem',
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            color: '#b91c1c',
-            fontSize: '0.825rem',
-          }}
-        >
-          <AlertCircle size={16} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Action Button & Cooldown */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-        <button
-          onClick={handleRun}
-          disabled={isButtonDisabled}
-          style={{
-            background: isButtonDisabled
-              ? '#94a3b8'
-              : 'linear-gradient(135deg, #5944db 0%, #4338ca 100%)',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '0.75rem 1.5rem',
-            fontWeight: 700,
-            fontSize: '0.925rem',
-            cursor: isButtonDisabled ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.6rem',
-            boxShadow: isButtonDisabled ? 'none' : '0 4px 14px rgba(89, 68, 219, 0.35)',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          {running ? (
-            <>
-              <Loader2 size={18} className="animate-spin" />
-              <span>Broadcasting Live Monad Testnet Sequence...</span>
-            </>
-          ) : (
-            <>
-              <Play size={18} fill="#ffffff" />
-              <span>Run Live Testnet Sequence (Judge Mode)</span>
-            </>
-          )}
-        </button>
-
-        {cooldown > 0 && !running && (
-          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
-            ⏳ Rate limit cooldown: {cooldown}s remaining (1 run per 2 min per IP)
-          </span>
-        )}
-
-        <span style={{ fontSize: '0.785rem', color: '#64748b' }}>
-          Runs 6 live transactions against deployed MockTarget (0.0001 MON cap)
-        </span>
-      </div>
-
-      {/* Live Transaction Results */}
-      {steps.length > 0 && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '0.75rem',
-              borderBottom: '1px solid rgba(89, 68, 219, 0.15)',
-              paddingBottom: '0.5rem',
-            }}
-          >
-            <h3
-              style={{
-                fontSize: '0.95rem',
-                fontWeight: 700,
-                color: 'var(--text-primary, #0f172a)',
-                margin: 0,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-              }}
-            >
-              <ShieldCheck size={18} color="#10b981" />
-              <span>Live Monad Testnet Execution Results ({steps.length}/6 Steps Completed)</span>
-            </h3>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                color: '#059669',
-                fontWeight: 700,
-                background: 'rgba(16, 185, 129, 0.12)',
-                padding: '0.2rem 0.6rem',
-                borderRadius: '6px',
-              }}
-            >
-              Chain ID: 10143 Verified
+        {status && !status.deployed && (
+          <div className={j.alertBad}>
+            <AlertCircle size={16} />
+            <span>
+              <strong>Contracts not found on chain {status.chainId || 10143}.</strong> Judge Mode needs the deployed MandateManager
+              and MockTarget. The passkey console and Verify page use AgentMandates and still work.
             </span>
           </div>
+        )}
+        {status?.lowFunds && status?.deployed && (
+          <div className={j.alertWarn}>
+            <AlertTriangle size={16} />
+            <span>
+              <strong>Relayer low on funds.</strong> It needs at least 0.005 MON to send the six transactions.
+            </span>
+          </div>
+        )}
+        {error && (
+          <div className={j.alertBad}>
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {steps.map((step) => {
-              const isSuccess = step.status === 'success';
-              const isReverted = step.status === 'reverted';
+        {steps.length > 0 && (
+          <div className={j.score}>
+            <div className={j.scoreItem}>
+              <span className={j.scoreNum} style={{ color: 'var(--accent-emerald)' }}>{executed}</span>
+              <span className={j.scoreLabel}>went through</span>
+            </div>
+            <div className={j.scoreItem}>
+              <span className={j.scoreNum} style={{ color: 'var(--accent-rose)' }}>{blocked}</span>
+              <span className={j.scoreLabel}>blocked by the contract</span>
+            </div>
+            <div className={j.scoreItem}>
+              <span className={j.scoreNum}>{asExpected}/{steps.length}</span>
+              <span className={j.scoreLabel}>exactly as expected</span>
+            </div>
+            <div className={j.scoreBadge}>
+              <ShieldCheck size={16} /> Verified on chain {status?.chainId || 10143}
+            </div>
+          </div>
+        )}
 
-              return (
-                <div
-                  key={step.step}
-                  style={{
-                    background: 'var(--bg-card, #ffffff)',
-                    border: '1px solid var(--border-color, #e2e8f0)',
-                    borderRadius: '8px',
-                    padding: '1rem',
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      justifyContent: 'space-between',
-                      gap: '0.75rem',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                      <span
-                        style={{
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '50%',
-                          background: isSuccess
-                            ? 'rgba(16, 185, 129, 0.15)'
-                            : 'rgba(239, 68, 68, 0.15)',
-                          color: isSuccess ? '#059669' : '#dc2626',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {step.step}
+        <ol className={j.timeline}>
+          {PLAN.map((p, i) => {
+            const res = steps.find((s) => s.step === i + 1);
+            const Icon = p.icon;
+            const state = res ? (res.status === 'success' ? 'ok' : res.status === 'reverted' ? 'no' : 'err') : running ? (i === pulse ? 'live' : 'wait') : 'idle';
+            return (
+              <li key={p.name} className={`${j.step} ${j[state]}`} style={{ animationDelay: res ? `${i * 90}ms` : undefined }}>
+                <span className={j.rail}>
+                  <span className={j.node}>
+                    {state === 'ok' ? <CheckCircle2 size={17} /> : state === 'no' ? <ShieldAlert size={17} /> : state === 'live' ? <Loader2 size={16} className="animate-spin" /> : <Icon size={16} />}
+                  </span>
+                </span>
+                <div className={j.body}>
+                  <div className={j.stepHead}>
+                    <span className={j.stepNum}>{String(i + 1).padStart(2, '0')}</span>
+                    <span className={j.stepName}>{res?.name || p.name}</span>
+                    <span className={j.tag}>{p.expect === 'success' ? 'should succeed' : 'should be blocked'}</span>
+                    {res && (
+                      <span className={`${j.result} ${res.status === 'success' ? j.resultOk : j.resultNo}`}>
+                        {res.status === 'success' ? 'SUCCESS' : res.status === 'reverted' ? 'REVERTED' : 'ERROR'}
                       </span>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary, #0f172a)' }}>
-                            {step.name}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: '0.68rem',
-                              fontWeight: 700,
-                              background: '#f1f5f9',
-                              color: '#475569',
-                              padding: '0.15rem 0.45rem',
-                              borderRadius: '4px',
-                              border: '1px solid #cbd5e1',
-                            }}
-                          >
-                            {step.label}
-                          </span>
-                        </div>
-                        <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                          {step.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Status Badge */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      {isSuccess ? (
-                        <span
-                          style={{
-                            background: 'rgba(16, 185, 129, 0.12)',
-                            color: '#059669',
-                            border: '1px solid rgba(16, 185, 129, 0.25)',
-                            padding: '0.25rem 0.6rem',
-                            borderRadius: '6px',
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.3rem',
-                          }}
-                        >
-                          <CheckCircle2 size={13} />
-                          <span>SUCCESS</span>
-                        </span>
-                      ) : (
-                        <span
-                          style={{
-                            background: 'rgba(239, 68, 68, 0.1)',
-                            color: '#dc2626',
-                            border: '1px solid rgba(239, 68, 68, 0.25)',
-                            padding: '0.25rem 0.6rem',
-                            borderRadius: '6px',
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.3rem',
-                          }}
-                        >
-                          <ShieldAlert size={13} />
-                          <span>REVERTED (Expected)</span>
-                        </span>
-                      )}
-                    </div>
+                    )}
                   </div>
-
-                  {/* Decoded Revert Callout */}
-                  {step.decodedRevert && (
-                    <div
-                      style={{
-                        marginTop: '0.6rem',
-                        background: 'rgba(239, 68, 68, 0.05)',
-                        border: '1px solid rgba(239, 68, 68, 0.2)',
-                        borderRadius: '6px',
-                        padding: '0.5rem 0.75rem',
-                        fontSize: '0.785rem',
-                        color: '#991b1b',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                      }}
-                    >
-                      <ShieldAlert size={14} color="#dc2626" />
-                      <span>
-                        <strong>Decoded On-Chain Revert Reason:</strong>{' '}
-                        <code style={{ background: '#fee2e2', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 700 }}>
-                          {step.decodedRevert}
-                        </code>
-                      </span>
+                  <p className={j.stepText}>{res?.description || p.text}</p>
+                  {res?.decodedRevert && (
+                    <div className={j.revert}>
+                      <ShieldAlert size={13} /> Contract said <code>{res.decodedRevert}</code>
                     </div>
                   )}
-
-                  {/* Tx Hash & Explorer Link */}
-                  <div
-                    style={{
-                      marginTop: '0.6rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      fontSize: '0.75rem',
-                      color: '#64748b',
-                      flexWrap: 'wrap',
-                      gap: '0.5rem',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <span>Tx:</span>
-                      <code style={{ background: 'var(--bg-muted, #f1f5f9)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
-                        {step.txHash.slice(0, 14)}...{step.txHash.slice(-10)}
+                  {res && (
+                    <div className={j.tx}>
+                      <code>
+                        {res.txHash.slice(0, 12)}…{res.txHash.slice(-8)}
                       </code>
-                      <button
-                        onClick={() => copyToClipboard(step.txHash)}
-                        title="Copy transaction hash"
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: copiedHash === step.txHash ? '#10b981' : '#64748b',
-                          padding: '0.2rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                        }}
-                      >
-                        {copiedHash === step.txHash ? <Check size={13} /> : <Copy size={13} />}
+                      <button onClick={() => copyToClipboard(res.txHash)} title="Copy transaction hash" aria-label="Copy transaction hash">
+                        {copiedHash === res.txHash ? <Check size={13} /> : <Copy size={13} />}
                       </button>
+                      {res.blockNumber ? <span>block {res.blockNumber.toLocaleString()}</span> : null}
+                      <a href={res.explorerUrl} target="_blank" rel="noopener noreferrer">
+                        Open in explorer <ExternalLink size={11} />
+                      </a>
                     </div>
-
-                    <a
-                      href={step.explorerUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: '#5944db',
-                        textDecoration: 'none',
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.3rem',
-                      }}
-                    >
-                      <span>View on Monad Explorer</span>
-                      <ExternalLink size={12} />
-                    </a>
-                  </div>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      <p className={j.foot}>
+        Judge Mode drives the v1 <code>MandateManager</code> with a server-held test passkey so it can run unattended. To sign
+        with your own device&apos;s passkey, use <a href="#passkey">Passkey Mandates</a>.
+      </p>
     </div>
   );
 }

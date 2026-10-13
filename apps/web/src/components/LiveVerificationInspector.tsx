@@ -98,8 +98,8 @@ export function LiveVerificationInspector() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
             {result.verified ? (
               <>
-                <CheckCircle size={18} color="#10b981" />
-                <span style={{ fontWeight: 600, color: '#10b981', fontSize: '0.9rem' }}>
+                <CheckCircle size={18} color="#34D399" />
+                <span style={{ fontWeight: 600, color: 'var(--accent-emerald)', fontSize: '0.9rem' }}>
                   Authentic On-Chain Receipt Verified
                 </span>
                 <span className="badge badge-active" style={{ fontSize: '0.65rem' }}>
@@ -108,8 +108,8 @@ export function LiveVerificationInspector() {
               </>
             ) : (
               <>
-                <XCircle size={18} color="#f43f5e" />
-                <span style={{ fontWeight: 600, color: '#f43f5e', fontSize: '0.9rem' }}>
+                <XCircle size={18} color="#FB7185" />
+                <span style={{ fontWeight: 600, color: 'var(--accent-rose)', fontSize: '0.9rem' }}>
                   Verification Failed / Action Reverted
                 </span>
               </>
@@ -147,8 +147,8 @@ export function LiveVerificationInspector() {
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: '0.8rem', color: '#fda4af', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <AlertTriangle size={15} color="#f43f5e" />
+            <div style={{ fontSize: '0.8rem', color: 'var(--accent-rose-border)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <AlertTriangle size={15} color="#FB7185" />
               <span>{result.revertReason || 'Transaction was not confirmed as an authentic ActionExecuted receipt.'}</span>
             </div>
           )}

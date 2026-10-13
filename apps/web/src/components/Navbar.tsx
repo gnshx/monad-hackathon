@@ -27,7 +27,7 @@ export function Navbar({
             height: '36px',
             borderRadius: '10px',
             objectFit: 'cover',
-            border: '1px solid var(--border-highlight, #836ef9)',
+            border: '1px solid var(--border-highlight, var(--accent-monad))',
             boxShadow: '0 0 12px rgba(131, 110, 249, 0.4)'
           }}
           onError={(e) => {
