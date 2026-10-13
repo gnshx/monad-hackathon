@@ -20,6 +20,9 @@
     "test:auditor": "npx tsx --test scripts/verify-all-testnet.test.ts",
     "start:web": "npm run --workspace=@agenttrust/web start",
     "e2e": "npm run build:sdk && npx -y tsx scripts/mandates-e2e.ts",
-    "test:contracts": "cd contracts && forge test"
+    "test:contracts": "cd contracts && forge test",
+    "build:mcp": "npm run --workspace=@agenttrust/mcp build",
+    "e2e:serve": "npm run build:sdk && npx -y tsx scripts/mandates-e2e.ts --serve",
+    "mcp:smoke": "npm run build:mcp && node scripts/mcp-smoke.mjs"
   }
 }

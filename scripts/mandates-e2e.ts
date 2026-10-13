@@ -41,6 +41,7 @@ import {
 
 const ROOT = path.resolve(__dirname, '..');
 const TESTNET = process.argv.includes('--testnet');
+const SERVE = process.argv.includes('--serve'); // stop after setup and keep the chain up, e.g. to try the MCP server
 const RPC_URL = TESTNET ? process.env.MONAD_RPC_URL || 'https://testnet-rpc.monad.xyz' : 'http://127.0.0.1:8546';
 const ANVIL_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; // anvil account #0, public test key
 const EXPLORER = 'https://testnet.monadexplorer.com';
@@ -68,7 +69,8 @@ async function main() {
     const chain = { id: chainId, name: TESTNET ? 'Monad Testnet' : 'anvil', nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 }, rpcUrls: { default: { http: [RPC_URL] } } } as Chain;
 
     const relayer = createWalletClient({ account: privateKeyToAccount(deployerKey), chain, transport: http(RPC_URL) });
-    const agentAccount = privateKeyToAccount((process.env.AGENT_PRIVATE_KEY as Hex) || generatePrivateKey());
+    const agentKey = (process.env.AGENT_PRIVATE_KEY as Hex) || generatePrivateKey();
+    const agentAccount = privateKeyToAccount(agentKey);
     const agent = createWalletClient({ account: agentAccount, chain, transport: http(RPC_URL) });
     const stranger = createWalletClient({ account: privateKeyToAccount(generatePrivateKey()), chain, transport: http(RPC_URL) });
     const passkey = createSoftwarePasskey();
@@ -129,6 +131,14 @@ async function main() {
     step('4/8', 'Agent makes an allowed call');
     record.allowedCall = (await agentSdk.execute(mandateId, target, call(1), parseEther('0.01'))).hash;
     log(`allowed: 0.01 MON to doSomething()   ${link(record.allowedCall)}`);
+
+    if (SERVE) {
+      log(`\nLeaving the mandate live. Point the MCP server at it:\n`);
+      log(`  AGENTTRUST_RPC_URL=${RPC_URL} AGENTTRUST_CONTRACT=${mandatesAddress} AGENTTRUST_MANDATE_ID=${mandateId} AGENT_PRIVATE_KEY=<agent key> node packages/mcp/dist/index.js`);
+      fs.writeFileSync(path.join(ROOT, '.mcp-local.env'), `AGENTTRUST_RPC_URL=${RPC_URL}\nAGENTTRUST_CONTRACT=${mandatesAddress}\nAGENTTRUST_MANDATE_ID=${mandateId}\nAGENT_PRIVATE_KEY=${TESTNET ? '<agent key>' : agentKey}\nTARGET=${target}\n`);
+      log('\nWrote .mcp-local.env (gitignored). Ctrl+C to stop.');
+      await new Promise(() => {});
+    }
 
     step('5/8', 'Out-of-policy calls (sent on-chain anyway, so the reverts are on record)');
     const attempts: [string, typeof agent, Address, Hex, bigint][] = [

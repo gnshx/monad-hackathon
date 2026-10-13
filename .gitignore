@@ -46,3 +46,6 @@ private_key*
 *.sw?
 .vscode/
 .idea/
+
+# Local MCP demo config
+.mcp-local.env
