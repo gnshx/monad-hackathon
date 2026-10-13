@@ -1,6 +1,6 @@
 # 🏆 AgentTrust — Metropolis Hackathon Official Submission Package
 
-> **Track:** Metropolis — Trust & Data Ownership Layer  
+> **Track:** Trust, Identity & AI Infrastructure  
 > **Prepared For:** Devpost / Hackathon Submission Portal & Judging Committee  
 > **GitHub:** [https://github.com/gnshx/monad-hackathon](https://github.com/gnshx/monad-hackathon)  
 > **Single Source of Truth Dossier:** [`docs/judges.md`](judges.md)
@@ -11,7 +11,7 @@
 
 - **Project Name:** AgentTrust
 - **Short Tagline:** Cryptographic Trust & Hardware Passkey Delegation Boundary for Autonomous AI Agents on Monad
-- **Hackathon Track:** Metropolis — Trust & Data Ownership Layer
+- **Hackathon Track:** Trust, Identity & AI Infrastructure
 - **Team Members:** AgentTrust Team
 - **Project Repository:** `https://github.com/gnshx/monad-hackathon`
 - **License:** MIT License (Open Source)

@@ -125,7 +125,7 @@ Dossier: https://github.com/gnshx/monad-hackathon/blob/main/docs/judges.md
 | **2:05 - 2:35** | Console shows "Revoke Mandate". Owner clicks revoke. Unspent funds returned to owner wallet. | "If the owner ever suspects compromise, they click 'Revoke Mandate'. The mandate is permanently locked on-chain and all unspent funds are returned to the owner’s wallet immediately." | Show status change to `Revoked` and balance returned. |
 | **2:35 - 3:00** | Terminal: run `npm run verify:tx <txHash>`. Show the audit summary with zero backend dependency. Display Monad Explorer link. | "Finally, how does a counterparty know an agent acted within its mandate? They don't have to trust our servers. With one command, `npm run verify:tx`, anyone can independently verify the transaction receipt directly against Monad RPC. AgentTrust: Sovereign human passkeys, unbreakable on-chain mandates on Monad. Thank you." | Show verified audit summary in CLI. Fade to repo link. |
 
-*Note for Fallback (if awaiting faucet at deadline):* Run the demo against local Anvil node (Chain 31337) demonstrating the 6 mined scenarios, and run `verify:p256` and `verify:erc8004` live against Monad Testnet (Chain 10143) to demonstrate on-chain connectivity.
+*Note on Live Deployment:* The contract is live on Monad Testnet at `0x3550f9fc84640a9cfd7c51330615a1e05cb948be` with all 6 scenarios mined into blocks #70689675–#70689714. All transaction links are accessible on `testnet.monadexplorer.com` and recorded in `deployments.json`.
 
 ---
 

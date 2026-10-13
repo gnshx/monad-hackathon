@@ -1,6 +1,6 @@
 # 🛡️ AgentTrust — Master Judging & Investment Dossier
 
-> **Hackathon Track:** Metropolis — Trust & Data Ownership Layer  
+> **Hackathon Track:** Trust, Identity & AI Infrastructure (Metropolis)  
 > **Prepared For:** Metropolis Hackathon Judging Panel & Investment Committee  
 > **Judges Reference:** Keone Hon, Tina Qi, Maria Shen, Will Nuelle, Frankie, Evan Feng, Ajit Tripathi, Francesco Andreoli  
 
