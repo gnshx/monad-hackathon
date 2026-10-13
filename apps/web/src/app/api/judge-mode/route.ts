@@ -16,7 +16,7 @@ import {
   type JudgeStatusResult,
 } from '@/lib/judge-mode-runner';
 import { judgeV2RunCost, runJudgeModeV2 } from '@/lib/judge-v2-runner';
-import { checkRateLimit, recordExecution } from '@/lib/rate-limit';
+import { checkRateLimit, recordExecution, resetRateLimit } from '@/lib/rate-limit';
 import {
   DEFAULT_MANDATE_MANAGER_ADDRESS,
   DEFAULT_MOCK_TARGET_ADDRESS,
@@ -34,6 +34,15 @@ const USE_V1 = process.env.JUDGE_MODE_VERSION === 'v1';
 /** MockTarget deployed with AgentMandates on testnet (deployments.mandates.json). */
 const V2_DEFAULT_TARGET = '0xd856e20dbf9280299739efdc0082e431fa644e73' as Address;
 const V2_TARGET = (process.env.JUDGE_TARGET || process.env.NEXT_PUBLIC_DEMO_TARGET || V2_DEFAULT_TARGET) as Address;
+
+/** Receipts on Monad arrive in about a second; viem's 4 s default polling would add ~30 s a run. */
+const client = () => createPublicClient({ transport: http(RPC_URL), pollingInterval: 750 }) as PublicClient;
+
+/** One run at a time per server instance: concurrent runs would collide on the relayer's nonce. */
+let inFlight = false;
+/** Hard cap per instance, on top of the per-IP cooldown, so a script can't drain the relayer. */
+const MAX_RUNS_PER_HOUR = 12;
+const recentRuns: number[] = [];
 
 function getRelayerKey(): Hex | undefined {
   return (
@@ -62,7 +71,7 @@ function getClientIp(req: NextRequest): string {
   return '127.0.0.1';
 }
 
-type Status = JudgeStatusResult & { version: 'v1' | 'v2'; agentMandates?: Address; target?: Address };
+type Status = JudgeStatusResult & { version: 'v1' | 'v2'; agentMandates?: Address; target?: Address; rpcError?: boolean };
 
 /** Same honesty checks as v1 (chain id, bytecode, funded relayer), against AgentMandates. */
 async function checkV2Status(publicClient: PublicClient, relayerKey?: Hex): Promise<Status> {
@@ -81,10 +90,15 @@ async function checkV2Status(publicClient: PublicClient, relayerKey?: Hex): Prom
   if (chainId !== 10143) {
     return { ...base, deployed: false, chainId, lowFunds: true, message: `Connected chain ID is ${chainId}, expected 10143 (Monad Testnet)` };
   }
-  const [code, targetCode] = await Promise.all([
-    publicClient.getBytecode({ address: AGENT_MANDATES_ADDRESS }).catch(() => null),
-    publicClient.getBytecode({ address: V2_TARGET }).catch(() => null),
-  ]);
+  let code: Hex | undefined, targetCode: Hex | undefined;
+  try {
+    [code, targetCode] = await Promise.all([
+      publicClient.getBytecode({ address: AGENT_MANDATES_ADDRESS }),
+      publicClient.getBytecode({ address: V2_TARGET }),
+    ]);
+  } catch {
+    return { ...base, deployed: false, rpcError: true, chainId, lowFunds: false, message: 'Could not reach the Monad RPC. Retry in a moment.' };
+  }
   if (!code || code === '0x' || !targetCode || targetCode === '0x') {
     return { ...base, deployed: false, chainId, lowFunds: false, message: 'Not deployed on Monad testnet' };
   }
@@ -92,10 +106,12 @@ async function checkV2Status(publicClient: PublicClient, relayerKey?: Hex): Prom
     return { ...base, deployed: true, chainId, lowFunds: true, message: 'Server relayer key not configured' };
   }
   const relayerAddress = privateKeyToAccount(relayerKey).address;
-  const [balance, required] = await Promise.all([
-    publicClient.getBalance({ address: relayerAddress }),
-    judgeV2RunCost(publicClient),
-  ]);
+  let balance: bigint, required: bigint;
+  try {
+    [balance, required] = await Promise.all([publicClient.getBalance({ address: relayerAddress }), judgeV2RunCost(publicClient)]);
+  } catch {
+    return { ...base, deployed: true, rpcError: true, chainId, relayerAddress, lowFunds: false, message: 'Could not reach the Monad RPC. Retry in a moment.' };
+  }
   const lowFunds = balance < required;
   return {
     ...base,
@@ -119,7 +135,7 @@ export async function GET(req: NextRequest) {
   try {
     const ip = getClientIp(req);
     const { allowed, retryAfterSeconds } = checkRateLimit(ip);
-    const publicClient = createPublicClient({ transport: http(RPC_URL) }) as PublicClient;
+    const publicClient = client();
     const s = await status(publicClient, getRelayerKey());
 
     return NextResponse.json({
@@ -154,9 +170,38 @@ export async function POST(req: NextRequest) {
         { status: 429 }
       );
     }
+    const hourAgo = Date.now() - 3_600_000;
+    while (recentRuns.length && recentRuns[0] < hourAgo) recentRuns.shift();
+    if (inFlight || recentRuns.length >= MAX_RUNS_PER_HOUR) {
+      return NextResponse.json(
+        {
+          error: inFlight
+            ? 'Another Judge Mode run is in progress. Try again in a minute.'
+            : 'Judge Mode has hit its hourly run limit. Try again later, or use the Passkey Mandates page.',
+          retryAfterSeconds: 60,
+        },
+        { status: 429 }
+      );
+    }
+    // Claim the slot before any await, so parallel requests can't all slip past the checks.
+    recordExecution(ip);
+    inFlight = true;
+    try {
+      return await runOnce(ip);
+    } finally {
+      inFlight = false;
+    }
+  } catch (err: any) {
+    console.error('[judge-mode]', err?.shortMessage || err?.message || err);
+    return NextResponse.json({ error: explainRelayerError(err, relayerAddressOrUndefined()) }, { status: 500 });
+  }
+}
 
+async function runOnce(ip: string) {
+  try {
     const relayerKey = getRelayerKey();
     if (!relayerKey) {
+      resetRateLimit(ip);
       return NextResponse.json(
         {
           error: 'Server relayer key is not configured. Live testnet execution requires RELAYER_PRIVATE_KEY.',
@@ -166,11 +211,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const publicClient = createPublicClient({ transport: http(RPC_URL) }) as PublicClient;
+    const publicClient = client();
 
     // Enforce bytecode, chain ID and funding honesty checks
     const s = await status(publicClient, relayerKey);
 
+    if (!s.deployed || s.lowFunds || s.rpcError) resetRateLimit(ip);
+    if (s.rpcError) {
+      return NextResponse.json({ error: s.message }, { status: 503 });
+    }
     if (!s.deployed) {
       return NextResponse.json(
         {
@@ -197,10 +246,22 @@ export async function POST(req: NextRequest) {
     const walletClient = createWalletClient({
       account,
       transport: http(RPC_URL),
+      pollingInterval: 750,
     });
 
-    // Record rate limit before execution to prevent concurrent replay
-    recordExecution(ip);
+    // Another server instance (or a passkey grant) may be mid-flight on the same relayer key.
+    const [pending, latest] = await Promise.all([
+      publicClient.getTransactionCount({ address: account.address, blockTag: 'pending' }),
+      publicClient.getTransactionCount({ address: account.address, blockTag: 'latest' }),
+    ]);
+    if (pending > latest) {
+      resetRateLimit(ip);
+      return NextResponse.json(
+        { error: 'The relayer is busy with another transaction. Try again in a few seconds.', retryAfterSeconds: 10 },
+        { status: 429 }
+      );
+    }
+    recentRuns.push(Date.now());
 
     if (USE_V1) {
       const steps = await runJudgeModeSequence(
@@ -225,7 +286,7 @@ export async function POST(req: NextRequest) {
       agentId: process.env.JUDGE_AGENT_ID,
     });
     return NextResponse.json({
-      success: true,
+      success: run.steps.length === 6 && run.steps.every((st) => st.status === st.expectedOutcome),
       version: 'v2',
       message: 'Judge Mode sequence executed live on Monad Testnet',
       chainId: 10143,

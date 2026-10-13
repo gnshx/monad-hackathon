@@ -34,6 +34,7 @@ interface JudgeStatus {
     mockTarget: string;
   };
   version?: 'v1' | 'v2';
+  rpcError?: boolean;
   agentMandates?: string;
   relayerAddress?: string;
   relayerBalance?: string;
@@ -76,7 +77,7 @@ export function JudgeMode() {
       setLoadingStatus(true);
       setError(null);
       const res = await fetch('/api/judge-mode');
-      const data: JudgeStatus = await res.json();
+      const data: JudgeStatus = await res.json().catch(() => ({ deployed: false, chainId: 0, lowFunds: false, rpcError: true, message: 'Could not reach the server. Retry in a moment.' } as any));
       setStatus(data);
       if (data.isRateLimited && data.retryAfterSeconds) {
         setCooldown(data.retryAfterSeconds);
@@ -119,7 +120,12 @@ export function JudgeMode() {
       const res = await fetch('/api/judge-mode', {
         method: 'POST',
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({
+        error:
+          res.status === 504
+            ? 'The run took longer than the server allows. Some steps may still have landed; check the relayer on the explorer, then run again.'
+            : `The server returned an unexpected response (HTTP ${res.status}). Try again in a minute.`,
+      }));
 
       if (!res.ok) {
         if (res.status === 429 && data.retryAfterSeconds) {
@@ -157,7 +163,7 @@ export function JudgeMode() {
     : null;
 
   const executed = steps.filter((s) => s.status === 'success').length;
-  const blocked = steps.filter((s) => s.status === 'reverted').length;
+  const blocked = steps.filter((s) => s.status === 'reverted' && s.expectedOutcome === 'reverted').length;
   const asExpected = steps.filter((s) => s.status === s.expectedOutcome).length;
 
   return (
@@ -206,7 +212,13 @@ export function JudgeMode() {
           </div>
         </div>
 
-        {status && !status.deployed && (
+        {status?.rpcError && (
+          <div className={j.alertWarn}>
+            <AlertTriangle size={16} />
+            <span>{status.message || 'Could not reach the Monad RPC. Retry in a moment.'}</span>
+          </div>
+        )}
+        {status && !status.deployed && !status.rpcError && (
           <div className={j.alertBad}>
             <AlertCircle size={16} />
             <span>
@@ -247,13 +259,19 @@ export function JudgeMode() {
               <span className={j.scoreLabel}>blocked by the contract</span>
             </div>
             <div className={j.scoreItem}>
-              <span className={j.scoreNum}>{asExpected}/{steps.length}</span>
+              <span className={j.scoreNum}>{asExpected}/{PLAN.length}</span>
               <span className={j.scoreLabel}>exactly as expected</span>
             </div>
-            <div className={j.scoreBadge}>
-              <ShieldCheck size={16} />
-              {runInfo?.mandateId ? `Mandate #${runInfo.mandateId} · agent ERC-8004 #${runInfo.agentId}` : `Verified on chain ${status?.chainId || 10143}`}
-            </div>
+            {asExpected === PLAN.length ? (
+              <div className={j.scoreBadge}>
+                <ShieldCheck size={16} />
+                {runInfo?.mandateId ? `Mandate #${runInfo.mandateId} · agent ERC-8004 #${runInfo.agentId}` : `Verified on chain ${status?.chainId || 10143}`}
+              </div>
+            ) : (
+              <div className={`${j.scoreBadge} ${j.scoreBadgeWarn}`}>
+                <AlertTriangle size={16} /> {PLAN.length - asExpected} step{PLAN.length - asExpected === 1 ? '' : 's'} not as expected
+              </div>
+            )}
           </div>
         )}
 
@@ -261,12 +279,22 @@ export function JudgeMode() {
           {PLAN.map((p, i) => {
             const res = steps.find((s) => s.step === i + 1);
             const Icon = p.icon;
-            const state = res ? (res.status === 'success' ? 'ok' : res.status === 'reverted' ? 'no' : 'err') : running ? (i === pulse ? 'live' : 'wait') : 'idle';
+            const state = res
+              ? res.status !== res.expectedOutcome
+                ? 'err'
+                : res.status === 'success'
+                ? 'ok'
+                : 'no'
+              : running
+              ? i === pulse
+                ? 'live'
+                : 'wait'
+              : 'idle';
             return (
               <li key={p.name} className={`${j.step} ${j[state]}`} style={{ animationDelay: res ? `${i * 90}ms` : undefined }}>
                 <span className={j.rail}>
                   <span className={j.node}>
-                    {state === 'ok' ? <CheckCircle2 size={17} /> : state === 'no' ? <ShieldAlert size={17} /> : state === 'live' ? <Loader2 size={16} className="animate-spin" /> : <Icon size={16} />}
+                    {state === 'ok' ? <CheckCircle2 size={17} /> : state === 'no' ? <ShieldAlert size={17} /> : state === 'err' ? <AlertTriangle size={16} /> : state === 'live' ? <Loader2 size={16} className="animate-spin" /> : <Icon size={16} />}
                   </span>
                 </span>
                 <div className={j.body}>
@@ -275,7 +303,7 @@ export function JudgeMode() {
                     <span className={j.stepName}>{res?.name || p.name}</span>
                     <span className={j.tag}>{p.expect === 'success' ? 'should succeed' : 'should be blocked'}</span>
                     {res && (
-                      <span className={`${j.result} ${res.status === 'success' ? j.resultOk : j.resultNo}`}>
+                      <span className={`${j.result} ${res.status !== res.expectedOutcome ? j.resultErr : res.status === 'success' ? j.resultOk : j.resultNo}`}>
                         {res.status === 'success' ? 'SUCCESS' : res.status === 'reverted' ? 'REVERTED' : 'ERROR'}
                       </span>
                     )}
@@ -283,10 +311,10 @@ export function JudgeMode() {
                   <p className={j.stepText}>{res?.description || p.text}</p>
                   {res?.decodedRevert && (
                     <div className={j.revert}>
-                      <ShieldAlert size={13} /> Contract said <code>{res.decodedRevert}</code>
+                      <ShieldAlert size={13} /> Reverted with <code>{res.decodedRevert}</code>
                     </div>
                   )}
-                  {res && (
+                  {res && res.txHash.length > 2 && (
                     <div className={j.tx}>
                       <code>
                         {res.txHash.slice(0, 12)}…{res.txHash.slice(-8)}

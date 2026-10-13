@@ -15,6 +15,8 @@
  * exactly as it verifies a phone's or laptop's passkey in the console.
  */
 import {
+  BaseError,
+  decodeEventLog,
   encodeFunctionData,
   formatEther,
   parseEther,
@@ -29,6 +31,7 @@ import {
   AgentMandates,
   AgentMandatesABI,
   ERC8004_IDENTITY_REGISTRY_ABI,
+  MANDATE_ERRORS,
   createSoftwarePasskey,
   encode,
   type MandateTerms,
@@ -55,17 +58,53 @@ export const VAULT_FUNDING = parseEther('0.00005');
 export const ALLOWED_VALUE = parseEther('0.00005');
 export const OVERSPEND_VALUE = parseEther('0.001');
 
-/** Gas limit for calls that are expected to revert in the policy check (measured ~45k used). */
-const BLOCKED_CALL_GAS = 80_000n;
+/**
+ * Gas limit for calls that must revert in the policy check. Locally they use ~35-60k, but on
+ * Monad cold storage and cold account access (the ERC-8004 registry call) cost far more; the
+ * Monad-priced worst case is ~127k. Each blocked call is simulated with this limit first.
+ */
+const BLOCKED_CALL_GAS = 150_000n;
 /** Upper bounds when an estimate fails. Monad bills the limit, so estimates are preferred. */
 const MAX_OWNER_GAS = 900_000n;
 const MAX_EXECUTE_GAS = 300_000n;
 /** Padded gas limit budget for a full run, including a one-off ERC-8004 registration. */
-export const JUDGE_V2_RUN_GAS = 1_300_000n;
+export const JUDGE_V2_RUN_GAS = 1_500_000n;
 
 const EXPLORER = 'https://testnet.monadexplorer.com';
 const ORIGIN = 'https://monad-hackathon-amber.vercel.app';
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+const MOCK_TARGET_SWITCH_ABI = [
+  { type: 'function', name: 'shouldFail', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+  { type: 'function', name: 'setShouldFail', inputs: [{ type: 'bool' }], outputs: [], stateMutability: 'nonpayable' },
+] as const;
+
+/** True when the error is the contract reverting, as opposed to the RPC or network failing. */
+function isRevert(err: unknown): boolean {
+  if (err instanceof BaseError) {
+    const hit = err.walk((e: any) => /revert/i.test(String(e?.name || '')) || (typeof e?.data === 'string' && e.data.length >= 10));
+    if (hit) return true;
+  }
+  return /execution reverted|reverted with/i.test(String((err as any)?.message || err));
+}
+
+/** The 4-byte revert data carried anywhere in a viem error chain, if any. */
+function revertSelector(err: unknown): Hex | undefined {
+  let found: Hex | undefined;
+  const visit = (e: any, depth = 0) => {
+    if (!e || depth > 8 || found) return;
+    const d = typeof e.data === 'string' ? e.data : typeof e.data?.data === 'string' ? e.data.data : undefined;
+    if (d && /^0x[0-9a-fA-F]{8}/.test(d)) found = d.slice(0, 10).toLowerCase() as Hex;
+    visit(e.cause, depth + 1);
+    if (e.error) visit(e.error, depth + 1);
+  };
+  visit(err);
+  if (!found) {
+    const m = String((err as any)?.message || '').match(/0x[0-9a-fA-F]{8}/);
+    if (m && MANDATE_ERRORS[m[0].toLowerCase()]) found = m[0].toLowerCase() as Hex;
+  }
+  return found;
+}
 
 /** Warm serverless instances reuse the relayer's ERC-8004 identity instead of minting another. */
 let cachedAgentId: bigint | undefined;
@@ -141,7 +180,28 @@ export async function ensureAgentIdentity(
   const registry = await identityRegistry(publicClient, mandates);
   if (registry === zeroAddress) return { agentId: 0n };
 
-  for (const candidate of [configuredId ? BigInt(configuredId) : undefined, cachedAgentId]) {
+  // The relayer's earlier Judge Mode mandates record its agent ID on-chain, so a cold instance
+  // can reuse it instead of minting a new identity.
+  let previous: bigint | undefined;
+  try {
+    const ids = (await publicClient.readContract({
+      address: mandates,
+      abi: AgentMandatesABI,
+      functionName: 'mandatesForAgent',
+      args: [relayer],
+    })) as readonly bigint[];
+    if (ids.length) {
+      const m = (await publicClient.readContract({
+        address: mandates,
+        abi: AgentMandatesABI,
+        functionName: 'getMandate',
+        args: [ids[ids.length - 1]],
+      })) as { agentId: bigint };
+      previous = m.agentId;
+    }
+  } catch {}
+
+  for (const candidate of [configuredId ? BigInt(configuredId) : undefined, cachedAgentId, previous]) {
     if (candidate !== undefined && (await identityHolds(publicClient, registry, relayer, candidate))) {
       cachedAgentId = candidate;
       return { agentId: candidate };
@@ -175,12 +235,19 @@ async function estimate(
   value: bigint,
   ceiling: bigint
 ): Promise<bigint> {
+  let g: bigint;
   try {
-    const g = ((await publicClient.estimateGas({ account: from, to, data, value })) * 5n) / 4n;
-    return g < ceiling ? g : ceiling;
-  } catch {
+    g = ((await publicClient.estimateGas({ account: from, to, data, value })) * 5n) / 4n;
+  } catch (err) {
+    // A call that would revert must not be broadcast at the ceiling; only RPC hiccups fall back.
+    if (isRevert(err)) {
+      const sel = revertSelector(err);
+      throw new Error(`The contract would reject this step${sel && MANDATE_ERRORS[sel] ? ` (${MANDATE_ERRORS[sel]})` : ''}, so it was not sent.`);
+    }
     return ceiling;
   }
+  if (g > ceiling) throw new Error('This step needs more gas than Judge Mode allows, so it was not sent.');
+  return g;
 }
 
 export interface JudgeV2Config {
@@ -267,11 +334,20 @@ export async function runJudgeModeV2(
     push(1, 'Create mandate', 'The passkey-signed mandate was rejected on-chain.', 'success', create);
     return { steps, agentId: setup.agentId.toString(), mandateId: '', setupTx: setup.registrationTx };
   }
-  const mandateId = (await publicClient.readContract({
-    address: config.mandates,
-    abi: AgentMandatesABI,
-    functionName: 'mandateCount',
-  })) as bigint;
+  // Read the ID from this transaction's MandateCreated event, not mandateCount (another grant
+  // could land in between).
+  let mandateId: bigint | undefined;
+  for (const log of create.receipt.logs) {
+    if (log.address.toLowerCase() !== config.mandates.toLowerCase()) continue;
+    try {
+      const ev = decodeEventLog({ abi: AgentMandatesABI, data: log.data, topics: log.topics });
+      if (ev.eventName === 'MandateCreated') {
+        mandateId = (ev.args as { mandateId: bigint }).mandateId;
+        break;
+      }
+    } catch {}
+  }
+  if (mandateId === undefined) throw new Error('Mandate created, but its ID could not be read from the receipt.');
   push(
     1,
     'Create mandate',
@@ -281,6 +357,15 @@ export async function runJudgeModeV2(
   );
 
   // ── 2. Allowed call ─────────────────────────────────────────────────────────
+  // The demo MockTarget has a public failure switch; make sure nobody left it on.
+  try {
+    const failing = await publicClient.readContract({ address: config.target, abi: MOCK_TARGET_SWITCH_ABI, functionName: 'shouldFail' });
+    if (failing) {
+      const off = encodeFunctionData({ abi: MOCK_TARGET_SWITCH_ABI, functionName: 'setShouldFail', args: [false] });
+      const h = await walletClient.sendTransaction({ account, chain: null, to: config.target, data: off, gas: 60_000n });
+      await publicClient.waitForTransactionReceipt({ hash: h });
+    }
+  } catch {}
   const execData = (target: Address, data: Hex, value: bigint) =>
     encodeFunctionData({ abi: AgentMandatesABI, functionName: 'execute', args: [mandateId, target, data, value] });
   const allowedData = execData(config.target, call(42n), ALLOWED_VALUE);
@@ -288,13 +373,44 @@ export async function runJudgeModeV2(
   push(2, 'Allowed call', 'The agent spends 0.00005 MON on doSomething(). The contract checks the signed terms and the ERC-8004 identity, then forwards the call.', 'success', allowed);
 
   // ── 3-4. Out-of-policy calls, sent anyway so the reverts are on the explorer ─
-  const blocked = async (n: number, name: string, description: string, target: Address, data: Hex, value: bigint) => {
-    const check = await sdk.checkAction(mandateId, relayer, target, data, value);
-    const r = await send(execData(target, data, value), 0n, BLOCKED_CALL_GAS);
-    push(n, name, description, 'reverted', r, check.allowed ? undefined : `${check.reason}()`);
+  const blocked = async (
+    n: number,
+    name: string,
+    description: string,
+    expected: string,
+    target: Address,
+    data: Hex,
+    value: bigint
+  ) => {
+    const tx = execData(target, data, value);
+    // Simulate with the exact gas limit first: the step is only sent if the contract itself
+    // rejects it with the expected reason (not out of gas, not allowed).
+    let reason: string | undefined;
+    try {
+      await publicClient.call({ account, to: config.mandates, data: tx, gas: BLOCKED_CALL_GAS });
+    } catch (err) {
+      const sel = revertSelector(err);
+      reason = sel ? MANDATE_ERRORS[sel] : undefined;
+      if (!reason && !isRevert(err)) throw err;
+    }
+    if (reason !== expected) {
+      steps.push({
+        step: n,
+        name,
+        description: `${description} Not sent: the contract would have ${reason ? `rejected it with ${reason}` : 'accepted it or run out of gas'}, not ${expected}.`,
+        expectedOutcome: 'reverted',
+        status: 'error',
+        txHash: '0x' as Hex,
+        explorerUrl: '',
+        label: 'Live Monad testnet tx',
+      });
+      return;
+    }
+    const r = await send(tx, 0n, BLOCKED_CALL_GAS);
+    push(n, name, description, 'reverted', r, `${expected}()`);
   };
-  await blocked(3, 'Overspend', 'The agent tries 0.001 MON, 10x its per-call cap.', config.target, call(1n), OVERSPEND_VALUE);
-  await blocked(4, 'Rogue target', 'The agent calls 0x…dEaD, a contract the passkey never granted.', ROGUE_TARGET, call(1n), 0n);
+  await blocked(3, 'Overspend', 'The agent tries 0.001 MON, 10x its per-call cap.', 'ExceedsPerCallLimit', config.target, call(1n), OVERSPEND_VALUE);
+  await blocked(4, 'Rogue target', 'The agent calls 0x…dEaD, a contract the passkey never granted.', 'PermissionDenied', ROGUE_TARGET, call(1n), 0n);
 
   // ── 5. Passkey-signed revoke, relayed ───────────────────────────────────────
   const revokeData = encode.revoke(mandateId, passkey.sign(await sdk.revokeChallenge(passkey.publicKey, mandateId)));
@@ -302,7 +418,7 @@ export async function runJudgeModeV2(
   push(5, 'Owner revokes', 'The same passkey signs a revoke and the relayer submits it. The owner never needs MON.', 'success', revoke);
 
   // ── 6. Agent after revoke ───────────────────────────────────────────────────
-  await blocked(6, 'Call after revoke', 'The agent retries the call that worked in step 2.', config.target, call(2n), ALLOWED_VALUE);
+  await blocked(6, 'Call after revoke', 'The agent retries the call that worked in step 2.', 'MandateInactive', config.target, call(2n), ALLOWED_VALUE);
 
   return { steps, agentId: setup.agentId.toString(), mandateId: mandateId.toString(), setupTx: setup.registrationTx };
 }

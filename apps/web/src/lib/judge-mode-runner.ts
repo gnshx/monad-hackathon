@@ -376,7 +376,7 @@ export async function runJudgeModeSequence(
   steps.push({
     step: 1,
     name: 'Create Mandate',
-    description: 'Hardware P-256 WebAuthn authorized mandate created with 0.0001 MON per-tx cap, MockTarget only, 1h expiry.',
+    description: 'Mandate created with a server-held P-256 key signing a WebAuthn-format assertion: 0.0001 MON per-tx cap, MockTarget only, 1h expiry.',
     expectedOutcome: 'success',
     status: createReceipt.status === 'success' ? 'success' : 'error',
     txHash: createMandateTx,

@@ -33,6 +33,7 @@
 .scoreNum { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 700; letter-spacing: -0.03em; color: var(--text-primary); }
 .scoreLabel { font-size: 0.8rem; color: var(--text-muted); }
 .scoreBadge { margin-left: auto; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 600; color: var(--accent-emerald); }
+.scoreBadgeWarn { color: var(--accent-amber); }
 @keyframes pop { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
 
 .timeline { list-style: none; margin-top: 1.5rem; display: flex; flex-direction: column; }
@@ -50,6 +51,7 @@
 .result { margin-left: auto; font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; padding: 0.25rem 0.6rem; border-radius: 8px; border: 1px solid; }
 .resultOk { color: var(--accent-emerald); background: var(--accent-emerald-subtle); border-color: var(--accent-emerald-border); }
 .resultNo { color: var(--accent-rose); background: var(--accent-rose-subtle); border-color: var(--accent-rose-border); }
+.resultErr { color: var(--accent-amber); background: var(--accent-amber-subtle); border-color: var(--accent-amber-border); }
 .stepText { font-size: 0.84rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.5; }
 .revert { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.55rem; font-size: 0.78rem; color: var(--accent-rose); }
 .revert code { color: var(--accent-rose); background: var(--accent-rose-subtle); font-weight: 600; }
@@ -67,6 +69,7 @@
 .ok, .no, .err { animation: rowIn 0.4s cubic-bezier(0.16,1,0.3,1) both; }
 .ok .node { background: var(--accent-emerald-subtle); border-color: var(--accent-emerald-border); color: var(--accent-emerald); }
 .ok .rail::after { background: linear-gradient(var(--accent-emerald-border), var(--border-default)); }
+.err .node { background: var(--accent-amber-subtle); border-color: var(--accent-amber-border); color: var(--accent-amber); }
 .no .node { background: var(--accent-rose-subtle); border-color: var(--accent-rose-border); color: var(--accent-rose); }
 .no .rail::after { background: linear-gradient(var(--accent-rose-border), var(--border-default)); }
 .tagOk {}
