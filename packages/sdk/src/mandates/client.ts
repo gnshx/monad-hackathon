@@ -300,7 +300,7 @@ export class AgentMandates {
     const wallet = this.requireWallet();
     const hash = await wallet.sendTransaction({
       account: wallet.account!, chain: wallet.chain, to: this.address, data, value,
-      gas: 1_200_000n,
+      gas: await this.gasFor(wallet.account!.address, data, value, 1_200_000n),
     });
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== 'success') throw new Error(`Relayed transaction reverted: ${hash}`);
@@ -315,10 +315,16 @@ export class AgentMandates {
     const wallet = this.requireWallet();
     const check = await this.checkAction(mandateId, wallet.account!.address, target, data, value);
     if (!check.allowed) throw new MandateDeniedError(check.reason ?? 'denied');
+    const args = [mandateId, target, data, value] as const;
     const hash = await wallet.writeContract({
       account: wallet.account!, chain: wallet.chain, address: this.address, abi: AgentMandatesABI,
-      functionName: 'execute', args: [mandateId, target, data, value],
-      gas: 300_000n,
+      functionName: 'execute', args,
+      gas: await this.gasFor(
+        wallet.account!.address,
+        encodeFunctionData({ abi: AgentMandatesABI, functionName: 'execute', args }),
+        0n,
+        300_000n
+      ),
     });
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== 'success') throw new Error(`execute reverted: ${hash}`);
@@ -330,10 +336,16 @@ export class AgentMandates {
     const wallet = this.requireWallet();
     const check = await this.checkPayment(mandateId, wallet.account!.address, token, to, amount);
     if (!check.allowed) throw new MandateDeniedError(check.reason ?? 'denied');
+    const args = [mandateId, token, to, amount] as const;
     const hash = await wallet.writeContract({
       account: wallet.account!, chain: wallet.chain, address: this.address, abi: AgentMandatesABI,
-      functionName: 'payToken', args: [mandateId, token, to, amount],
-      gas: 300_000n,
+      functionName: 'payToken', args,
+      gas: await this.gasFor(
+        wallet.account!.address,
+        encodeFunctionData({ abi: AgentMandatesABI, functionName: 'payToken', args }),
+        0n,
+        300_000n
+      ),
     });
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== 'success') throw new Error(`payToken reverted: ${hash}`);
@@ -357,6 +369,20 @@ export class AgentMandates {
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== 'success') throw new Error(`depositToken reverted: ${hash}`);
     return { hash };
+  }
+
+  /**
+   * Gas limit from an estimate plus 25% headroom, capped at `ceiling`. Monad bills the gas limit,
+   * not the gas used, so a flat ceiling would overcharge every call. Falls back to the ceiling.
+   */
+  private async gasFor(from: Address, data: Hex, value: bigint, ceiling: bigint): Promise<bigint> {
+    try {
+      const estimate = await this.publicClient.estimateGas({ account: from, to: this.address, data, value });
+      const padded = (estimate * 5n) / 4n;
+      return padded < ceiling ? padded : ceiling;
+    } catch {
+      return ceiling;
+    }
   }
 
   private requireWallet(): WalletClient {
