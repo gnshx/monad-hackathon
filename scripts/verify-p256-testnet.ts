@@ -21,6 +21,14 @@ async function main() {
   console.log(`    NIST P-256 (secp256r1) test vector. For end-user biometric passkeys (TouchID/FaceID),`);
   console.log(`    use the WebAuthn creation flow in the web console (apps/web).\n`);
 
+  // Strict chain-ID gate — must be Monad Testnet
+  if (chainId !== 10143) {
+    console.error(`\n❌ CHAIN ID MISMATCH: expected 10143 (Monad Testnet), got ${chainId}.`);
+    console.error('   Set MONAD_RPC_URL=https://testnet-rpc.monad.xyz and retry.\n');
+    process.exit(1);
+  }
+  console.log('✅ Chain ID confirmed: 10143 = Monad Testnet\n');
+
   // 1. Generate real SECP256R1 (P-256) keypair
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', {
     namedCurve: 'prime256v1',

@@ -252,7 +252,7 @@ Judges **do not need testnet MON or wallet funds** to evaluate AgentTrust:
 # 1. Foundry Contract Test Suite (29 tests + 1,000-run fuzz tests)
 cd contracts && ~/.foundry/bin/forge test -vvv
 
-# 2. TypeScript SDK Unit & Receipt Verification Tests (21 tests)
+# 2. TypeScript SDK Unit & Receipt Verification Tests (25 tests)
 npm --prefix packages/sdk run test
 
 # 3. Next.js Web Production Build
@@ -280,7 +280,7 @@ monad-hackathon/
 │       │   ├── mandate.ts          # createMandate, revokeMandate, hashing
 │       │   ├── verify.ts           # Fail-closed verifyReceipt implementation
 │       │   └── abi.ts              # Contract ABIs
-│       └── test/                   # 21 Vitest unit & regression tests
+│       └── test/                   # 25 Vitest unit & regression tests
 │
 ├── apps/
 │   ├── web/                    # Next.js 15 Web3 Security Console
