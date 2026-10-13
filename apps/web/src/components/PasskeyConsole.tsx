@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Fingerprint,
   KeyRound,
@@ -53,7 +53,7 @@ import {
   type TokenAllowance,
 } from '@agenttrust/sdk';
 import { AGENT_MANDATES_ADDRESS, EXPLORER, mandatesClient } from '../lib/agentMandates';
-import { DEFAULT_MOCK_TARGET_ADDRESS } from '../lib/contracts';
+import { DEFAULT_MOCK_TARGET_ADDRESS, MONAD_TESTNET_CONFIG } from '../lib/contracts';
 import s from './PasskeyConsole.module.css';
 
 const STORAGE_KEY = 'agenttrust.passkey.v1';
@@ -73,13 +73,17 @@ interface RelayInfo {
   lowFunds?: boolean;
 }
 
-function parseEtherSafe(v: string) {
+/** A non-negative amount in `decimals` units, or null when the field is not a plain number. */
+function parseAmount(v: string, decimals = 18) {
   try {
-    return parseEther(v || '0');
+    const n = parseUnits(v.trim(), decimals);
+    return n >= 0n ? n : null;
   } catch {
-    return 0n;
+    return null;
   }
 }
+
+const minWei = (a: bigint, b: bigint) => (a < b ? a : b);
 
 /** Whether the relayer can pay gas and still fund the vault with `amount`. */
 function relayCanSponsor(relay: RelayInfo | null, amount: bigint) {
@@ -87,12 +91,46 @@ function relayCanSponsor(relay: RelayInfo | null, amount: bigint) {
   return BigInt(relay.balanceWei || '0') >= BigInt(relay.neededWei || '0') + amount;
 }
 
+const fetchTimeout = (ms: number) =>
+  typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(ms) : undefined;
+
+const MONAD_CHAIN_HEX = `0x${MONAD_TESTNET_CONFIG.id.toString(16)}`;
+
+/** Puts the browser wallet on Monad testnet (adding the network if it is missing) and refuses to send anywhere else. */
+async function switchToMonad(eth: any) {
+  const onMonad = async () => Number(await eth.request({ method: 'eth_chainId' })) === MONAD_TESTNET_CONFIG.id;
+  if (await onMonad()) return;
+  try {
+    await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: MONAD_CHAIN_HEX }] });
+  } catch (e: any) {
+    // 4902: the wallet does not know Monad testnet yet.
+    if (e?.code === 4902 || e?.data?.originalError?.code === 4902) {
+      await eth
+        .request({
+          method: 'wallet_addEthereumChain',
+          params: [
+            {
+              chainId: MONAD_CHAIN_HEX,
+              chainName: MONAD_TESTNET_CONFIG.name,
+              nativeCurrency: MONAD_TESTNET_CONFIG.nativeCurrency,
+              rpcUrls: MONAD_TESTNET_CONFIG.rpcUrls.default.http,
+              blockExplorerUrls: [MONAD_TESTNET_CONFIG.blockExplorers.default.url],
+            },
+          ],
+        })
+        .catch(() => {});
+    }
+  }
+  if (!(await onMonad())) throw new Error('Switch your wallet to Monad Testnet, then try again.');
+}
+
 type Notice = { kind: 'ok' | 'err' | 'warn'; text: string; hash?: Hex } | null;
 
 interface TokenRow extends TokenAllowance {
   token: Address;
   symbol: string;
-  decimals: number;
+  /** null when decimals() could not be read; amounts are then shown in raw base units. */
+  decimals: number | null;
 }
 
 interface Row {
@@ -101,6 +139,8 @@ interface Row {
   permissions: readonly Permission[];
   tokens: TokenRow[];
   active: boolean;
+  /** Killed by "revoke all": the owner's epoch moved past the mandate's. */
+  revokedAll: boolean;
 }
 
 const ERC20_META = [
@@ -108,12 +148,35 @@ const ERC20_META = [
   { type: 'function', name: 'symbol', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
 ] as const;
 
-async function tokenMeta(client: NonNullable<ReturnType<typeof mandatesClient>>, token: Address) {
+type Client = NonNullable<ReturnType<typeof mandatesClient>>;
+
+/** Display metadata. Decimals are never guessed: a wrong guess would show caps off by powers of ten. */
+async function tokenMeta(client: Client, token: Address) {
   const [decimals, symbol] = await Promise.all([
-    client.publicClient.readContract({ address: token, abi: ERC20_META, functionName: 'decimals' }).catch(() => 18),
+    client.publicClient.readContract({ address: token, abi: ERC20_META, functionName: 'decimals' }).then(Number).catch(() => null),
     client.publicClient.readContract({ address: token, abi: ERC20_META, functionName: 'symbol' }).catch(() => 'TOKEN'),
   ]);
-  return { decimals: Number(decimals), symbol };
+  return { decimals, symbol };
+}
+
+/** Decimals for the caps the passkey signs. Throws instead of assuming 18. */
+async function tokenDecimals(client: Client, token: Address) {
+  try {
+    return Number(await client.publicClient.readContract({ address: token, abi: ERC20_META, functionName: 'decimals' }));
+  } catch {
+    throw new Error('Could not read decimals() from the token address. Check that it is an ERC-20 on Monad testnet.');
+  }
+}
+
+const tokenAmount = (v: bigint, decimals: number | null) => (decimals === null ? v.toString() : formatUnits(v, decimals));
+
+/** Relay response for a submitted action. */
+interface Submitted {
+  hash: Hex;
+  /** MON the relayer actually put into the new vault. */
+  sponsoredWei: bigint;
+  /** Why the relayer funded less than asked, if it did. */
+  sponsorNote?: string;
 }
 
 const PRESETS = [
@@ -160,36 +223,57 @@ export function PasskeyConsole() {
   const [useToken, setUseToken] = useState(!!process.env.NEXT_PUBLIC_DEMO_TOKEN);
 
   const ownerKey = passkey ? ownerKeyOf(passkey.publicKey) : null;
+  const uid = useId();
+  const fid = (name: string) => `${uid}-${name}`;
+
+  // The latest /api/relay answer as a promise, so an action started before it loads waits for it
+  // instead of falling through to the browser-wallet path.
+  const relayP = useRef<Promise<RelayInfo> | null>(null);
+  const loadRelay = useCallback(() => {
+    const prev = relayP.current;
+    const p = fetch('/api/relay', { cache: 'no-store', signal: fetchTimeout(10_000) })
+      .then((r) => r.json() as Promise<RelayInfo>)
+      // A failed re-check keeps the last known status; only a first failure means "no relayer".
+      .catch((): RelayInfo | Promise<RelayInfo> => prev ?? { enabled: false });
+    relayP.current = p;
+    p.then(setRelay);
+    return p;
+  }, []);
+  const currentRelay = async (): Promise<RelayInfo> => (await relayP.current) ?? { enabled: false };
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setPasskey(JSON.parse(raw));
     } catch {}
-    fetch('/api/relay')
-      .then((r) => r.json())
-      .then(setRelay)
-      .catch(() => setRelay({ enabled: false }));
-  }, []);
+    loadRelay();
+  }, [loadRelay]);
 
   const refresh = useCallback(async () => {
     if (!client || !ownerKey) return;
     try {
-      const ids = await client.mandatesOf(ownerKey);
+      const [ids, epoch] = await Promise.all([
+        client.mandatesOf(ownerKey),
+        client.publicClient.readContract({ address: client.address, abi: AgentMandatesABI, functionName: 'epochs', args: [ownerKey] }),
+      ]);
       const loaded = await Promise.all(
-        [...ids].reverse().map(async (id) => ({
-          id,
-          m: await client.getMandate(id),
-          permissions: await client.getPermissions(id),
-          tokens: await Promise.all(
-            (await client.getTokens(id)).map(async (token) => ({
-              token,
-              ...(await client.getTokenAllowance(id, token)),
-              ...(await tokenMeta(client, token)),
-            }))
-          ),
-          active: await client.isActive(id),
-        }))
+        [...ids].reverse().map(async (id) => {
+          const m = await client.getMandate(id);
+          return {
+            id,
+            m,
+            revokedAll: m.epoch < BigInt(epoch),
+            permissions: await client.getPermissions(id),
+            tokens: await Promise.all(
+              (await client.getTokens(id)).map(async (token) => ({
+                token,
+                ...(await client.getTokenAllowance(id, token)),
+                ...(await tokenMeta(client, token)),
+              }))
+            ),
+            active: await client.isActive(id),
+          };
+        })
       );
       setRows(loaded);
       // Verify follows the visitor's newest live mandate, or their latest one so a revoke shows up there too.
@@ -205,8 +289,24 @@ export function PasskeyConsole() {
     refresh();
   }, [refresh]);
 
-  async function submit(data: Hex, sponsorWei = 0n): Promise<Hex> {
-    if (relay?.enabled) {
+  /** Waits for the receipt and fails on a revert, keeping the hash so the notice still links to the transaction. */
+  async function waitForReceipt(hash: Hex) {
+    let status: string;
+    try {
+      ({ status } = await client!.publicClient.waitForTransactionReceipt({ hash }));
+    } catch {
+      throw Object.assign(new Error('Submitted, but Monad has not confirmed it yet. Check the transaction before trying again.'), {
+        hash,
+        warn: true,
+      });
+    }
+    if (status !== 'success') {
+      throw Object.assign(new Error('The transaction reverted on-chain, so nothing changed. The explorer shows why.'), { hash });
+    }
+  }
+
+  async function submit(data: Hex, sponsorWei = 0n): Promise<Submitted> {
+    if ((await currentRelay()).enabled) {
       const res = await fetch('/api/relay', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -214,22 +314,20 @@ export function PasskeyConsole() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Relayer rejected the request');
-      await client!.publicClient.waitForTransactionReceipt({ hash: json.hash });
-      return json.hash;
+      await waitForReceipt(json.hash);
+      return { hash: json.hash, sponsoredWei: BigInt(json.sponsoredWei ?? '0'), sponsorNote: json.sponsorNote };
     }
-    // No relayer configured: any wallet can submit, because the passkey signature is the authority.
+    // No relayer available: any wallet can submit, because the passkey signature is the authority.
     const eth = (window as any).ethereum;
-    if (!eth) throw new Error('No relayer is configured and no browser wallet was found to submit the signed action');
+    if (!eth) throw new Error('No relayer is available and no browser wallet was found to submit the signed action');
     const [from] = await eth.request({ method: 'eth_requestAccounts' });
-    try {
-      await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x279f' }] });
-    } catch {}
+    await switchToMonad(eth);
     const hash = await eth.request({
       method: 'eth_sendTransaction',
       params: [{ from, to: AGENT_MANDATES_ADDRESS, data, value: `0x${sponsorWei.toString(16)}` }],
     });
-    await client!.publicClient.waitForTransactionReceipt({ hash });
-    return hash;
+    await waitForReceipt(hash);
+    return { hash, sponsoredWei: sponsorWei };
   }
 
   async function run(label: string, fn: () => Promise<Notice>) {
@@ -241,10 +339,15 @@ export function PasskeyConsole() {
       await refresh();
       if (label === 'grant') document.getElementById('pk-mandates')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e: any) {
-      const msg = e?.name === 'NotAllowedError' ? 'Passkey prompt was cancelled.' : e.shortMessage || e.message || String(e);
-      setNotice({ kind: 'err', text: msg });
+      const cancelled = e?.name === 'NotAllowedError';
+      const msg = cancelled ? 'Passkey prompt was cancelled.' : e.shortMessage || e.message || String(e);
+      // Reload what is on-chain, so a stale balance or a half-finished action is not retried blindly.
+      if (!cancelled) await refresh();
+      setNotice({ kind: e?.warn ? 'warn' : 'err', text: msg, hash: e?.hash });
     } finally {
       setBusy(null);
+      // Keep the relayer balance (and whether it can fund a vault) current after each owner action.
+      if (label !== 'passkey' && label !== 'recover') loadRelay();
     }
   }
 
@@ -287,66 +390,68 @@ export function PasskeyConsole() {
       if (!isAddress(form.target)) throw new Error('Target must be a 0x address');
       const terms: MandateTerms = {
         agent: form.agent,
-        agentId: BigInt(form.agentId || '0'),
+        agentId: BigInt(form.agentId.trim() || '0'),
         permissions: [{ target: form.target, selector: parseSelector(form.fn) }],
-        maxPerCall: parseEther(form.perCall),
-        budget: parseEther(form.budget),
+        maxPerCall: parseEther(form.perCall.trim()),
+        budget: parseEther(form.budget.trim()),
         expiresAt: BigInt(Math.floor(Date.now() / 1000) + Math.round(Number(form.days) * 86400)),
         tokenLimits: [],
       };
       if (useToken && form.token) {
         if (!isAddress(form.token) || !isAddress(form.payee)) throw new Error('Stablecoin budget needs a token address and a payee address');
-        const { decimals } = await tokenMeta(client, form.token);
+        const decimals = await tokenDecimals(client, form.token);
         terms.permissions.push({ target: form.payee, selector: ANY_SELECTOR });
         terms.tokenLimits!.push({
           token: form.token,
-          maxPerCall: parseUnits(form.tokenPerCall, decimals),
-          budget: parseUnits(form.tokenBudget, decimals),
+          maxPerCall: parseUnits(form.tokenPerCall.trim(), decimals),
+          budget: parseUnits(form.tokenBudget.trim(), decimals),
         });
       }
       const challenge = await client.createChallenge(passkey.publicKey, terms);
       const auth = await signWithBrowserPasskey(challenge, passkey.credentialId);
-      const sponsorMax = BigInt(relay?.sponsorMaxWei || '0');
-      const wanted = form.sponsor && relay?.enabled ? (terms.budget < sponsorMax ? terms.budget : sponsorMax) : 0n;
-      // A low relayer still submits the grant; it just skips funding the vault.
-      const sponsor = wanted > 0n && relayCanSponsor(relay, wanted) ? wanted : 0n;
-      const hash = await submit(encode.createMandate(passkey.publicKey, terms, auth), sponsor);
+      const r = await currentRelay();
+      // Enough for the agent's largest single call. The relayer decides what it can spare and reports it back.
+      const wanted = form.sponsor && r.enabled ? minWei(terms.maxPerCall, BigInt(r.sponsorMaxWei || '0')) : 0n;
+      const { hash, sponsoredWei, sponsorNote } = await submit(encode.createMandate(passkey.publicKey, terms, auth), wanted);
+      const why = sponsorNote ? ` (${sponsorNote.charAt(0).toLowerCase()}${sponsorNote.slice(1)})` : '';
       return {
         kind: 'ok',
         hash,
         text: `Mandate created and enforced on Monad${
-          sponsor > 0n
-            ? `, vault funded with ${formatEther(sponsor)} MON by the relayer`
+          sponsoredWei > 0n
+            ? `, vault funded with ${formatEther(sponsoredWei)} MON by the relayer.`
             : wanted > 0n
-            ? '. The relayer was too low on MON to fund the vault, so deposit before the agent spends'
-            : ''
-        }.`,
+            ? `. The relayer did not fund the vault${why}, so it starts empty. Anyone can fund it with deposit() on the contract.`
+            : '.'
+        }`,
       };
     });
 
   const revoke = (id: bigint) =>
     run(`revoke-${id}`, async () => {
       const auth = await signWithBrowserPasskey(await client!.revokeChallenge(passkey!.publicKey, id), passkey!.credentialId);
-      const hash = await submit(encode.revoke(id, auth));
+      const { hash } = await submit(encode.revoke(id, auth));
       return { kind: 'ok', hash, text: `Mandate #${id} revoked. The agent's next call will be rejected on-chain.` };
     });
 
   const revokeAll = () =>
     run('revoke-all', async () => {
       const auth = await signWithBrowserPasskey(await client!.revokeAllChallenge(passkey!.publicKey), passkey!.credentialId);
-      const hash = await submit(encode.revokeAll(ownerKey!, auth));
+      const { hash } = await submit(encode.revokeAll(ownerKey!, auth));
       return { kind: 'ok', hash, text: 'Every mandate this passkey ever issued is now dead, in one transaction.' };
     });
 
   const withdraw = (row: Row) =>
     run(`withdraw-${row.id}`, async () => {
       if (!isAddress(withdrawTo)) throw new Error('Enter the address to send the vault balance to');
-      const amount = row.m.balance;
+      // Sign for what the vault holds now, not what the card showed when it loaded.
+      const amount = (await client!.getMandate(row.id)).balance;
+      if (amount === 0n) throw new Error(`The vault of mandate #${row.id} is already empty.`);
       const auth = await signWithBrowserPasskey(
         await client!.withdrawChallenge(passkey!.publicKey, row.id, withdrawTo, amount),
         passkey!.credentialId
       );
-      const hash = await submit(encode.withdraw(row.id, withdrawTo, amount, auth));
+      const { hash } = await submit(encode.withdraw(row.id, withdrawTo, amount, auth));
       return { kind: 'ok', hash, text: `Withdrew ${formatEther(amount)} MON to ${short(withdrawTo)}.` };
     });
 
@@ -375,6 +480,13 @@ export function PasskeyConsole() {
 
   const badAgent = !!form.agent && !isAddress(form.agent);
   const badTarget = !!form.target && !isAddress(form.target);
+  // Checked before the passkey prompt, so a bad field never costs a signature.
+  const perCallWei = parseAmount(form.perCall);
+  const budgetWei = parseAmount(form.budget);
+  const expirySecs = Number.isFinite(Number(form.days)) ? Math.round(Number(form.days) * 86400) : 0;
+  const tokenOn = useToken && !!form.token;
+  const tokenPerCall = parseAmount(form.tokenPerCall);
+  const tokenBudget = parseAmount(form.tokenBudget);
   const grantBlocker = !client
     ? 'AgentMandates is not configured on this deployment.'
     : !passkey
@@ -383,7 +495,23 @@ export function PasskeyConsole() {
     ? 'Enter the agent wallet address.'
     : badAgent || badTarget
     ? 'Agent and contract must be 0x addresses.'
+    : !/^\d*$/.test(form.agentId.trim())
+    ? 'The ERC-8004 agent ID must be a whole number.'
+    : perCallWei === null || budgetWei === null
+    ? 'Max per call and total budget must be MON amounts, like 0.005.'
+    : perCallWei > budgetWei
+    ? 'Max per call cannot be more than the total budget.'
+    : expirySecs < 60
+    ? 'Expires in must be more than 0 days.'
+    : tokenOn && (!isAddress(form.token) || !isAddress(form.payee))
+    ? 'Stablecoin budget needs a token address and a payee address.'
+    : tokenOn && (tokenPerCall === null || tokenBudget === null)
+    ? 'Token per call and token budget must be numbers, like 10.'
+    : tokenOn && tokenPerCall! > tokenBudget!
+    ? 'Token per call cannot be more than the token budget.'
     : null;
+  const sponsorMax = BigInt(relay?.sponsorMaxWei || '0');
+  const sponsorAmount = perCallWei !== null ? minWei(perCallWei, sponsorMax) : sponsorMax;
 
   const fnLabel = form.fn.trim().toLowerCase() === 'any' || !form.fn.trim() ? 'any function' : form.fn.trim();
   const days = Number(form.days) || 0;
@@ -561,24 +689,24 @@ export function PasskeyConsole() {
           <div className={s.group}>Who</div>
           <div className={s.fields}>
             <div className={s.field}>
-              <label>Agent wallet</label>
-              <input className={`${s.input} ${s.monoInput} ${badAgent ? s.inputBad : ''}`} value={form.agent} onChange={set('agent')} placeholder="0x…" />
+              <label htmlFor={fid('agent')}>Agent wallet</label>
+              <input id={fid('agent')} className={`${s.input} ${s.monoInput} ${badAgent ? s.inputBad : ''}`} value={form.agent} onChange={set('agent')} placeholder="0x…" />
             </div>
             <div className={s.field}>
-              <label>ERC-8004 agent ID</label>
-              <input className={s.input} value={form.agentId} onChange={set('agentId')} placeholder="e.g. 12" />
+              <label htmlFor={fid('agent-id')}>ERC-8004 agent ID</label>
+              <input id={fid('agent-id')} className={s.input} value={form.agentId} onChange={set('agentId')} placeholder="e.g. 12" />
             </div>
           </div>
 
           <div className={s.group}>What it may call</div>
           <div className={s.fields}>
             <div className={`${s.field} ${s.full}`}>
-              <label>Allowed contract</label>
-              <input className={`${s.input} ${s.monoInput} ${badTarget ? s.inputBad : ''}`} value={form.target} onChange={set('target')} />
+              <label htmlFor={fid('target')}>Allowed contract</label>
+              <input id={fid('target')} className={`${s.input} ${s.monoInput} ${badTarget ? s.inputBad : ''}`} value={form.target} onChange={set('target')} />
             </div>
             <div className={`${s.field} ${s.full}`}>
-              <label>Allowed function</label>
-              <input className={`${s.input} ${s.monoInput}`} value={form.fn} onChange={set('fn')} />
+              <label htmlFor={fid('fn')}>Allowed function</label>
+              <input id={fid('fn')} className={`${s.input} ${s.monoInput}`} value={form.fn} onChange={set('fn')} />
               <small>A signature like transfer(address,uint256), a 4-byte selector, or &quot;any&quot;.</small>
             </div>
           </div>
@@ -586,23 +714,23 @@ export function PasskeyConsole() {
           <div className={s.group}>Limits</div>
           <div className={s.fields3}>
             <div className={s.field}>
-              <label>Max per call</label>
+              <label htmlFor={fid('per-call')}>Max per call</label>
               <div className={s.inputWrap}>
-                <input className={s.input} value={form.perCall} onChange={set('perCall')} inputMode="decimal" />
+                <input id={fid('per-call')} className={s.input} value={form.perCall} onChange={set('perCall')} inputMode="decimal" />
                 <span className={s.unit}>MON</span>
               </div>
             </div>
             <div className={s.field}>
-              <label>Total budget</label>
+              <label htmlFor={fid('budget')}>Total budget</label>
               <div className={s.inputWrap}>
-                <input className={s.input} value={form.budget} onChange={set('budget')} inputMode="decimal" />
+                <input id={fid('budget')} className={s.input} value={form.budget} onChange={set('budget')} inputMode="decimal" />
                 <span className={s.unit}>MON</span>
               </div>
             </div>
             <div className={s.field}>
-              <label>Expires in</label>
+              <label htmlFor={fid('days')}>Expires in</label>
               <div className={s.inputWrap}>
-                <input className={s.input} value={form.days} onChange={set('days')} inputMode="decimal" />
+                <input id={fid('days')} className={s.input} value={form.days} onChange={set('days')} inputMode="decimal" />
                 <span className={s.unit}>days</span>
               </div>
             </div>
@@ -622,34 +750,34 @@ export function PasskeyConsole() {
           {useToken && (
             <div className={`${s.fields} ${s.reveal}`}>
               <div className={s.field}>
-                <label>Token</label>
-                <input className={`${s.input} ${s.monoInput}`} value={form.token} onChange={set('token')} placeholder="0x… e.g. USDC" />
+                <label htmlFor={fid('token')}>Token</label>
+                <input id={fid('token')} className={`${s.input} ${s.monoInput}`} value={form.token} onChange={set('token')} placeholder="0x… e.g. USDC" />
               </div>
               <div className={s.field}>
-                <label>Payee</label>
-                <input className={`${s.input} ${s.monoInput}`} value={form.payee} onChange={set('payee')} placeholder="0x… API / merchant" />
+                <label htmlFor={fid('payee')}>Payee</label>
+                <input id={fid('payee')} className={`${s.input} ${s.monoInput}`} value={form.payee} onChange={set('payee')} placeholder="0x… API / merchant" />
               </div>
               <div className={s.field}>
-                <label>Token per call</label>
-                <input className={s.input} value={form.tokenPerCall} onChange={set('tokenPerCall')} inputMode="decimal" />
+                <label htmlFor={fid('token-per-call')}>Token per call</label>
+                <input id={fid('token-per-call')} className={s.input} value={form.tokenPerCall} onChange={set('tokenPerCall')} inputMode="decimal" />
               </div>
               <div className={s.field}>
-                <label>Token budget</label>
-                <input className={s.input} value={form.tokenBudget} onChange={set('tokenBudget')} inputMode="decimal" />
+                <label htmlFor={fid('token-budget')}>Token budget</label>
+                <input id={fid('token-budget')} className={s.input} value={form.tokenBudget} onChange={set('tokenBudget')} inputMode="decimal" />
               </div>
             </div>
           )}
 
-          {relay?.enabled && BigInt(relay.sponsorMaxWei || '0') > 0n && (
+          {relay?.enabled && sponsorMax > 0n && (
             <button type="button" className={s.toggle} onClick={() => setForm((f) => ({ ...f, sponsor: !f.sponsor }))} aria-pressed={form.sponsor}>
               <span>
                 <span className={s.toggleTitle}>
                   <Zap size={15} /> Demo: relayer funds the vault
                 </span>
                 <span className={s.toggleText} style={{ display: 'block' }}>
-                  {relayCanSponsor(relay, BigInt(relay.sponsorMaxWei!) < parseEtherSafe(form.budget) ? BigInt(relay.sponsorMaxWei!) : parseEtherSafe(form.budget))
-                    ? `Up to ${formatEther(BigInt(relay.sponsorMaxWei!))} MON, so the agent can act right away.`
-                    : 'The relayer is low on MON right now, so the vault starts empty. You can deposit after granting.'}
+                  {relayCanSponsor(relay, sponsorAmount)
+                    ? `Up to ${formatEther(sponsorAmount)} MON, so the agent can act right away.`
+                    : 'The relayer is low on MON right now, so the vault starts empty. Anyone can fund it later with deposit() on the contract.'}
                 </span>
               </span>
               <span className={`${s.switch} ${form.sponsor ? s.switchOn : ''}`} />
@@ -718,11 +846,11 @@ export function PasskeyConsole() {
           </div>
         ) : (
           <>
-            {rows.some((r) => r.m.balance > 0n || r.tokens.some((t) => t.balance > 0n)) && (
+            {rows.some((r) => r.m.balance > 0n) && (
               <div className={s.withdrawBar}>
                 <div className={s.field}>
-                  <label>Withdraw unspent funds to</label>
-                  <input className={`${s.input} ${s.monoInput}`} value={withdrawTo} onChange={(e) => setWithdrawTo(e.target.value)} placeholder="0x… any address you control" />
+                  <label htmlFor={fid('withdraw-to')}>Withdraw unspent funds to</label>
+                  <input id={fid('withdraw-to')} className={`${s.input} ${s.monoInput}`} value={withdrawTo} onChange={(e) => setWithdrawTo(e.target.value)} placeholder="0x… any address you control" />
                 </div>
               </div>
             )}
@@ -730,14 +858,15 @@ export function PasskeyConsole() {
               {rows.map((row) => {
                 const pct = row.m.budget > 0n ? Number((row.m.spent * 1000n) / row.m.budget) / 10 : 0;
                 const expired = row.m.expiresAt !== 0n && Number(row.m.expiresAt) * 1000 < Date.now();
+                const revoked = row.m.revoked || row.revokedAll;
                 return (
                   <div key={row.id.toString()} className={`${s.mandate} ${row.active ? '' : s.mandateDead}`}>
                     <div className={s.mandateTop}>
                       <span className={s.mandateId}>
                         <Bot size={16} style={{ color: 'var(--accent-monad)' }} /> Mandate #{row.id.toString()}
                       </span>
-                      <span className={row.active ? s.pillOk : row.m.revoked ? s.pillOff : s.pillIdle}>
-                        {row.active ? 'ACTIVE' : row.m.revoked ? 'REVOKED' : expired ? 'EXPIRED' : 'INACTIVE'}
+                      <span className={row.active ? s.pillOk : revoked ? s.pillOff : s.pillIdle}>
+                        {row.active ? 'ACTIVE' : revoked ? 'REVOKED' : expired ? 'EXPIRED' : 'INACTIVE'}
                       </span>
                     </div>
                     <div className={s.mandateAgent}>
@@ -760,9 +889,10 @@ export function PasskeyConsole() {
                         <div key={t.token}>
                           <div className={s.spendRow} style={{ marginTop: '0.6rem' }}>
                             <span>
-                              {formatUnits(t.spent, t.decimals)} / {formatUnits(t.budget, t.decimals)} {t.symbol} spent
+                              {tokenAmount(t.spent, t.decimals)} / {tokenAmount(t.budget, t.decimals)} {t.symbol}
+                              {t.decimals === null ? ' (raw units, decimals unknown)' : ''} spent
                             </span>
-                            <span className={s.mono}>vault {formatUnits(t.balance, t.decimals)}</span>
+                            <span className={s.mono}>vault {tokenAmount(t.balance, t.decimals)}</span>
                           </div>
                           <div className={s.meter}>
                             <div className={`${s.meterFill} ${s.meterToken}`} style={{ width: `${Math.min(tp, 100)}%` }} />
@@ -841,7 +971,7 @@ export function PasskeyConsole() {
       {notice && !busy && (
         <div className={s.floater} role="status">
           <div className={notice.kind === 'ok' ? s.noticeOk : notice.kind === 'err' ? s.noticeErr : s.notice}>
-            {notice.kind === 'ok' ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+            {notice.kind === 'ok' ? <CheckCircle2 size={16} /> : notice.kind === 'warn' ? <AlertTriangle size={16} /> : <XCircle size={16} />}
             <span>
               {notice.text}{' '}
               {notice.hash && (

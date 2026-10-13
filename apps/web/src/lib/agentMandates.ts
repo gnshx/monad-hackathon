@@ -17,10 +17,15 @@ export const monadTestnet = defineChain({
   nativeCurrency: MONAD_TESTNET_CONFIG.nativeCurrency,
   rpcUrls: { default: { http: [RPC_URL] } },
   blockExplorers: MONAD_TESTNET_CONFIG.blockExplorers,
+  // Monad blocks land about every 0.4 s; without this viem assumes 12 s blocks and polls every 4 s.
+  blockTime: 400,
 });
 
+/** Receipt polling interval: owner actions confirm in about a second instead of waiting on a 4 s poll. */
+export const RECEIPT_POLL_MS = 1_000;
+
 export function publicClient(): PublicClient {
-  return createPublicClient({ chain: monadTestnet, transport: http(RPC_URL) }) as PublicClient;
+  return createPublicClient({ chain: monadTestnet, transport: http(RPC_URL), pollingInterval: RECEIPT_POLL_MS }) as PublicClient;
 }
 
 export function mandatesClient(): AgentMandates | null {

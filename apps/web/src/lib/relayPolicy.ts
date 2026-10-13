@@ -1,4 +1,4 @@
-import { isHex, slice, toFunctionSelector, type Hex } from 'viem';
+import { formatEther, isHex, slice, toFunctionSelector, type Hex } from 'viem';
 import { AgentMandatesABI } from '@agenttrust/sdk';
 
 export const selectorOf = (name: string): Hex =>
@@ -25,12 +25,58 @@ export interface RelayPolicyConfig {
   maxDailyGlobalSponsorWei?: bigint;
 }
 
+/** Vault sponsorship per grant when RELAYER_SPONSOR_MAX_WEI is not set. */
+export const DEFAULT_SPONSOR_PER_TX_WEI = 10_000_000_000_000_000n; // 0.01 MON
+
 export const DEFAULT_RELAY_CONFIG: RelayPolicyConfig = {
   maxRequestsPerMinutePerIp: 10,
-  maxSponsorPerTxWei: 50_000_000_000_000_000n, // 0.05 MON
-  maxDailySponsorPerIpWei: 100_000_000_000_000_000n, // 0.10 MON
-  maxDailyGlobalSponsorWei: 500_000_000_000_000_000n, // 0.50 MON
+  maxSponsorPerTxWei: DEFAULT_SPONSOR_PER_TX_WEI,
+  maxDailySponsorPerIpWei: 20_000_000_000_000_000n, // 0.02 MON
+  maxDailyGlobalSponsorWei: 200_000_000_000_000_000n, // 0.2 MON
 };
+
+/**
+ * Parses RELAYER_SPONSOR_MAX_WEI. Unset or blank uses the default; 0 turns vault sponsorship off.
+ * A value that is not a whole number of wei (e.g. "0.01") also turns it off rather than guessing.
+ */
+export function sponsorCapFromEnv(raw: string | undefined, fallback = DEFAULT_SPONSOR_PER_TX_WEI): bigint {
+  const v = raw?.trim();
+  if (!v) return fallback;
+  try {
+    const wei = BigInt(v);
+    return wei > 0n ? wei : 0n;
+  } catch {
+    return 0n;
+  }
+}
+
+/** Relay policy for this deployment: the defaults plus the operator's sponsorship cap. */
+export function relayConfigFromEnv(env: Record<string, string | undefined> = process.env): RelayPolicyConfig {
+  return { ...DEFAULT_RELAY_CONFIG, maxSponsorPerTxWei: sponsorCapFromEnv(env.RELAYER_SPONSOR_MAX_WEI) };
+}
+
+const mon = (wei: bigint) => `${formatEther(wei)} MON`;
+
+/**
+ * Gas limit for a relayed transaction: the estimate plus 25% headroom, capped at `max`.
+ * Null when the estimate alone is above `max`: a lower limit would be a certain out-of-gas
+ * revert, and Monad bills the whole limit.
+ */
+export function relayGasLimit(estimate: bigint, max: bigint): bigint | null {
+  if (estimate > max) return null;
+  const padded = (estimate * 5n) / 4n;
+  return padded > max ? max : padded;
+}
+
+/**
+ * Vault sponsorship never eats into the gas the relayer needs: it is kept only when `balance`
+ * still covers `gasWei` on top of it, otherwise dropped to 0. `payable` is false when the
+ * relayer cannot pay even the gas.
+ */
+export function sponsorWithinBalance(balance: bigint, gasWei: bigint, sponsorWei: bigint): { sponsorWei: bigint; payable: boolean } {
+  if (balance >= gasWei + sponsorWei) return { sponsorWei, payable: true };
+  return { sponsorWei: 0n, payable: balance >= gasWei };
+}
 
 export class RelayPolicyTracker {
   private requestsByIp = new Map<string, number[]>();
@@ -53,22 +99,26 @@ export class RelayPolicyTracker {
 
   checkSponsorCap(ip: string, requestedWei: bigint, now = Date.now()): { allowed: boolean; reason?: string } {
     if (requestedWei === 0n) return { allowed: true };
+    if (requestedWei < 0n) return { allowed: false, reason: 'Sponsored funding cannot be negative' };
 
-    const maxPerTx = this.config.maxSponsorPerTxWei ?? 50_000_000_000_000_000n;
+    const maxPerTx = this.config.maxSponsorPerTxWei ?? DEFAULT_RELAY_CONFIG.maxSponsorPerTxWei!;
+    if (maxPerTx <= 0n) {
+      return { allowed: false, reason: 'Vault sponsorship is turned off on this deployment' };
+    }
     if (requestedWei > maxPerTx) {
-      return { allowed: false, reason: `Sponsored funding exceeds per-transaction cap (${maxPerTx} wei)` };
+      return { allowed: false, reason: `Sponsored funding exceeds per-transaction cap of ${mon(maxPerTx)}` };
     }
 
     const oneDay = 24 * 60 * 60 * 1000;
-    const maxDailyPerIp = this.config.maxDailySponsorPerIpWei ?? 100_000_000_000_000_000n;
+    const maxDailyPerIp = this.config.maxDailySponsorPerIpWei ?? DEFAULT_RELAY_CONFIG.maxDailySponsorPerIpWei!;
     const ipHistory = (this.spendByIp.get(ip) || []).filter((s) => now - s.timestamp < oneDay);
     const ipTotal = ipHistory.reduce((acc, s) => acc + s.amount, 0n);
 
     if (ipTotal + requestedWei > maxDailyPerIp) {
-      return { allowed: false, reason: `Daily sponsored funding cap reached for this IP (${maxDailyPerIp} wei/day)` };
+      return { allowed: false, reason: `Daily sponsored funding cap of ${mon(maxDailyPerIp)} reached for this IP` };
     }
 
-    const maxDailyGlobal = this.config.maxDailyGlobalSponsorWei ?? 500_000_000_000_000_000n;
+    const maxDailyGlobal = this.config.maxDailyGlobalSponsorWei ?? DEFAULT_RELAY_CONFIG.maxDailyGlobalSponsorWei!;
     const globalHistory = this.globalSpend.filter((s) => now - s.timestamp < oneDay);
     const globalTotal = globalHistory.reduce((acc, s) => acc + s.amount, 0n);
 
@@ -90,7 +140,7 @@ export class RelayPolicyTracker {
   }
 
   reset(): void {
-    this.requestsByIp.clear( );
+    this.requestsByIp.clear();
     this.spendByIp.clear();
     this.globalSpend = [];
   }

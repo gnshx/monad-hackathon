@@ -3,15 +3,25 @@ import { createWalletClient, formatEther, http, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { AGENT_MANDATES_ADDRESS, RPC_URL, monadTestnet, publicClient } from '../../../lib/agentMandates';
 import { MANDATE_ERRORS } from '@agenttrust/sdk';
-import { RelayPolicyTracker, validateRelayCalldata, DEFAULT_RELAY_CONFIG } from '../../../lib/relayPolicy';
+import {
+  RelayPolicyTracker,
+  relayConfigFromEnv,
+  relayGasLimit,
+  sponsorWithinBalance,
+  validateRelayCalldata,
+} from '../../../lib/relayPolicy';
 
 export const dynamic = 'force-dynamic';
 
-const policyTracker = new RelayPolicyTracker(DEFAULT_RELAY_CONFIG);
+// RELAYER_SPONSOR_MAX_WEI caps the MON the relayer puts into a new vault (0 turns it off; unset = 0.01 MON).
+const RELAY_CONFIG = relayConfigFromEnv();
+const SPONSOR_MAX = RELAY_CONFIG.maxSponsorPerTxWei ?? 0n;
+const policyTracker = new RelayPolicyTracker(RELAY_CONFIG);
 
 // Monad charges the gas limit, so we size it from an estimate instead of a flat ceiling.
 const MAX_RELAY_GAS = 1_200_000n;
-// Typical passkey grant measured locally (~120k used); used only to warn when the relayer runs low.
+// Typical passkey grant measured locally (~120k used); used to warn when the relayer runs low and
+// to keep gas for a grant plus a revoke before any MON goes into a vault.
 const TYPICAL_RELAY_GAS = 400_000n;
 
 const FRIENDLY: Record<string, string> = {
@@ -41,6 +51,19 @@ const mon = (wei: bigint) => `${Number(formatEther(wei)).toLocaleString('en-US',
 
 const gasPrice = () => publicClient().getGasPrice().catch(() => 0n);
 
+/** Gas the relayer keeps for a typical grant plus a revoke; vault sponsorship never dips into it. */
+const gasReserve = (price: bigint) => ((price * TYPICAL_RELAY_GAS * 3n) / 2n) * 2n;
+
+function parseWei(v: unknown): bigint | null {
+  if (v === undefined || v === null || v === '') return 0n;
+  try {
+    const wei = BigInt(v as string);
+    return wei >= 0n ? wei : null;
+  } catch {
+    return null;
+  }
+}
+
 function relayer() {
   const key = (process.env.RELAYER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY) as Hex | undefined;
   if (!key || !AGENT_MANDATES_ADDRESS) return null;
@@ -55,7 +78,7 @@ export async function GET() {
     gasPrice(),
   ]);
   // Enough gas for a grant plus a revoke (vault sponsorship is optional and checked per request).
-  const neededWei = ((price * TYPICAL_RELAY_GAS * 3n) / 2n) * 2n;
+  const neededWei = gasReserve(price);
   return NextResponse.json({
     enabled: true,
     contract: AGENT_MANDATES_ADDRESS,
@@ -63,7 +86,7 @@ export async function GET() {
     balanceWei: balance.toString(),
     neededWei: neededWei.toString(),
     lowFunds: balance < neededWei,
-    sponsorMaxWei: DEFAULT_RELAY_CONFIG.maxSponsorPerTxWei?.toString() || '0',
+    sponsorMaxWei: SPONSOR_MAX.toString(),
   });
 }
 
@@ -87,10 +110,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }
 
-  const sponsorWei = validation.isCreate ? BigInt(body?.sponsorWei || 0) : 0n;
-  const sponsorCheck = policyTracker.checkSponsorCap(ip, sponsorWei);
-  if (!sponsorCheck.allowed) {
-    return NextResponse.json({ error: sponsorCheck.reason }, { status: 400 });
+  const requestedWei = parseWei(body?.sponsorWei);
+  if (requestedWei === null) {
+    return NextResponse.json({ error: 'sponsorWei must be a whole, non-negative number of wei' }, { status: 400 });
+  }
+
+  // Vault sponsorship is best effort: when a cap or the relayer's balance cannot cover it, the grant
+  // still goes through with an empty vault, and the response says how much was actually sponsored.
+  let sponsorWei = validation.isCreate && requestedWei > 0n ? (requestedWei < SPONSOR_MAX ? requestedWei : SPONSOR_MAX) : 0n;
+  let sponsorNote: string | undefined;
+  if (validation.isCreate && requestedWei > 0n && sponsorWei === 0n) sponsorNote = 'vault sponsorship is turned off';
+  if (sponsorWei > 0n) {
+    const sponsorCheck = policyTracker.checkSponsorCap(ip, sponsorWei);
+    if (!sponsorCheck.allowed) {
+      sponsorWei = 0n;
+      sponsorNote = sponsorCheck.reason;
+    }
+  }
+
+  const [balance, price] = await Promise.all([
+    publicClient().getBalance({ address: wallet.account.address }).catch(() => 0n),
+    gasPrice(),
+  ]);
+  // Keep enough for a grant plus a revoke before any MON goes into the vault.
+  if (sponsorWei > 0n && sponsorWithinBalance(balance, gasReserve(price), sponsorWei).sponsorWei === 0n) {
+    sponsorWei = 0n;
+    sponsorNote = 'the relayer is low on MON';
   }
 
   let gas: bigint;
@@ -102,25 +147,36 @@ export async function POST(req: Request) {
       data,
       value: sponsorWei,
     });
-    gas = (estimate * 5n) / 4n;
-    if (gas > MAX_RELAY_GAS) gas = MAX_RELAY_GAS;
+    const limit = relayGasLimit(estimate, MAX_RELAY_GAS);
+    // Never send with a limit below the estimate: it would be a certain out-of-gas revert, billed in full.
+    if (limit === null) {
+      return NextResponse.json(
+        { error: `This action is too large to relay (needs about ${estimate} gas, the relayer allows ${MAX_RELAY_GAS}).` },
+        { status: 422 }
+      );
+    }
+    gas = limit;
   } catch (e: any) {
     return NextResponse.json({ error: `Contract would reject this: ${explainRejection(e)}` }, { status: 422 });
   }
 
-  const [balance, price] = await Promise.all([
-    publicClient().getBalance({ address: wallet.account.address }).catch(() => 0n),
-    gasPrice(),
-  ]);
-  const neededWei = (price * gas * 3n) / 2n + sponsorWei;
-  if (price > 0n && balance < neededWei) {
-    return NextResponse.json(
-      {
-        error: `The gas relayer is out of testnet MON (has ${mon(balance)}, needs about ${mon(neededWei)}). Fund ${wallet.account.address} and try again.`,
-        lowFunds: true,
-      },
-      { status: 503 }
-    );
+  const gasWei = (price * gas * 3n) / 2n;
+  if (price > 0n) {
+    const funds = sponsorWithinBalance(balance, gasWei, sponsorWei);
+    if (!funds.payable) {
+      return NextResponse.json(
+        {
+          error: `The gas relayer is out of testnet MON (has ${mon(balance)}, needs about ${mon(gasWei)}). Fund ${wallet.account.address} and try again.`,
+          lowFunds: true,
+        },
+        { status: 503 }
+      );
+    }
+    // The estimate above included the sponsored value, so it also covers the same grant without it.
+    if (funds.sponsorWei < sponsorWei) {
+      sponsorWei = 0n;
+      sponsorNote = 'the relayer is low on MON';
+    }
   }
 
   try {
@@ -131,7 +187,7 @@ export async function POST(req: Request) {
       gas,
     });
     policyTracker.recordSpend(ip, sponsorWei);
-    return NextResponse.json({ hash });
+    return NextResponse.json({ hash, sponsoredWei: sponsorWei.toString(), ...(sponsorNote ? { sponsorNote } : {}) });
   } catch (e: any) {
     return NextResponse.json({ error: `Relayer transaction failed: ${e.shortMessage || e.message}` }, { status: 500 });
   }
