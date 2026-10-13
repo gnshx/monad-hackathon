@@ -17,6 +17,7 @@ import {
 | `createSoftwarePasskey()` | Byte-compatible WebAuthn assertions from a software key, for scripts, CI and tests |
 | `encode.createMandate / revoke / revokeAll / withdraw` | Calldata any relayer can submit |
 | `createDigest`, `revokeDigest`, … | Off-chain mirrors of the contract's digests |
+| `mandateTools(mandates, id)` | Framework-agnostic LLM tools (`mandate_status`, `check_action`, `execute_action`, `pay_token`) with JSON-Schema inputs |
 | `MandateDeniedError` | Thrown by `execute()` with the contract's reason before any gas is spent |
 
 ```ts

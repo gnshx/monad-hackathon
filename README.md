@@ -102,6 +102,19 @@ Works with Claude Desktop, Claude Code, Cursor and any MCP client.
 
 Build it with `npm run build:mcp`. Once the package is on npm, the command becomes `npx -y @agenttrust/mcp`. The agent gets four tools: `mandate_status`, `check_action`, `execute_action` and `pay_token`. A disallowed call comes back as `{ ok: false, blockedBy: "ExceedsPerCallLimit" }` before any gas is spent. Even if the model is fully compromised, the most it can do is spend the remaining budget on the calls the human allowed. See [`packages/mcp`](packages/mcp/README.md).
 
+### Any LLM tool loop (Claude API, OpenAI, LangChain, Eliza)
+
+```ts
+import { AgentMandates, mandateTools } from '@agenttrust/sdk';
+
+const tools = mandateTools(new AgentMandates(address, publicClient, agentWallet), mandateId);
+// Give the model the schemas…
+const schemas = tools.map(({ run, ...schema }) => schema); // name, description, input_schema
+// …and dispatch its tool calls:
+const result = await tools.find((t) => t.name === call.name)!.run(call.input);
+// → { ok: true, transactionHash } or { ok: false, blockedBy: 'ExceedsPerCallLimit' }
+```
+
 ### TypeScript SDK
 
 ```ts
