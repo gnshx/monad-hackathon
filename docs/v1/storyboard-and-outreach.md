@@ -27,7 +27,7 @@ AgentTrust gives your protocol's agents an immutable on-chain mandate boundary o
 - Isolated per-agent vaults so a compromised bot cannot touch user or treasury funds
 - Owner revocation with instant fund recovery
 
-We’ve published a zero-dependency TypeScript SDK (@agenttrust/sdk) that drops into agent loops in under 15 minutes. 
+We’ve open-sourced a TypeScript SDK (`packages/sdk` in our repo, not yet on npm) that drops into agent loops in under 15 minutes. 
 
 Would love to set up a quick 15-minute call or share our testnet contract address to explore a design partnership for autonomous rebalancing on Monad.
 

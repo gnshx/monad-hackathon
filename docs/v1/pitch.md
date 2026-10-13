@@ -30,7 +30,7 @@ AgentTrust translates this into an immutable smart contract mandate on Monad. Th
 ### [01:25 - 01:55] Radical Honesty & Traction Roadmap
 "We differentiate through radical transparency: our smart contracts strictly enforce native MON spend limits, allowlisted selectors, and vault isolation today with 72 passing Foundry tests, 34 passing SDK tests, and 142 total tests across the repo.
 
-We've published `@agenttrust/sdk` with a 10-line quickstart so any agent framework can integrate in minutes. With our 30/60/90-day plan, AgentTrust is poised to become the standard security perimeter for autonomous finance.
+Our SDK (`packages/sdk`, open source in the repo, not yet on npm) has a 10-line quickstart so any agent framework can integrate in minutes. With our 30/60/90-day plan, AgentTrust is poised to become the standard security perimeter for autonomous finance.
 
 AgentTrust: Sovereign human passkeys. Unbreakable on-chain mandates. Welcome to the trust layer of the agentic internet."
 

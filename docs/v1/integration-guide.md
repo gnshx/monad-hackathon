@@ -16,10 +16,15 @@ Users grant your agent a scoped Passkey mandate. Your agent is cryptographically
 
 ## 15-Minute Integration Walkthrough
 
-### Step 1: Install `@agenttrust/sdk`
+### Step 1: Build `@agenttrust/sdk` from the repo
+
+The SDK is not published on npm, and `npm install @agenttrust/sdk` fetches an unrelated package from another publisher. Build it from a clone and use it inside the workspace:
 
 ```bash
-npm install @agenttrust/sdk viem
+git clone https://github.com/gnshx/monad-hackathon.git
+cd monad-hackathon
+npm install
+npm run build:sdk
 ```
 
 ### Step 2: Request User Mandate in Your UI

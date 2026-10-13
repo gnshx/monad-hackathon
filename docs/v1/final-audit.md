@@ -57,25 +57,25 @@ The fundamental security claim of AgentTrust is:
 ## 4. Detailed Vulnerabilities & Remediations
 
 ### CRIT-01: Caller Spoofing in `execute()`
-- **Affected File:** [`contracts/src/MandateManager.sol`](file:///home/ganesh/Desktop/monad-hackathon/contracts/src/MandateManager.sol#L318-L321)
+- **Affected File:** [`contracts/src/MandateManager.sol`](../../contracts/src/MandateManager.sol#L318-L321)
 - **Impact:** An unauthorized third party could call `execute()` passing any `agentId` configured on a mandate, executing actions using the owner's delegated authority and spending limits.
 - **Root Cause:** The contract previously checked only `if (m.agentId != agentId) revert UnauthorizedAgent()`, treating a numeric argument as proof of caller identity.
 - **Fix:** Added `agentAddress` to the `Mandate` struct and enforced that `msg.sender` must be either the designated `m.agentAddress` or the mandate `m.owner`.
-- **Regression Test:** [`test_execute_unauthorizedCaller_stranger_reverts`](file:///home/ganesh/Desktop/monad-hackathon/contracts/test/MandateManager.t.sol) verifies that third-party callers revert with `UnauthorizedAgent()`.
+- **Regression Test:** [`test_execute_unauthorizedCaller_stranger_reverts`](../../contracts/test/MandateManager.t.sol) verifies that third-party callers revert with `UnauthorizedAgent()`.
 
 ---
 
 ### CRIT-02: Cross-Mandate Native Asset Theft
-- **Affected File:** [`contracts/src/MandateManager.sol`](file:///home/ganesh/Desktop/monad-hackathon/contracts/src/MandateManager.sol#L53-L55)
+- **Affected File:** [`contracts/src/MandateManager.sol`](../../contracts/src/MandateManager.sol#L53-L55)
 - **Impact:** Any mandate authorized to execute native calls could spend up to the entire contract balance, draining funds deposited by other mandate owners.
 - **Root Cause:** Native value was transferred from the pooled contract balance without isolated per-mandate accounting.
 - **Fix:** Implemented isolated vault balances: `mapping(uint256 => uint256) public mandateBalances`. Value deposited at creation or via `deposit(mandateId)` is credited exclusively to that mandate. Added `withdrawUnspent(mandateId)` to allow owners to withdraw unused funds from inactive mandates.
-- **Regression Test:** [`test_vault_isolation_preventsCrossMandateTheft`](file:///home/ganesh/Desktop/monad-hackathon/contracts/test/MandateManager.t.sol) proves that an agent with 0 deposited funds cannot execute even if other mandates have deposited 10 ETH.
+- **Regression Test:** [`test_vault_isolation_preventsCrossMandateTheft`](../../contracts/test/MandateManager.t.sol) proves that an agent with 0 deposited funds cannot execute even if other mandates have deposited 10 ETH.
 
 ---
 
 ### HIGH-01: Monad RIP-7212 Precompile Calling Convention Mismatch
-- **Affected File:** [`contracts/src/MandateManager.sol`](file:///home/ganesh/Desktop/monad-hackathon/contracts/src/MandateManager.sol#L402-L417)
+- **Affected File:** [`contracts/src/MandateManager.sol`](../../contracts/src/MandateManager.sol#L402-L417)
 - **Impact:** Calling the precompile via `IP256Verifier.verify` passed 164 bytes (4-byte function selector + 160 bytes ABI parameters). RIP-7212 on Monad expects exactly 160 raw bytes via `staticcall`.
 - **Fix:** Implemented `_verifyP256()` helper: when targeting `P256_PRECOMPILE` (`0x100`), it performs a raw 160-byte staticcall using `abi.encodePacked(hash, r, s, x, y)` and validates the 32-byte response.
 - **Regression Test:** Precompile calling path tested in Foundry and verified against Monad Testnet RPC.
@@ -83,51 +83,51 @@ The fundamental security claim of AgentTrust is:
 ---
 
 ### HIGH-02: WebAuthn Assertion Envelope & Challenge Binding
-- **Affected File:** [`contracts/src/MandateManager.sol`](file:///home/ganesh/Desktop/monad-hackathon/contracts/src/MandateManager.sol#L203-L255)
+- **Affected File:** [`contracts/src/MandateManager.sol`](../../contracts/src/MandateManager.sol#L203-L255)
 - **Impact:** WebAuthn Authenticators sign `sha256(authenticatorData || sha256(clientDataJSON))`. If a contract simply checks raw P-256 signatures over `challengeHash`, browser WebAuthn assertions fail, OR if envelope verification does not bind `expectedHash` to `clientDataJSON`, attackers could replay foreign assertions.
 - **Fix:** Added `createMandateWithWebAuthn` which:
   1. Validates that `authenticatorData` has the User Presence (UP) flag set (`authData[32] & 0x01 != 0`).
   2. Binds the canonical `expectedHash` to the `clientDataJSON` challenge via on-chain base64url verification (`_verifyClientDataChallenge`).
   3. Verifies the P-256 signature against `sha256(authData || sha256(clientDataJSON))`.
-- **Regression Tests:** [`test_createMandateWithWebAuthn_happy`](file:///home/ganesh/Desktop/monad-hackathon/contracts/test/MandateManager.t.sol), [`test_createMandateWithWebAuthn_wrongChallenge_reverts`](file:///home/ganesh/Desktop/monad-hackathon/contracts/test/MandateManager.t.sol), and [`test_createMandateWithWebAuthn_missingUserPresence_reverts`](file:///home/ganesh/Desktop/monad-hackathon/contracts/test/MandateManager.t.sol).
+- **Regression Tests:** [`test_createMandateWithWebAuthn_happy`](../../contracts/test/MandateManager.t.sol), [`test_createMandateWithWebAuthn_wrongChallenge_reverts`](../../contracts/test/MandateManager.t.sol), and [`test_createMandateWithWebAuthn_missingUserPresence_reverts`](../../contracts/test/MandateManager.t.sol).
 
 ---
 
 ### MED-01: ECDSA Signature Malleability & Range Bounds
-- **Affected File:** [`contracts/src/MandateManager.sol`](file:///home/ganesh/Desktop/monad-hackathon/contracts/src/MandateManager.sol#L471-L478)
+- **Affected File:** [`contracts/src/MandateManager.sol`](../../contracts/src/MandateManager.sol#L471-L478)
 - **Impact:** Malleable ECDSA signatures with $s > n/2$ or zero coordinates could be accepted, allowing signature replay or unexpected verifier behavior.
 - **Fix:** Added `_checkSignatureBounds`:
   - Rejects $r == 0$ or $r \ge n$.
   - Rejects $s == 0$ or $s > n/2$.
   - Rejects public keys with coordinates exceeding curve field prime $p$.
-- **Regression Tests:** [`test_createMandate_malleableSig_reverts`](file:///home/ganesh/Desktop/monad-hackathon/contracts/test/MandateManager.t.sol) and [`test_createMandate_zeroSig_reverts`](file:///home/ganesh/Desktop/monad-hackathon/contracts/test/MandateManager.t.sol).
+- **Regression Tests:** [`test_createMandate_malleableSig_reverts`](../../contracts/test/MandateManager.t.sol) and [`test_createMandate_zeroSig_reverts`](../../contracts/test/MandateManager.t.sol).
 
 ---
 
 ### MED-02: Receipt Verifier False Positives on Unrelated Contracts
-- **Affected File:** [`packages/sdk/src/verify.ts`](file:///home/ganesh/Desktop/monad-hackathon/packages/sdk/src/verify.ts#L130-L165)
+- **Affected File:** [`packages/sdk/src/verify.ts`](../../packages/sdk/src/verify.ts#L130-L165)
 - **Impact:** An attacker could craft a dummy contract that emits an `ActionExecuted` event with identical topic layout, causing the SDK verifier to falsely report valid execution.
 - **Fix:** Updated `verifyReceipt` to strictly filter by `log.address.toLowerCase() === contractAddress.toLowerCase()` and accept `VerifyReceiptOptions` (`expectedMandateId`, `expectedTarget`, `expectedSelector`).
-- **Regression Test:** [`packages/sdk/test/sdk.test.ts`](file:///home/ganesh/Desktop/monad-hackathon/packages/sdk/test/sdk.test.ts) test `"rejects logs emitted by an unrelated contract (false positive defense)"` passes.
+- **Regression Test:** [`packages/sdk/test/sdk.test.ts`](../../packages/sdk/test/sdk.test.ts) test `"rejects logs emitted by an unrelated contract (false positive defense)"` passes.
 
 ---
 
 ### MED-03: Web UI Simulation Fallback Masking Errors
-- **Affected File:** [`apps/web/src/components/LiveVerificationInspector.tsx`](file:///home/ganesh/Desktop/monad-hackathon/apps/web/src/components/LiveVerificationInspector.tsx#L40-L60)
+- **Affected File:** [`apps/web/src/components/LiveVerificationInspector.tsx`](../../apps/web/src/components/LiveVerificationInspector.tsx#L40-L60)
 - **Impact:** The Live Verification Inspector caught RPC errors and returned a hardcoded success result with `verified: true`, misleading users.
 - **Fix:** Removed the mock simulation catch block. If an RPC call fails or the transaction was not confirmed on-chain, the component displays the honest error reason and marks verification as failed.
 
 ---
 
 ### LOW-01: Native Transfers with Empty Calldata
-- **Affected File:** [`contracts/src/MandateManager.sol`](file:///home/ganesh/Desktop/monad-hackathon/contracts/src/MandateManager.sol#L354-L358)
+- **Affected File:** [`contracts/src/MandateManager.sol`](../../contracts/src/MandateManager.sol#L354-L358)
 - **Impact:** Target allowlist with wildcard selector (`bytes4(0)`) for pure native MON transfers was blocked because calldata validation required `callData.length >= 4`.
 - **Fix:** Allowed `callData.length == 0` when `selector == bytes4(0)`.
 
 ---
 
 ### LOW-02: Checks-Effects-Interactions & Lint Cleanliness
-- **Affected File:** [`contracts/src/MandateManager.sol`](file:///home/ganesh/Desktop/monad-hackathon/contracts/src/MandateManager.sol#L309-L313)
+- **Affected File:** [`contracts/src/MandateManager.sol`](../../contracts/src/MandateManager.sol#L309-L313)
 - **Fix:** Emitted `FundsWithdrawn` before calling external recipient in `withdrawUnspent()`. Initialized loop variables explicitly to eliminate compiler warnings.
 
 ---

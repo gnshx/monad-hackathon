@@ -66,7 +66,7 @@ AgentTrust provides an end-to-end delegation and security infrastructure for aut
 
 ### ⚙️ How We Built It
 - **Smart Contracts:** Built in Solidity 0.8.24 using Foundry. Tested with 72 comprehensive unit, fuzz (1,000 runs), reentrancy, and vault isolation tests across contracts.
-- **TypeScript SDK (`@agenttrust/sdk`):** A zero-dependency client library built with Viem and TypeScript providing `createAgentGuard()`, `AgentMandates` client, preflight invariant checks, and tiered receipt decoding. Tested with 34 Vitest tests.
+- **TypeScript SDK (`@agenttrust/sdk`):** A TypeScript client library built on viem and @noble/curves (in the repo, not on npm) providing `createAgentGuard()`, `AgentMandates` client, preflight invariant checks, and tiered receipt decoding. Tested with 34 Vitest tests.
 - **Frontend Console:** Built with Next.js 15 (App Router), Tailwind CSS, Lucide icons, and Wagmi/Viem.
 - **Verification Scripts:** CLI tools verifying real Monad Testnet precompile vectors (`verify:p256`), live ERC-8004 identity queries (`verify:erc8004`), and transaction receipt auditing (`verify:tx`, `verify:all`).
 
