@@ -4,6 +4,12 @@
 > **Prepared For:** Metropolis Hackathon Judging Panel & Investment Committee  
 > **Judges Reference:** Keone Hon, Tina Qi, Maria Shen, Will Nuelle, Frankie, Evan Feng, Ajit Tripathi, Francesco Andreoli  
 
+**Judges & Evaluators Quick Links:**
+- 🎬 **Video Storyboards & Integration Outreach:** [`docs/storyboard-and-outreach.md`](storyboard-and-outreach.md)
+- 📊 **Claim vs. Evidence Matrix:** [`docs/claim-vs-evidence.md`](claim-vs-evidence.md)
+- 🎙️ **Interview Defense Brief & Rehearsed Answers:** [`docs/interview-brief.md`](interview-brief.md)
+- ⚡ **1-Command Independent Verifier:** `npm run verify:tx <txHash>`
+
 ---
 
 ## ⚡ 1. Executive Briefing (60-Second Read)
@@ -55,23 +61,30 @@ Winning the hackathon and entering the Monad Ecosystem Residency will fund:
 
 ---
 
-## 🦊 3. The MetaMask Question: AgentTrust vs. MetaMask Delegation
+## 🦊 3. The MetaMask Question: Complementary Architecture
 
 > *Special Briefing for Francesco Andreoli (MetaMask DevRel Lead & Delegation Architect)*
 
-### "How is AgentTrust different from MetaMask's scoped delegation framework (ERC-7715)?"
+### "How does AgentTrust relate to MetaMask's delegation initiatives (e.g. [MetaMask Delegation Toolkit](https://docs.metamask.io/delegation-framework/) and [ERC-7715](https://eips.ethereum.org/EIPS/eip-7715))?"
 
-**The Short Answer:** AgentTrust is **complementary, not competing**. While MetaMask Delegation focuses on interactive browser wallet sessions for human users, AgentTrust is an on-chain execution primitive purpose-built for **headless, autonomous AI agent runtimes operating 24/7 without browser extensions**.
+**The Short Answer:** AgentTrust is **complementary, not competing**. We do not make assumptions about MetaMask's internal caveat enforcers or future roadmap. Instead, a human owner can use their standard wallet (including MetaMask) or device passkey to create and fund an AgentTrust mandate vault. 
 
-| Architectural Dimension | MetaMask Delegation (ERC-7715) | AgentTrust on Monad |
-| :--- | :--- | :--- |
-| **Primary Target User** | Interactive human wallet user in a dApp session | Headless autonomous AI agent (LangChain, Eliza, CrewAI, AutoGPT) |
-| **Root of Trust** | EIP-712 signature generated inside browser extension | Hardware WebAuthn Passkey (Secure Enclave / TPM) verified via **Monad RIP-7212 (`0x0100`)** |
-| **Agent Identity Binding** | Session caveat caveats tree | Composes directly with on-chain **ERC-8004 Agent Identity Registry** (`0x8004A818...`) |
-| **Execution Environment** | Client-side wallet extension runtime | Server-side / background daemon via zero-dependency `@agenttrust/sdk` |
-| **Receipt Auditing** | Wallet transaction history | Standalone cryptographic receipt auditor for third-party counterparties (`verifyReceipt`) |
+AgentTrust provides three concrete, on-chain primitives purpose-built for autonomous AI agents on Monad:
 
-**The Synergy:** A user can create and manage their AgentTrust vaults directly through their MetaMask wallet! AgentTrust provides the isolated on-chain execution container that the autonomous agent interacts with.
+1. **Passkey Root via Monad's RIP-7212 P-256 Precompile (`0x0100`):**
+   - Mandate authorization can be anchored directly to hardware biometrics / WebAuthn passkeys (TouchID, FaceID, YubiKey) via secp256r1.
+   - Verified directly on-chain on Monad at 6,900 gas (per Monad docs, ~50x cheaper than EVM bytecode verifiers).
+   - Zero MPC networks, zero relayer custodianship, and zero off-chain verification servers needed to validate human consent.
+
+2. **Native ERC-8004 Agent Identity Binding:**
+   - Directly composes on-chain with Monad Testnet's **ERC-8004 Trustless Agent Identity Registry** (`0x8004A818BFB912233c491871b3d84c89A494BD9e`).
+   - Every mandate explicitly authorizes an on-chain registered agent identity (`agentId`), preventing execution by unauthorized agents and establishing provenance.
+
+3. **Independent Counterparty Receipts Without Server Trust:**
+   - Every authorized action emits a canonical `ActionExecuted(mandateId, target, selector, value, returnData)` event.
+   - Any counterparty, DEX, or compliance auditor can verify execution receipts directly against Monad RPC using our standalone zero-dependency verifier (`npm run verify:tx <txHash>` / `verifyReceipt`), without trusting or pinging an AgentTrust backend.
+
+**The Synergy:** A user connects their wallet (e.g. MetaMask) or passkey to establish a scoped mandate. The autonomous AI agent (running headless in LangChain, Eliza, CrewAI, or an MCP server) executes on-chain within those immutable bounds.
 
 ---
 

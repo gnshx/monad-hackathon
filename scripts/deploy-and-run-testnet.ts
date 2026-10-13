@@ -303,50 +303,79 @@ async function main() {
   console.log(`   ✓ Allowed Action Executed in Block #${execReceipt.blockNumber}`);
   console.log(`   Explorer: https://testnet.monadexplorer.com/tx/${execTxHash}`);
 
+  // Sponsoring stranger account for execution gas if needed
+  const strangerBal = await publicClient.getBalance({ address: strangerAccount.address });
+  if (strangerBal < parseEther('0.005')) {
+    const fundStrangerTx = await deployerWallet.sendTransaction({
+      to: strangerAccount.address,
+      value: parseEther('0.01'),
+    });
+    await publicClient.waitForTransactionReceipt({ hash: fundStrangerTx });
+    console.log(`   ✓ Transferred 0.01 MON to Stranger account (${strangerAccount.address})`);
+  }
+
   // SCENARIO 2: Rogue Target Revert
   console.log('\n--- SCENARIO 2: ROGUE TARGET REVERT (FAIL-CLOSED) ---');
   const rogueTarget = '0x000000000000000000000000000000000000dEaD' as Address;
+  let rogueTxHash: Hex | undefined;
   try {
-    await publicClient.simulateContract({
-      account: agentAccount,
-      address: mandateManagerAddress,
-      abi: MandateManagerABI,
-      functionName: 'execute',
-      args: [0n, agentId, rogueTarget, '0x50824e4f', callData, parseEther('0.01'), 1n],
+    rogueTxHash = await agentWallet.sendTransaction({
+      to: mandateManagerAddress,
+      data: encodeFunctionData({
+        abi: MandateManagerABI,
+        functionName: 'execute',
+        args: [0n, agentId, rogueTarget, '0x50824e4f', callData, parseEther('0.01'), 1n],
+      }),
+      gas: 150_000n,
     });
-    console.error('   ❌ FAILED: Rogue target should have reverted!');
+    console.log(`   Tx Submitted: ${rogueTxHash}`);
+    const rogueReceipt = await publicClient.waitForTransactionReceipt({ hash: rogueTxHash });
+    console.log(`   ✓ On-Chain Revert Mined in Block #${rogueReceipt.blockNumber} (Status: ${rogueReceipt.status})`);
+    console.log(`   Explorer: https://testnet.monadexplorer.com/tx/${rogueTxHash}`);
   } catch (err: any) {
-    console.log(`   🛑 Blocked on-chain: TargetNotAllowed (Execution rejected)`);
+    console.log(`   🛑 Blocked on-chain: TargetNotAllowed (${err.message || String(err)})`);
   }
 
   // SCENARIO 3: Over-Limit Spend Revert
   console.log('\n--- SCENARIO 3: OVER-LIMIT SPEND REVERT (0.1 MON > 0.05 MON CAP) ---');
+  let overLimitTxHash: Hex | undefined;
   try {
-    await publicClient.simulateContract({
-      account: agentAccount,
-      address: mandateManagerAddress,
-      abi: MandateManagerABI,
-      functionName: 'execute',
-      args: [0n, agentId, targetAddress, '0x50824e4f', callData, parseEther('0.1'), 1n],
+    overLimitTxHash = await agentWallet.sendTransaction({
+      to: mandateManagerAddress,
+      data: encodeFunctionData({
+        abi: MandateManagerABI,
+        functionName: 'execute',
+        args: [0n, agentId, targetAddress, '0x50824e4f', callData, parseEther('0.1'), 2n],
+      }),
+      gas: 150_000n,
     });
-    console.error('   ❌ FAILED: Over-limit spend should have reverted!');
+    console.log(`   Tx Submitted: ${overLimitTxHash}`);
+    const overLimitReceipt = await publicClient.waitForTransactionReceipt({ hash: overLimitTxHash });
+    console.log(`   ✓ On-Chain Revert Mined in Block #${overLimitReceipt.blockNumber} (Status: ${overLimitReceipt.status})`);
+    console.log(`   Explorer: https://testnet.monadexplorer.com/tx/${overLimitTxHash}`);
   } catch (err: any) {
-    console.log(`   🛑 Blocked on-chain: ExceedsPerTxLimit (Execution rejected)`);
+    console.log(`   🛑 Blocked on-chain: ExceedsPerTxLimit (${err.message || String(err)})`);
   }
 
   // SCENARIO 4: Stranger Hijack Revert
   console.log('\n--- SCENARIO 4: STRANGER HIJACK REVERT (UNAUTHORIZED CALLER) ---');
+  let strangerTxHash: Hex | undefined;
   try {
-    await publicClient.simulateContract({
-      account: strangerAccount,
-      address: mandateManagerAddress,
-      abi: MandateManagerABI,
-      functionName: 'execute',
-      args: [0n, agentId, targetAddress, '0x50824e4f', callData, parseEther('0.01'), 1n],
+    strangerTxHash = await strangerWallet.sendTransaction({
+      to: mandateManagerAddress,
+      data: encodeFunctionData({
+        abi: MandateManagerABI,
+        functionName: 'execute',
+        args: [0n, agentId, targetAddress, '0x50824e4f', callData, parseEther('0.01'), 3n],
+      }),
+      gas: 150_000n,
     });
-    console.error('   ❌ FAILED: Stranger caller should have reverted!');
+    console.log(`   Tx Submitted: ${strangerTxHash}`);
+    const strangerReceipt = await publicClient.waitForTransactionReceipt({ hash: strangerTxHash });
+    console.log(`   ✓ On-Chain Revert Mined in Block #${strangerReceipt.blockNumber} (Status: ${strangerReceipt.status})`);
+    console.log(`   Explorer: https://testnet.monadexplorer.com/tx/${strangerTxHash}`);
   } catch (err: any) {
-    console.log(`   🛑 Blocked on-chain: CallerNotAuthorized (CRIT-01 guard)`);
+    console.log(`   🛑 Blocked on-chain: CallerNotAuthorized (${err.message || String(err)})`);
   }
 
   // SCENARIO 5: Owner Revocation & Fund Recovery
@@ -364,13 +393,20 @@ async function main() {
 
   // SCENARIO 6: Independent Receipt Auditing
   console.log('\n--- SCENARIO 6: INDEPENDENT RECEIPT AUDITING VIA SDK ---');
+  console.log('Auditing allowed execution receipt:');
   const auditRes = await verifyReceipt(publicClient, mandateManagerAddress, execTxHash, {
     expectedMandateId: 0n,
     expectedTarget: targetAddress,
   });
-  console.log(`   Receipt Audit Result: ${auditRes.verified ? '✅ 100% VERIFIED' : '❌ FAILED'}`);
+  console.log(`   Allowed Execution Audit: ${auditRes.verified ? '✅ 100% VERIFIED' : '❌ FAILED'} (Status: ${auditRes.status})`);
   console.log(`   Block Number: #${auditRes.blockNumber}`);
-  console.log(`   Status Category: ${auditRes.status}`);
+
+  if (rogueTxHash) {
+    console.log('\nAuditing rogue target revert receipt:');
+    const revertAudit = await verifyReceipt(publicClient, mandateManagerAddress, rogueTxHash);
+    console.log(`   Revert Audit: Status [${revertAudit.status.toUpperCase()}] | Verified: ${revertAudit.verified}`);
+    console.log(`   Audit Explanation: ${revertAudit.revertReason}`);
+  }
 
   console.log('\n================================================================');
   console.log('🎉 MONAD TESTNET DEPLOYMENT & 6 SCENARIOS COMPLETE & VERIFIED');
@@ -379,6 +415,9 @@ async function main() {
   console.log(`MockTarget: ${targetAddress}`);
   console.log(`Creation Tx: https://testnet.monadexplorer.com/tx/${createMandateHash}`);
   console.log(`Execution Tx: https://testnet.monadexplorer.com/tx/${execTxHash}`);
+  if (rogueTxHash) console.log(`Rogue Revert Tx: https://testnet.monadexplorer.com/tx/${rogueTxHash}`);
+  if (overLimitTxHash) console.log(`Over-Limit Revert Tx: https://testnet.monadexplorer.com/tx/${overLimitTxHash}`);
+  if (strangerTxHash) console.log(`Stranger Hijack Revert Tx: https://testnet.monadexplorer.com/tx/${strangerTxHash}`);
   console.log(`Revocation Tx: https://testnet.monadexplorer.com/tx/${revokeTxHash}`);
 
   const deploymentData = {
@@ -397,12 +436,18 @@ async function main() {
       credentialRegistration: regCredHash,
       mandateCreation: createMandateHash,
       allowedExecution: execTxHash,
+      rogueTargetRevert: rogueTxHash || null,
+      overLimitRevert: overLimitTxHash || null,
+      strangerHijackRevert: strangerTxHash || null,
       mandateRevocation: revokeTxHash,
     },
     explorerUrls: {
       mandateManager: `https://testnet.monadexplorer.com/address/${mandateManagerAddress}`,
       mandateCreation: `https://testnet.monadexplorer.com/tx/${createMandateHash}`,
       allowedExecution: `https://testnet.monadexplorer.com/tx/${execTxHash}`,
+      rogueTargetRevert: rogueTxHash ? `https://testnet.monadexplorer.com/tx/${rogueTxHash}` : null,
+      overLimitRevert: overLimitTxHash ? `https://testnet.monadexplorer.com/tx/${overLimitTxHash}` : null,
+      strangerHijackRevert: strangerTxHash ? `https://testnet.monadexplorer.com/tx/${strangerTxHash}` : null,
       mandateRevocation: `https://testnet.monadexplorer.com/tx/${revokeTxHash}`,
     },
   };

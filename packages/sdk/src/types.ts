@@ -100,7 +100,9 @@ export interface ExecutionReceiptVerification {
   returnData?: Hex;
   transactionHash: Hex;
   blockNumber: bigint;
+  gasUsed?: bigint;
   revertReason?: string;
+  logs?: any[];
 }
 
 export interface MonadNetworkConfig {

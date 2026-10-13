@@ -105,8 +105,12 @@
 > **Answer:** "Our first users are developers building transaction-capable autonomous agents—such as autonomous DeFi rebalancers, DAO automated treasury runners, and automated game players. These developers currently face a binary choice: grant their agent a hot private key with full wallet drain risk, or keep a human in the loop for every micro-transaction. AgentTrust gives them an SDK to grant scoped, autonomous operational freedom with guaranteed financial downside bounds."
 
 ### Q9: "How does this compare to ERC-4337 Session Keys, Safe Modules, or MetaMask Delegation?"
-> **Answer:** "ERC-4337 session keys and Safe modules are designed for general account abstraction and often require full smart contract wallet migrations, Bundler infrastructure, and paymasters. MetaMask's delegation toolkit provides ERC-7715 permissions primarily geared towards browser extensions. 
-> AgentTrust focuses specifically on the **autonomous agent developer workflow**: lightweight isolated vaults that work with standard EOAs via WebAuthn, paired with an open-source TypeScript SDK that agents import directly into LangChain, CrewAI, or autonomous loop runtimes, plus an independent receipt verifier for third-party auditing."
+> **Answer:** "ERC-4337 session keys and Safe modules are designed for general account abstraction and often require full smart contract wallet migrations, Bundler infrastructure, and paymasters. MetaMask's delegation initiatives (e.g. [MetaMask Delegation Toolkit](https://docs.metamask.io/delegation-framework/) and [ERC-7715](https://eips.ethereum.org/EIPS/eip-7715)) provide scoped permissions for user sessions.
+> 
+> AgentTrust is complementary and focuses specifically on autonomous AI agent execution on Monad with three distinct differentiators:
+> 1. **Passkey Root via Monad RIP-7212 Precompile (0x0100):** Hardware passkey signatures verified directly on-chain at 6,900 gas (~50x cheaper than EVM bytecode verifiers).
+> 2. **Native ERC-8004 Agent Identity Binding:** Direct on-chain composability with Monad Testnet's ERC-8004 Agent Identity Registry.
+> 3. **Independent Counterparty Receipts Without Server Trust:** Zero-server cryptographic receipt verifier (`verifyReceipt` / `verify:tx`) that any counterparty can run directly against RPC."
 
 ### Q10: "Is the contract deployed on Monad testnet right now?"
 > **Answer:** "The contract code is 100% written, tested with 29 Foundry tests, and deployment-ready via `contracts/script/Deploy.s.sol`. On Monad testnet, because the public faucet was rate-limited during the hackathon sprint, the configured address currently has 0 bytes bytecode. Rather than faking a deployment or hardcoding synthetic transaction hashes, our console honestly detects bytecode status via RPC and clearly directs judges to our fully verified local Anvil node (31337) or provides the one-command deployment script. Every claim we make is backed by verifiable code."

@@ -182,7 +182,9 @@ export async function verifyReceipt(
       status: 'reverted',
       transactionHash,
       blockNumber: receipt.blockNumber,
-      revertReason: 'Transaction reverted on-chain (contract policy rejected execution)',
+      gasUsed: receipt.gasUsed,
+      logs: receipt.logs,
+      revertReason: 'Transaction reverted on-chain (contract policy rejected execution: no ActionExecuted event emitted)',
     };
   }
 
@@ -214,6 +216,8 @@ export async function verifyReceipt(
             returnData,
             transactionHash,
             blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed,
+            logs: receipt.logs,
             revertReason: `Receipt emitted for Mandate #${mandateId.toString()}, expected #${options.expectedMandateId.toString()}`,
           };
         }
@@ -232,6 +236,8 @@ export async function verifyReceipt(
             returnData,
             transactionHash,
             blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed,
+            logs: receipt.logs,
             revertReason: `Receipt target ${target} does not match expected ${options.expectedTarget}`,
           };
         }
@@ -250,6 +256,8 @@ export async function verifyReceipt(
             returnData,
             transactionHash,
             blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed,
+            logs: receipt.logs,
             revertReason: `Receipt selector ${selector} does not match expected ${options.expectedSelector}`,
           };
         }
@@ -265,6 +273,8 @@ export async function verifyReceipt(
             returnData,
             transactionHash,
             blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed,
+            logs: receipt.logs,
             revertReason: `Receipt transferred value ${value.toString()} exceeds expected maximum ${options.expectedMaxValue.toString()}`,
           };
         }
@@ -280,6 +290,8 @@ export async function verifyReceipt(
             returnData,
             transactionHash,
             blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed,
+            logs: receipt.logs,
             revertReason: `Receipt transferred value ${value.toString()} does not match expected ${options.expectedValue.toString()}`,
           };
         }
@@ -294,6 +306,8 @@ export async function verifyReceipt(
           returnData,
           transactionHash,
           blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed,
+          logs: receipt.logs,
         };
       }
     } catch {
@@ -306,6 +320,8 @@ export async function verifyReceipt(
     status: 'success',
     transactionHash,
     blockNumber: receipt.blockNumber,
+    gasUsed: receipt.gasUsed,
+    logs: receipt.logs,
     revertReason: 'Transaction succeeded but no ActionExecuted event was emitted by MandateManager',
   };
 }

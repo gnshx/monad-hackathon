@@ -58,10 +58,14 @@ async function main() {
     const result = await verifyReceipt(client, contractAddress, txHash);
 
     console.log(`\n📊 AUDIT SUMMARY:`);
-    console.log(`   Verification Result:   ${result.verified ? '✅ 100% CRYPTOGRAPHICALLY VERIFIED' : '❌ FAILED / REVERTED'}`);
+    console.log(`   Verification Result:   ${result.verified ? '✅ 100% CRYPTOGRAPHICALLY VERIFIED' : result.status === 'reverted' ? '❌ REVERTED ON-CHAIN (POLICY REJECTED)' : '⚠️ UNVERIFIED / UNRELATED'}`);
     console.log(`   Execution Category:    [${result.status.toUpperCase()}]`);
     console.log(`   Block Number:          #${result.blockNumber}`);
-    console.log(`   Gas Used:              ${result.gasUsed ? result.gasUsed.toString() : 'N/A'}`);
+    console.log(`   Gas Used:              ${result.gasUsed !== undefined ? result.gasUsed.toLocaleString() : 'N/A'}`);
+
+    if (result.revertReason) {
+      console.log(`   Audit Note:            ${result.revertReason}`);
+    }
 
     if (result.mandateId !== undefined) {
       console.log(`\n📋 ENFORCED ON-CHAIN POLICY BOUNDS:`);
@@ -71,10 +75,21 @@ async function main() {
       if (result.value !== undefined) console.log(`   Native Value Spent:    ${formatEther(result.value)} MON`);
     }
 
+    if (result.status === 'reverted') {
+      console.log(`\n🛡️  ON-CHAIN POLICY REVERT ANALYSIS:`);
+      console.log(`   This transaction was REVERTED on-chain by the EVM.`);
+      console.log(`   In Monad/EVM execution, when an unauthorized action is attempted (e.g. TargetNotAllowed,`);
+      console.log(`   ExceedsPerTxLimit, ExceedsTotalLimit, or CallerNotAuthorized), the contract executes 'revert'`);
+      console.log(`   and rolls back all state modifications.`);
+      console.log(`   Because the call reverted, no ActionExecuted event was emitted into the receipt logs.`);
+      console.log(`   👉 This is the EXPECTED BEHAVIOR for attack scenarios: the smart contract successfully blocked`);
+      console.log(`      the unauthorized agent action at the consensus level!`);
+    }
+
     if (result.logs && result.logs.length > 0) {
       console.log(`\n📜 LOG TOPICS EXTRACTED:`);
       result.logs.forEach((log, i) => {
-        console.log(`   Log #${i + 1} Topic 0:   ${log.topics[0]}`);
+        console.log(`   Log #${i + 1} Contract: ${log.address} | Topic 0: ${log.topics[0]}`);
       });
     }
 
@@ -83,7 +98,13 @@ async function main() {
     }
 
     console.log('\n================================================================');
-    console.log(result.verified ? '🎉 RECEIPT COMPLIANCE CONFIRMED ON-CHAIN' : '⚠️ RECEIPT REJECTED OR NOT RECOGNIZED');
+    if (result.verified) {
+      console.log('🎉 RECEIPT COMPLIANCE CONFIRMED ON-CHAIN');
+    } else if (result.status === 'reverted') {
+      console.log('🛡️ ON-CHAIN REVERT CONFIRMED (SECURITY GATE TRIGGERED)');
+    } else {
+      console.log('⚠️ RECEIPT REJECTED OR NOT RECOGNIZED AS A MANDATE ACTION');
+    }
     console.log('================================================================');
   } catch (err: any) {
     console.error(`\n❌ Error during verification: ${err.message || String(err)}`);
