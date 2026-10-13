@@ -624,6 +624,25 @@ export default function SecurityConsoleDashboard() {
 
           {/* Controls Right */}
           <div className="top-bar-controls" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            {activeTab === 'passkey' ? (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-full)',
+                  padding: '0.4rem 0.8rem',
+                }}
+              >
+                <KeyRound size={14} /> Monad Testnet · no wallet needed
+              </span>
+            ) : (
+            <>
             {/* Network Selector Pill Dropdown */}
             <div style={{ position: 'relative' }} ref={dropdownRef}>
               <button
@@ -757,6 +776,8 @@ export default function SecurityConsoleDashboard() {
                   : 'Connect wallet'}
               </span>
             </button>
+            </>
+            )}
           </div>
         </header>
 
