@@ -19,7 +19,7 @@ AgentTrust is an open primitive for delegating spending authority to AI agents. 
 **Links**
 - Repo: https://github.com/gnshx/monad-hackathon (make sure metropolis@hackathon.monad.xyz has access)
 - Live console: https://agenttrust.vercel.app
-- AgentMandates on Monad testnet: `<address from deployments.mandates.json>`
+- AgentMandates on Monad testnet: [`0x636ffc9e00aa109b3f3cb899c891fb4603187d12`](https://testnet.monadexplorer.com/address/0x636ffc9e00aa109b3f3cb899c891fb4603187d12) (full run with every tx: `deployments.mandates.json`)
 - Demo video (≤3 min): `<link>`
 - Pitch video (≤2 min): `<link>`
 
@@ -37,9 +37,9 @@ No test login credentials are needed. Passkeys are created on the judge's own de
 
 ## Deliverables checklist
 
-- [ ] Logo: `docs/assets/agenttrust_logo.jpg` (JPG, under 3 MB)
+- [x] Logo: `docs/assets/agenttrust_logo.jpg` (JPG, under 3 MB)
 - [ ] Repository public, with access for metropolis@hackathon.monad.xyz
-- [ ] `npm run e2e -- --testnet` run, and `deployments.mandates.json` committed
+- [x] `npm run e2e -- --testnet` run, and `deployments.mandates.json` committed
 - [ ] Vercel env vars set (see `docs/deploy.md`) and the console redeployed
 - [ ] Demo video recorded from the live console + Claude with the MCP server (script: `docs/demo-and-pitch.md`)
 - [ ] Pitch video recorded (script: `docs/demo-and-pitch.md`)
