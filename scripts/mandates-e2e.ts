@@ -101,7 +101,7 @@ async function main() {
     log(`Test USDC      ${usdc}`);
 
     step('2/8', 'Give the agent gas and an ERC-8004 identity');
-    record.fundAgent = await relayer.sendTransaction({ to: agentAccount.address, value: parseEther(TESTNET ? '0.05' : '1') });
+    record.fundAgent = await relayer.sendTransaction({ to: agentAccount.address, value: parseEther(TESTNET ? '0.3' : '1') });
     await wait(record.fundAgent);
     let agentId: bigint;
     if (TESTNET) {
@@ -162,7 +162,7 @@ async function main() {
       ['strangerBlocked', stranger, target, call(3), 0n],
     ];
     if (!TESTNET) await relayer.sendTransaction({ to: stranger.account.address, value: parseEther('1') });
-    else await wait(await relayer.sendTransaction({ to: stranger.account.address, value: parseEther('0.02') }));
+    else await wait(await relayer.sendTransaction({ to: stranger.account.address, value: parseEther('0.1') }));
     {
       const check = await agentSdk.checkPayment(mandateId, agentAccount.address, usdc, merchant, 15_000_000n);
       record.tokenOverLimitBlocked = await agent.writeContract({ address: mandatesAddress, abi: AgentMandatesABI, functionName: 'payToken', args: [mandateId, usdc, merchant, 15_000_000n], gas: 300_000n });

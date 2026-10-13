@@ -1,0 +1,34 @@
+{
+  "network": "Monad Testnet",
+  "chainId": 10143,
+  "timestamp": "2026-10-13T17:37:45.052Z",
+  "contracts": {
+    "agentMandates": "0x636ffc9e00aa109b3f3cb899c891fb4603187d12",
+    "erc8004IdentityRegistry": "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+    "mockTarget": "0x5c91b87c350b79533d21a8c638099eec7a79c3e4",
+    "testUsdc": "0xfd14d330987869a6ecf9b43c910b1e8fcf1ae0cc",
+    "p256Precompile": "0x0000000000000000000000000000000000000100"
+  },
+  "mandateId": 1,
+  "agentId": 2306,
+  "agent": "0xe5A8eAACFb7851aa1A633e53ADA62eBF3C3cc303",
+  "merchant": "0xB80413471Ec370047Ac95F76681Efb7Afe394Fa1",
+  "ownerKey": "0x0ea1b2e2eab1587612025fb9576c81a11ab182c7b7a1edc38cb713f7c2ce7d01",
+  "transactions": {
+    "fundAgent": "0x5d4e3b6a8cfa714dbca8de5564d40de4e323ac81b7dab564c7e867183445b1db",
+    "registerAgent": "0x277e3e2c0d209fbf2188eb7b1d0db8fff5393781d6511f415925c14385ce4cd4",
+    "createMandate": "0x19b35182fd49acc32172228492e86cf5dd6419816df0f485b0fc81af8ae343d7",
+    "mintUsdc": "0xe3b6ed50bbf5f373e33e1b5844ecd1526797775682e6579588529939cdcc3604",
+    "depositUsdc": "0xb54747312c7e74e1756a47cf74150c389dced06fdbc87b635a692a3f1e3fe70a",
+    "allowedCall": "0x427e03b566286ab95385e5f4d5b3d741692fb71afbc52d12a0fe3262d8360fd0",
+    "allowedPayment": "0xd01ae88edbc6ff0496cc23c8457f151176b7ef3aea34f5f95bd4980cbcd763a5",
+    "tokenOverLimitBlocked": "0xc18deef25aca950b641e29bb92e1ee53678515342cf08c8963967a6ecac85c83",
+    "overLimitBlocked": "0xa4e97a990798629d0308857e5f56595c7a774cdb500967e07a7f2bc301a8ee8f",
+    "rogueTargetBlocked": "0xb5024a91df9b5cb28d525b9f4ce040dfd51251125e7a96a99cee526b096abf8b",
+    "strangerBlocked": "0xd2671865fcfbaeb41caa5167397f6d2bd5d0b441d137942d05496f293cac148b",
+    "revoke": "0x65eb583c3711af4f662e0667ff0c08ffed4c7cdd4c02c1b1503c31f2e1e0c0d7",
+    "afterRevokeBlocked": "0xc79ec923991ba123a6e406207af67fac1719b1b3ca2f327802669d234407e70a",
+    "withdraw": "0x61761b3be61b538d8d1aa4d3f8016c2cdbb3806e801280a90d00bf078e542ade",
+    "withdrawToken": "0x2895acd96ecde1ecb6b65bbde66fbb805186a3e95f3aa679082a0d38df2d592f"
+  }
+}
