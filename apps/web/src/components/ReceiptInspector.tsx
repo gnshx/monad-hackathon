@@ -261,7 +261,7 @@ export function ReceiptInspector() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Header Card */}
-      <div className="security-card" style={{ background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(131, 110, 249, 0.04))' }}>
+      <div className="security-card" style={{ padding: '1.75rem' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
@@ -271,24 +271,24 @@ export function ReceiptInspector() {
               </span>
               <span className="badge badge-monad">Zero-Backend SDK</span>
             </div>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
               Trust & Receipt Explorer
             </h2>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '680px', marginTop: '0.25rem' }}>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '680px', marginTop: '0.25rem' }}>
               Independently audit execution receipts directly against raw blockchain event logs and contract bytecode. Fails closed on unconfirmed or mismatched evidence.
             </p>
           </div>
 
           {/* Network Badge */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.75rem', background: 'var(--accent-monad)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', fontWeight: 600, color: '#fff' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.85rem', background: '#ede9fe', borderRadius: 'var(--radius-md)', fontSize: '0.785rem', fontWeight: 600, color: '#4f46e5', border: '1px solid #ddd6fe' }}>
             <span>Monad Testnet</span>
-            <span style={{ fontFamily: 'var(--font-mono)', background: 'rgba(255,255,255,0.2)', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>Chain ID: 10143</span>
+            <span style={{ fontFamily: 'var(--font-mono)', background: '#ffffff', padding: '0.1rem 0.4rem', borderRadius: '4px', border: '1px solid #c7d2fe' }}>Chain ID: 10143</span>
           </div>
         </div>
 
         {/* Input Form */}
-        <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem' }}>
+        <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.85rem' }}>
             <div>
               <label className="input-label">MandateManager Contract Address *</label>
               <input
@@ -313,7 +313,7 @@ export function ReceiptInspector() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem' }}>
             <div>
               <label className="input-label">Expected Mandate ID (Optional)</label>
               <input
@@ -339,25 +339,23 @@ export function ReceiptInspector() {
           </div>
 
           {validationError && (
-            <div style={{ padding: '0.6rem 0.85rem', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid var(--accent-rose-border)', borderRadius: 'var(--radius-sm)', color: 'var(--accent-rose)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ padding: '0.65rem 0.85rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--radius-md)', color: '#dc2626', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <AlertTriangle size={15} />
               <span>{validationError}</span>
             </div>
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                className="btn-primary"
-                onClick={handleVerify}
-                disabled={isVerifying}
-              >
-                <SearchCode size={15} />
-                {isVerifying ? 'Auditing On-Chain Evidence...' : 'Audit On-Chain Evidence'}
-              </button>
-            </div>
+            <button
+              className="btn-primary"
+              onClick={handleVerify}
+              disabled={isVerifying}
+            >
+              <SearchCode size={15} />
+              {isVerifying ? 'Auditing On-Chain Evidence...' : 'Audit On-Chain Evidence'}
+            </button>
 
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+            <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'var(--font-mono)' }}>
               Active RPC: https://testnet-rpc.monad.xyz
             </span>
           </div>
@@ -367,41 +365,42 @@ export function ReceiptInspector() {
       {/* Audit Report Result */}
       {auditResult ? (
         <div
-          className="security-card-elevated"
+          className="security-card"
           style={{
             border: auditResult.verified
-              ? '1px solid var(--accent-emerald-border)'
-              : '1px solid var(--accent-rose-border)',
+              ? '1px solid #a7f3d0'
+              : '1px solid #fecaca',
+            padding: '1.75rem',
           }}
         >
           {/* Header Status */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <div
                 style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '8px',
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '10px',
                   background: auditResult.verified
-                    ? 'var(--accent-emerald-subtle)'
-                    : 'var(--accent-rose-subtle)',
+                    ? '#ecfdf5'
+                    : '#fef2f2',
                   border: auditResult.verified
-                    ? '1px solid var(--accent-emerald-border)'
-                    : '1px solid var(--accent-rose-border)',
+                    ? '1px solid #a7f3d0'
+                    : '1px solid #fecaca',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
                 {auditResult.verified ? (
-                  <ShieldCheck size={22} color="var(--accent-emerald)" />
+                  <ShieldCheck size={24} color="#059669" />
                 ) : (
-                  <ShieldAlert size={22} color="var(--accent-rose)" />
+                  <ShieldAlert size={24} color="#dc2626" />
                 )}
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#111827' }}>
                     {auditResult.verified
                       ? 'Receipt Audit: Cryptographically Verified'
                       : 'Receipt Audit: Verification Failed'}
@@ -410,7 +409,7 @@ export function ReceiptInspector() {
                     {auditResult.verified ? 'Consensus Verified' : 'Unverified / Reverted'}
                   </span>
                 </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                <div style={{ fontSize: '0.785rem', color: '#64748b', fontFamily: 'var(--font-mono)' }}>
                   {auditResult.verified
                     ? `Confirmed in ${auditResult.networkName} Block #${auditResult.blockNumber}`
                     : `Network: ${auditResult.networkName} (Chain ID: ${auditResult.chainId})`}
@@ -420,10 +419,10 @@ export function ReceiptInspector() {
 
             <button
               className="btn-secondary"
-              style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem' }}
+              style={{ padding: '0.45rem 0.85rem', fontSize: '0.785rem' }}
               onClick={() => copyToClipboard(auditResult.txHash)}
             >
-              {copied ? <Check size={14} color="var(--accent-emerald)" /> : <Copy size={14} />}
+              {copied ? <Check size={14} color="#059669" /> : <Copy size={14} />}
               {copied ? 'Copied Hash' : 'Copy Hash'}
             </button>
           </div>
@@ -434,13 +433,13 @@ export function ReceiptInspector() {
               <div
                 key={idx}
                 style={{
-                  background: 'var(--bg-input)',
+                  background: '#f8fafc',
                   border:
                     check.status === 'passed'
-                      ? '1px solid rgba(16, 185, 129, 0.25)'
+                      ? '1px solid #a7f3d0'
                       : check.status === 'warning'
-                      ? '1px solid rgba(245, 158, 11, 0.25)'
-                      : '1px solid rgba(244, 63, 94, 0.25)',
+                      ? '1px solid #fde68a'
+                      : '1px solid #fecaca',
                   borderRadius: 'var(--radius-md)',
                   padding: '0.85rem 1rem',
                   display: 'flex',
@@ -449,15 +448,15 @@ export function ReceiptInspector() {
                 }}
               >
                 {check.status === 'passed' ? (
-                  <CheckCircle2 size={18} color="var(--accent-emerald)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <CheckCircle2 size={18} color="#059669" style={{ marginTop: '2px', flexShrink: 0 }} />
                 ) : check.status === 'warning' ? (
-                  <AlertTriangle size={18} color="var(--accent-amber)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <AlertTriangle size={18} color="#d97706" style={{ marginTop: '2px', flexShrink: 0 }} />
                 ) : (
-                  <XCircle size={18} color="var(--accent-rose)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <XCircle size={18} color="#dc2626" style={{ marginTop: '2px', flexShrink: 0 }} />
                 )}
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <strong style={{ fontSize: '0.85rem', color: '#fff' }}>{check.title}</strong>
+                    <strong style={{ fontSize: '0.875rem', color: '#111827' }}>{check.title}</strong>
                     <span
                       className={
                         check.status === 'passed'
@@ -471,10 +470,10 @@ export function ReceiptInspector() {
                       {check.status === 'passed' ? 'Passed' : check.status === 'warning' ? 'Notice' : 'Failed'}
                     </span>
                   </div>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                  <p style={{ fontSize: '0.8rem', color: '#4b5563', marginTop: '0.2rem' }}>
                     {check.description}
                   </p>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: '#64748b', marginTop: '0.35rem' }}>
                     {check.evidence}
                   </div>
                 </div>
@@ -483,22 +482,22 @@ export function ReceiptInspector() {
           </div>
 
           {/* Technical Context Footer */}
-          <div style={{ marginTop: '1.25rem', padding: '0.85rem', borderRadius: 'var(--radius-sm)', background: 'rgba(131, 110, 249, 0.05)', border: '1px solid var(--border-subtle)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            <strong style={{ color: '#c4b5fd' }}>Independent Verification Proof:</strong> Receipts are decoded against the canonical ABI without trusting web frontend state. If an event origin does not match the target contract address or has been tampered with, the audit fails closed.
+          <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', background: '#eef2ff', border: '1px solid #e0e7ff', fontSize: '0.785rem', color: '#334155' }}>
+            <strong style={{ color: '#4338ca' }}>Independent Verification Proof:</strong> Receipts are decoded against the canonical ABI without trusting web frontend state. If an event origin does not match the target contract address or has been tampered with, the audit fails closed.
           </div>
         </div>
       ) : (
         /* Empty Actionable State Before Audit */
-        <div className="security-card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', border: '1px dashed var(--border-default)' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem' }}>
-            <SearchCode size={22} color="var(--text-muted)" />
+        <div className="empty-state">
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#f3f4f6', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem', color: '#9ca3af' }}>
+            <SearchCode size={24} />
           </div>
-          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff' }}>No Active Receipt Audit</h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: '480px', margin: '0.35rem auto 1rem auto' }}>
+          <h3 className="empty-state-title">No Active Receipt Audit</h3>
+          <p className="empty-state-desc">
             Provide a Monad transaction hash and MandateManager contract address above to independently verify on-chain consensus, event topics, and spending constraints.
           </p>
-          <p style={{ fontSize: '0.75rem', color: 'var(--accent-rose)', fontFamily: 'var(--font-mono)' }}>
-            Note: This auditor queries Monad Testnet (Chain ID 10143) directly. No local simulation mode available.
+          <p style={{ fontSize: '0.785rem', color: '#dc2626', fontFamily: 'var(--font-mono)', marginTop: '0.5rem' }}>
+            Note: This auditor queries Monad Testnet (Chain ID 10143) directly.
           </p>
         </div>
       )}

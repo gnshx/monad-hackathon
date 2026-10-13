@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar, type NavTab } from '../components/Sidebar';
 import { MandateList } from '../components/MandateList';
 import { AiPolicyCopilot } from '../components/AiPolicyCopilot';
@@ -35,23 +35,30 @@ import {
   MONAD_TESTNET_CONFIG,
 } from '../lib/contracts';
 import {
+  Shield,
   ShieldCheck,
   Plus,
   Sparkles,
-  FlaskConical,
   SearchCode,
-  FileKey2,
-  Activity,
-  Layers,
-  ArrowRight,
-  TrendingUp,
-  AlertTriangle,
+  FileText,
   Lock,
   Wallet,
   AlertCircle,
   CheckCircle2,
   Radio,
   ExternalLink,
+  ChevronDown,
+  ArrowRight,
+  Target,
+  Code,
+  Coins,
+  CreditCard,
+  Clock,
+  Info,
+  BookOpen,
+  Layers,
+  KeyRound,
+  Check,
 } from 'lucide-react';
 
 export default function SecurityConsoleDashboard() {
@@ -74,21 +81,35 @@ export default function SecurityConsoleDashboard() {
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [revokingId, setRevokingId] = useState<bigint | null>(null);
   const [copilotDraft, setCopilotDraft] = useState<Partial<CreateMandateParams> | null>(null);
+  const [isNetworkDropdownOpen, setIsNetworkDropdownOpen] = useState(false);
   const [statusAlert, setStatusAlert] = useState<{
     type: 'info' | 'warning' | 'error' | 'success';
     message: string;
   } | null>(null);
 
-  // Local Simulated Mandates State (starts empty; populated only by real user actions in sandbox mode)
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsNetworkDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  // Local Simulated Mandates State
   const [simulatedMandates, setSimulatedMandates] = useState<MandateItem[]>([]);
 
-  // Real Monad Testnet Mandates State (populated strictly from on-chain reads or real confirmed txs)
+  // Real Monad Testnet Mandates State
   const [testnetMandates, setTestnetMandates] = useState<MandateItem[]>([]);
 
-  // Simulated Activities State (starts empty; populated only by real user actions in sandbox mode)
+  // Simulated Activities State
   const [simulatedActivities, setSimulatedActivities] = useState<ActivityItem[]>([]);
 
-  // Real Monad Testnet Activities State (strictly real transactions with confirmed hashes)
+  // Real Monad Testnet Activities State
   const [testnetActivities, setTestnetActivities] = useState<ActivityItem[]>([]);
 
   // Current active records based on selected network mode
@@ -119,106 +140,48 @@ export default function SecurityConsoleDashboard() {
     }
   }, []);
 
-  // Persist networkMode to localStorage when it changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('agenttrust.networkMode', networkMode);
-    }
-  }, [networkMode]);
-
-  // Sync wallet state and check network on mount / mode switch
   useEffect(() => {
     if (networkMode === 'MONAD_TESTNET') {
       checkContractOnTestnet();
-      if (typeof window !== 'undefined' && (window as any).ethereum) {
-        const eth = (window as any).ethereum;
-        eth.request({ method: 'eth_accounts' }).then((accounts: string[]) => {
-          if (accounts && accounts.length > 0) {
-            setWalletAddress(accounts[0]);
-          } else {
-            setWalletAddress(null);
-          }
-        }).catch(() => {});
-
-        eth.request({ method: 'eth_chainId' }).then((hexId: string) => {
-          setConnectedChainId(parseInt(hexId, 16));
-        }).catch(() => {});
-
-        const handleAccounts = (accs: string[]) => {
-          setWalletAddress(accs.length > 0 ? accs[0] : null);
-        };
-        const handleChain = (hexId: string) => {
-          setConnectedChainId(parseInt(hexId, 16));
-        };
-
-        eth.on?.('accountsChanged', handleAccounts);
-        eth.on?.('chainChanged', handleChain);
-
-        return () => {
-          eth.removeListener?.('accountsChanged', handleAccounts);
-          eth.removeListener?.('chainChanged', handleChain);
-        };
-      }
-    } else {
-      // Local simulation defaults - no hardcoded wallet
-      // Wallet must be explicitly connected by user
-      setWalletAddress(null);
-      setConnectedChainId(31337);
-      setIsContractDeployed(true);
     }
   }, [networkMode, checkContractOnTestnet]);
 
-  // Connect or switch wallet
+  // Connect Wallet Handler
   const handleConnectWallet = async () => {
-    setStatusAlert(null);
-    if (networkMode === 'LOCAL_SIMULATION') {
-      // In LOCAL_SIMULATION, generate a clearly-labelled random sandbox address (not a real account)
-      if (walletAddress) {
-        setWalletAddress(null);
-      } else {
-        const bytes = new Uint8Array(20);
-        window.crypto.getRandomValues(bytes);
-        const generated = `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
-        setWalletAddress(generated);
-        setStatusAlert({
-          type: 'info',
-          message: `[SIMULATION] Generated random sandbox wallet ${generated.slice(0, 6)}...${generated.slice(-4)} for local testing. This address does not exist on-chain and holds no funds.`,
-        });
-      }
-      setConnectedChainId(31337);
-      return;
-    }
-
-    // Monad Testnet mode: request injected wallet
-    if (typeof window === 'undefined' || !(window as any).ethereum) {
-      setStatusAlert({
-        type: 'warning',
-        message: 'No injected Web3 wallet detected (MetaMask, Rabby, etc.). Please install a Web3 wallet extension to submit real transactions on Monad Testnet, or switch to Local Simulation mode.',
-      });
-      return;
-    }
-
     try {
-      const eth = (window as any).ethereum;
-      const accounts = await eth.request({ method: 'eth_requestAccounts' });
-      if (accounts && accounts.length > 0) {
-        setWalletAddress(accounts[0]);
+      if (typeof window === 'undefined' || !(window as any).ethereum) {
+        if (networkMode === 'LOCAL_SIMULATION') {
+          setWalletAddress('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+          setConnectedChainId(31337);
+          setStatusAlert({ type: 'info', message: 'Connected simulated test wallet (0xf39F...2266).' });
+          return;
+        }
+        alert('MetaMask or Web3 wallet extension not detected. Running in sandbox read-only mode.');
+        return;
       }
 
-      const hexChainId = await eth.request({ method: 'eth_chainId' });
-      const chainIdNum = parseInt(hexChainId, 16);
-      setConnectedChainId(chainIdNum);
+      const client = createWalletClient({
+        chain: MONAD_TESTNET_CONFIG as any,
+        transport: custom((window as any).ethereum),
+      });
 
-      if (chainIdNum !== 10143) {
+      const [address] = await client.requestAddresses();
+      setWalletAddress(address);
+
+      const chainIdHex = await (window as any).ethereum.request({ method: 'eth_chainId' });
+      const chainId = parseInt(chainIdHex, 16);
+      setConnectedChainId(chainId);
+
+      if (networkMode === 'MONAD_TESTNET' && chainId !== 10143) {
         try {
-          await eth.request({
+          await (window as any).ethereum.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x279f' }],
+            params: [{ chainId: '0x279f' }], // 10143 in hex
           });
           setConnectedChainId(10143);
-        } catch (switchErr: any) {
-          if (switchErr.code === 4902) {
-            await eth.request({
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            await (window as any).ethereum.request({
               method: 'wallet_addEthereumChain',
               params: [
                 {
@@ -235,59 +198,38 @@ export default function SecurityConsoleDashboard() {
         }
       }
     } catch (err: any) {
-      setStatusAlert({
-        type: 'error',
-        message: `Wallet connection error: ${err.message || String(err)}`,
-      });
+      console.error('Wallet connection error:', err);
+      setStatusAlert({ type: 'error', message: err.message || 'Failed to connect wallet.' });
     }
   };
 
   const handleToggleNetworkMode = (mode: 'LOCAL_SIMULATION' | 'MONAD_TESTNET') => {
     setNetworkMode(mode);
+    setIsNetworkDropdownOpen(false);
     if (typeof window !== 'undefined') {
       localStorage.setItem('agenttrust.networkMode', mode);
     }
-    setStatusAlert(null);
-    if (mode === 'LOCAL_SIMULATION') {
-      // In LOCAL_SIMULATION, no auto-assigned wallet - user must explicitly connect
-      setWalletAddress(null);
-      setConnectedChainId(31337);
-    } else {
-      if (typeof window !== 'undefined' && (window as any).ethereum?.selectedAddress) {
-        setWalletAddress((window as any).ethereum.selectedAddress);
-      } else {
-        setWalletAddress(null);
-      }
-      checkContractOnTestnet();
-    }
+    setStatusAlert({
+      type: 'info',
+      message:
+        mode === 'MONAD_TESTNET'
+          ? 'Switched to Monad Testnet mode (Chain 10143). Queries routed to live RPC.'
+          : 'Switched to Local Simulation sandbox mode. Offline scenario execution active.',
+    });
   };
 
   // Revoke Mandate Handler
   const handleRevoke = async (id: bigint) => {
-    setStatusAlert(null);
     setRevokingId(id);
-
     if (networkMode === 'MONAD_TESTNET') {
-      if (!walletAddress) {
-        setStatusAlert({ type: 'warning', message: 'Please connect your Web3 wallet to revoke this mandate on-chain.' });
-        setRevokingId(null);
-        return;
-      }
-      if (connectedChainId !== 10143) {
-        setStatusAlert({ type: 'warning', message: 'Please switch your wallet network to Monad Testnet (Chain ID 10143).' });
-        setRevokingId(null);
-        return;
-      }
-      if (!isContractDeployed) {
-        setStatusAlert({
-          type: 'error',
-          message: `Cannot revoke: MandateManager contract is not deployed at ${DEFAULT_MANDATE_MANAGER_ADDRESS} on Monad Testnet (0 bytes bytecode). Deploy contracts first.`,
-        });
-        setRevokingId(null);
-        return;
-      }
-
       try {
+        if (!walletAddress) {
+          throw new Error('Please connect your wallet to submit on-chain revocation.');
+        }
+        if (connectedChainId !== 10143) {
+          throw new Error('Please switch network to Monad Testnet (Chain ID 10143) in your wallet.');
+        }
+
         const walletClient = createWalletClient({
           chain: MONAD_TESTNET_CONFIG as any,
           transport: custom((window as any).ethereum),
@@ -306,7 +248,7 @@ export default function SecurityConsoleDashboard() {
           args: [id],
         });
 
-        setStatusAlert({ type: 'info', message: `Transaction submitted: ${hash.slice(0, 10)}... Waiting for confirmation on Monad...` });
+        setStatusAlert({ type: 'info', message: `Revocation transaction submitted: ${hash.slice(0, 10)}... Waiting for Monad confirmation...` });
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
         if (receipt.status === 'success') {
@@ -403,7 +345,7 @@ export default function SecurityConsoleDashboard() {
           nonce,
         });
 
-        // 3. Hardware Passkey Prompt (Strict Fail-Closed: throws if user cancels or fails)
+        // 3. Hardware Passkey Prompt
         const passkeyData = await signMandateWithPasskey(challengeHash);
 
         // 4. Submit real on-chain transaction through user's wallet
@@ -439,7 +381,6 @@ export default function SecurityConsoleDashboard() {
         const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
         if (receipt.status === 'success') {
-          // Read new mandate from chain
           const newId = (await publicClient.readContract({
             address: DEFAULT_MANDATE_MANAGER_ADDRESS,
             abi: MandateManagerABI,
@@ -448,7 +389,7 @@ export default function SecurityConsoleDashboard() {
 
           const createdMandate: MandateItem = {
             id: newId,
-            owner: walletAddress as Address,
+            owner: walletAddress,
             agentAddress: params.agentAddress,
             agentId: params.agentId,
             maxValuePerTx: params.maxValuePerTx,
@@ -464,35 +405,30 @@ export default function SecurityConsoleDashboard() {
           setTestnetMandates((prev) => [createdMandate, ...prev]);
           setTestnetActivities((prev) => [
             {
-              id: `tx-${receipt.transactionHash}`,
+              id: `tx-${txHash}`,
               type: 'executed',
               agentId: params.agentId,
               mandateId: newId,
-              target: params.targets[0].target,
-              selector: params.targets[0].selector,
+              target: params.targets[0]?.target ?? '0x0000000000000000000000000000000000000000',
+              selector: params.targets[0]?.selector ?? '0x00000000',
               value: params.depositValue ?? 0n,
               timestamp: 'Just now',
-              txHash: receipt.transactionHash,
+              txHash,
             },
             ...prev,
           ]);
 
           setStatusAlert({ type: 'success', message: `Mandate #${newId} confirmed on Monad Testnet! Tx: ${txHash}` });
-        } else {
-          throw new Error(`Transaction reverted on-chain. Tx: ${txHash}`);
         }
       } else {
-        // Local simulation path: explicitly labelled
-        if (!walletAddress) {
-          throw new Error('Connect a wallet first (a simulated sandbox wallet is fine).');
-        }
-        const ownerAddress = walletAddress as Address;
+        // Local simulation path
+        const ownerAddress = walletAddress || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
         const nextNonce = BigInt(simulatedMandates.length);
 
         const challengeHash = computeMandateHash({
           chainId: 31337,
           mandateManagerAddress: DEFAULT_MANDATE_MANAGER_ADDRESS,
-          owner: ownerAddress,
+          owner: ownerAddress as Address,
           agentAddress: params.agentAddress,
           agentId: params.agentId,
           targets: params.targets,
@@ -501,9 +437,6 @@ export default function SecurityConsoleDashboard() {
           expiresAt: params.expiresAt,
           nonce: nextNonce,
         });
-
-        // Generate synthetic passkey data in simulation mode
-        const simSig = generateSimulatedSignature(challengeHash);
 
         const newId = BigInt(simulatedMandates.length + 1);
         const newMandate: MandateItem = {
@@ -530,9 +463,9 @@ export default function SecurityConsoleDashboard() {
             mandateId: newId,
             target: params.targets[0].target,
             selector: params.targets[0].selector,
-              value: params.depositValue ?? 0n,
-              timestamp: 'Just now',
-              txHash: undefined,
+            value: params.depositValue ?? 0n,
+            timestamp: 'Just now',
+            txHash: undefined,
           },
           ...prev,
         ]);
@@ -559,12 +492,11 @@ export default function SecurityConsoleDashboard() {
     if (networkMode === 'MONAD_TESTNET') {
       setStatusAlert({
         type: 'warning',
-        message: 'Attack Simulation Lab runs against isolated local contract scenarios. Switch to LOCAL SIMULATION mode to exercise the 5 local attack scenarios.',
+        message: 'Attack Simulation Lab runs against isolated local contract scenarios. Switch to LOCAL SIMULATION mode to exercise the local attack scenarios.',
       });
       return;
     }
 
-    // Scenarios execute against a mandate that actually exists in this sandbox session
     const targetMandate = simulatedMandates.find((m) => !m.revoked) || simulatedMandates[0];
     if (!targetMandate) {
       setStatusAlert({
@@ -599,7 +531,6 @@ export default function SecurityConsoleDashboard() {
         ...simulatedActivities,
       ]);
     } else {
-      // Reverted actions: accurately report simulation without inventing fake confirmed transaction hashes
       setSimulatedActivities([
         {
           id: `sim-${Date.now()}`,
@@ -617,6 +548,21 @@ export default function SecurityConsoleDashboard() {
       ]);
     }
   };
+
+  const breadcrumbTitle =
+    activeTab === 'overview'
+      ? 'OVERVIEW'
+      : activeTab === 'mandates'
+      ? 'MANDATES'
+      : activeTab === 'attack-lab'
+      ? 'ATTACK LAB'
+      : activeTab === 'inspector'
+      ? 'RECEIPTS'
+      : activeTab === 'docs'
+      ? 'DOCUMENTATION'
+      : activeTab === 'copilot'
+      ? 'AI POLICY COPILOT'
+      : 'SECURITY ACTIVITY';
 
   return (
     <div className="app-shell">
@@ -639,193 +585,210 @@ export default function SecurityConsoleDashboard() {
 
       {/* Main Content Area */}
       <div className="main-content">
-        {/* Top Sticky Header */}
+        {/* Top Header matching reference image */}
         <header className="top-bar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Console</span>
-            <span style={{ color: 'var(--border-default)' }}>/</span>
-            <h1 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff', textTransform: 'capitalize' }}>
-              {activeTab === 'overview'
-                ? 'Security Overview'
-                : activeTab === 'copilot'
-                ? 'AI Policy Copilot'
-                : activeTab === 'attack-lab'
-                ? 'Attack Simulation Lab'
-                : activeTab === 'inspector'
-                ? 'Trust & Receipt Explorer'
-                : activeTab === 'mandates'
-                ? 'Mandates Ledger'
-                : 'Security Activity'}
-            </h1>
+          {/* Breadcrumb Left */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                letterSpacing: '0.08em',
+                color: '#64748b',
+                textTransform: 'uppercase',
+              }}
+            >
+              SECURITY CONSOLE
+            </span>
+            <span style={{ color: '#cbd5e1', fontSize: '0.75rem' }}>/</span>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                letterSpacing: '0.08em',
+                color: '#64748b',
+                textTransform: 'uppercase',
+              }}
+            >
+              {breadcrumbTitle}
+            </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            {/* Network Mode Status Pill */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                background: networkMode === 'MONAD_TESTNET' ? 'rgba(131, 110, 249, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                border: `1px solid ${networkMode === 'MONAD_TESTNET' ? 'rgba(131, 110, 249, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
-                padding: '0.35rem 0.75rem',
-                borderRadius: 'var(--radius-sm)',
-              }}
-            >
-              <span className={`status-dot ${networkMode === 'MONAD_TESTNET' ? 'emerald' : 'amber'}`} />
-              <span
+          {/* Controls Right */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            {/* Network Selector Pill Dropdown */}
+            <div style={{ position: 'relative' }} ref={dropdownRef}>
+              <button
+                onClick={() => setIsNetworkDropdownOpen(!isNetworkDropdownOpen)}
                 style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  color: networkMode === 'MONAD_TESTNET' ? '#c4b5fd' : '#fbbf24',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  padding: '0.45rem 0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  fontSize: '0.825rem',
+                  color: '#334155',
+                  fontWeight: 500,
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
                 }}
               >
-                {networkMode === 'MONAD_TESTNET' ? 'Monad Testnet (10143)' : 'Local Simulation (31337)'}
-              </span>
+                {/* Purple Monad Icon Mark */}
+                <div
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    borderRadius: '50%',
+                    background: networkMode === 'MONAD_TESTNET' ? '#4f46e5' : '#d97706',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '1px',
+                      border: '1.5px solid #ffffff',
+                      transform: 'rotate(45deg)',
+                    }}
+                  />
+                </div>
+                <span>
+                  {networkMode === 'MONAD_TESTNET' ? 'Monad Testnet · 10143' : 'Local Sandbox · 31337'}
+                </span>
+                <ChevronDown size={14} color="#64748b" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {isNetworkDropdownOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    width: '240px',
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 'var(--radius-md)',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.08)',
+                    zIndex: 100,
+                    overflow: 'hidden',
+                    padding: '0.35rem',
+                  }}
+                >
+                  <button
+                    onClick={() => handleToggleNetworkMode('MONAD_TESTNET')}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.55rem 0.75rem',
+                      border: 'none',
+                      borderRadius: 'var(--radius-sm)',
+                      background: networkMode === 'MONAD_TESTNET' ? '#ede9fe' : 'transparent',
+                      color: networkMode === 'MONAD_TESTNET' ? '#4f46e5' : '#1e293b',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span className="status-dot emerald" style={{ width: '6px', height: '6px' }} />
+                      <span>Monad Testnet (10143)</span>
+                    </div>
+                    {networkMode === 'MONAD_TESTNET' && <Check size={14} color="#4f46e5" />}
+                  </button>
+
+                  <button
+                    onClick={() => handleToggleNetworkMode('LOCAL_SIMULATION')}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.55rem 0.75rem',
+                      border: 'none',
+                      borderRadius: 'var(--radius-sm)',
+                      background: networkMode === 'LOCAL_SIMULATION' ? '#ede9fe' : 'transparent',
+                      color: networkMode === 'LOCAL_SIMULATION' ? '#4f46e5' : '#1e293b',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      marginTop: '2px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span className="status-dot amber" style={{ width: '6px', height: '6px' }} />
+                      <span>Local Simulation (Sandbox)</span>
+                    </div>
+                    {networkMode === 'LOCAL_SIMULATION' && <Check size={14} color="#4f46e5" />}
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* P-256 Precompile Indicator */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-                background: 'var(--bg-input)',
-                padding: '0.35rem 0.65rem',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border-subtle)',
-              }}
-            >
-              <CheckCircle2 size={13} color="var(--accent-emerald)" />
-              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                RIP-7212 (0x100) Active
-              </span>
-            </div>
-
+            {/* Connect Wallet Button */}
             <button
-              className="btn-primary"
-              style={{ padding: '0.45rem 0.9rem', fontSize: '0.8rem' }}
-              onClick={() => {
-                setCopilotDraft(null);
-                setIsModalOpen(true);
-              }}
+              className="btn-outline-purple"
+              onClick={handleConnectWallet}
+              style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
             >
-              <Plus size={15} />
-              New Mandate
+              <Wallet size={16} />
+              <span>
+                {walletAddress
+                  ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+                  : 'Connect wallet'}
+              </span>
             </button>
           </div>
         </header>
 
-        {/* Global Network Notice Banner */}
-        {networkMode === 'MONAD_TESTNET' ? (
-          <div
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: 'rgba(131, 110, 249, 0.08)',
-              borderBottom: '1px solid rgba(131, 110, 249, 0.25)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '0.75rem',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <ShieldCheck size={18} color="var(--accent-monad)" />
-              <span style={{ fontSize: '0.8rem', color: '#fff' }}>
-                <strong>MONAD TESTNET MODE:</strong> Interacting directly with Monad RPC (Chain ID 10143).
-                {isContractDeployed === false && (
-                  <span style={{ color: 'var(--accent-amber)', marginLeft: '0.5rem' }}>
-                    Contract at {DEFAULT_MANDATE_MANAGER_ADDRESS.slice(0, 8)}... has no deployed bytecode. Deploy contract or use Receipt Inspector.
-                  </span>
-                )}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              {walletAddress ? (
-                <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--accent-emerald)' }}>
-                  Connected: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-                </span>
-              ) : (
-                <button
-                  className="btn-secondary"
-                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', borderColor: 'var(--accent-monad-border)' }}
-                  onClick={handleConnectWallet}
-                >
-                  <Wallet size={13} />
-                  Connect Injected Wallet
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: 'rgba(245, 158, 11, 0.08)',
-              borderBottom: '1px solid rgba(245, 158, 11, 0.25)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '0.75rem',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <AlertTriangle size={18} color="var(--accent-amber)" />
-              <span style={{ fontSize: '0.8rem', color: '#fff' }}>
-                <strong>LOCAL SIMULATION MODE (Offline Sandbox):</strong> No transactions are submitted on-chain. Mandates and events shown here were created locally in this session only.
-              </span>
-            </div>
-
-            <button
-              className="btn-secondary"
-              style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', borderColor: 'rgba(245, 158, 11, 0.4)', color: '#fbbf24' }}
-              onClick={() => handleToggleNetworkMode('MONAD_TESTNET')}
-            >
-              Switch to Live Monad Testnet
-            </button>
-          </div>
-        )}
-
-        {/* Status Alerts Toast */}
+        {/* Global Toast Alert */}
         {statusAlert && (
           <div
             style={{
-              margin: '1rem 1.5rem 0',
-              padding: '0.75rem 1rem',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.82rem',
+              margin: '1.25rem 2rem 0',
+              padding: '0.75rem 1.25rem',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '0.75rem',
               background:
                 statusAlert.type === 'error'
-                  ? 'var(--accent-rose-subtle)'
+                  ? '#fef2f2'
                   : statusAlert.type === 'success'
-                  ? 'var(--accent-emerald-subtle)'
+                  ? '#ecfdf5'
                   : statusAlert.type === 'warning'
-                  ? 'var(--accent-amber-subtle)'
-                  : 'rgba(131, 110, 249, 0.15)',
+                  ? '#fffbeb'
+                  : '#eef2ff',
               border: `1px solid ${
                 statusAlert.type === 'error'
-                  ? 'var(--accent-rose-border)'
+                  ? '#fecaca'
                   : statusAlert.type === 'success'
-                  ? 'var(--accent-emerald-border)'
+                  ? '#a7f3d0'
                   : statusAlert.type === 'warning'
-                  ? 'var(--accent-amber-border)'
-                  : 'rgba(131, 110, 249, 0.3)'
+                  ? '#fde68a'
+                  : '#c7d2fe'
               }`,
               color:
                 statusAlert.type === 'error'
-                  ? '#fda4af'
+                  ? '#991b1b'
                   : statusAlert.type === 'success'
-                  ? '#6ee7b7'
+                  ? '#065f46'
                   : statusAlert.type === 'warning'
-                  ? '#fcd34d'
-                  : '#c4b5fd',
+                  ? '#92400e'
+                  : '#3730a3',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -833,7 +796,7 @@ export default function SecurityConsoleDashboard() {
               <span>{statusAlert.message}</span>
             </div>
             <button
-              style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '0.85rem' }}
+              style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '0.9rem' }}
               onClick={() => setStatusAlert(null)}
             >
               ✕
@@ -841,237 +804,606 @@ export default function SecurityConsoleDashboard() {
           </div>
         )}
 
-        {/* Tab Views */}
+        {/* Main Content Area */}
         <main className="page-container">
+          {/* TAB: OVERVIEW */}
           {activeTab === 'overview' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
-              {/* Product Positioning Hero Header */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              {/* Notification Banner matching reference */}
+              <div
+                style={{
+                  background: '#eef2ff',
+                  border: '1px solid #e0e7ff',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.75rem 1.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.65rem',
+                }}
+              >
+                <div
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '50%',
+                    background: '#4f46e5',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  i
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#1e293b' }}>
+                  <strong style={{ color: '#4338ca', fontWeight: 700, letterSpacing: '0.02em' }}>
+                    {walletAddress ? 'ACTIVE SESSION' : 'READ-ONLY'}
+                  </strong>
+                  <span style={{ margin: '0 0.5rem', color: '#818cf8' }}>·</span>
+                  <span style={{ color: '#4b5563' }}>
+                    {walletAddress
+                      ? `Wallet ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} connected on ${networkMode === 'MONAD_TESTNET' ? 'Monad Testnet (10143)' : 'Local Sandbox'}.`
+                      : 'Connect a wallet to load live mandates.'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Hero Title & Actions */}
+              <div>
+                <h1
+                  style={{
+                    fontSize: '2.5rem',
+                    fontWeight: 800,
+                    color: '#111827',
+                    letterSpacing: '-0.03em',
+                    lineHeight: 1.15,
+                  }}
+                >
+                  Agent authority, under control.
+                </h1>
+                <p
+                  style={{
+                    fontSize: '1.1rem',
+                    color: '#4b5563',
+                    marginTop: '0.45rem',
+                    fontWeight: 400,
+                  }}
+                >
+                  Scope every action. Enforce every limit. Verify every receipt.
+                </p>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginTop: '1.5rem' }}>
+                  <button
+                    className="btn-primary"
+                    onClick={() => {
+                      setCopilotDraft(null);
+                      setIsModalOpen(true);
+                    }}
+                    style={{ padding: '0.65rem 1.25rem', fontSize: '0.875rem' }}
+                  >
+                    <Plus size={16} strokeWidth={2.5} />
+                    Create a mandate
+                  </button>
+
+                  <button
+                    className="btn-link-purple"
+                    onClick={() => setActiveTab('attack-lab')}
+                  >
+                    <span>Run security demo</span>
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Central Comparison Showcase Card ("AGENT REQUEST" vs "ON-CHAIN POLICY") */}
               <div
                 className="security-card"
                 style={{
-                  padding: '2rem',
-                  background: 'linear-gradient(135deg, rgba(131, 110, 249, 0.08), rgba(16, 185, 129, 0.03))',
-                  border: '1px solid var(--border-subtle)',
+                  padding: '2rem 2.25rem',
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(280px, 1fr) auto minmax(320px, 1.2fr)',
+                  gap: '2.5rem',
+                  alignItems: 'center',
                 }}
               >
-                <div style={{ maxWidth: '820px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <span className="badge badge-monad">Delegated Authority Console</span>
-                    <span className={`badge ${networkMode === 'MONAD_TESTNET' ? 'badge-emerald' : 'badge-amber'}`}>
-                      {networkMode === 'MONAD_TESTNET' ? 'Monad Testnet' : 'Local Simulation'}
-                    </span>
+                {/* Left Column: AGENT REQUEST */}
+                <div>
+                  <div
+                    style={{
+                      fontSize: '0.725rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      color: '#6b7280',
+                      textTransform: 'uppercase',
+                      marginBottom: '1rem',
+                    }}
+                  >
+                    AGENT REQUEST
                   </div>
-                  <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.025em', lineHeight: 1.25 }}>
-                    Give your AI agent a mandate, not unlimited power.
-                  </h2>
-                  <p style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', marginTop: '0.45rem', lineHeight: 1.5 }}>
-                    Passkey-authorized delegation. Contract-enforced limits. Independently checkable receipts.
-                  </p>
-                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
-                    <button
-                      className="btn-primary"
-                      onClick={() => {
-                        setCopilotDraft(null);
-                        setIsModalOpen(true);
+
+                  <div
+                    style={{
+                      background: '#f3f4f8',
+                      borderRadius: 'var(--radius-lg)',
+                      padding: '2rem 1.75rem',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div style={{ flexShrink: 0, marginTop: '2px' }}>
+                      <Sparkles size={20} color="#4f46e5" />
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '1.15rem',
+                        fontWeight: 600,
+                        color: '#1e293b',
+                        lineHeight: 1.4,
                       }}
-                      style={{ padding: '0.5rem 1.1rem', fontSize: '0.82rem' }}
                     >
-                      <Plus size={15} />
-                      Create Mandate
-                    </button>
-                    <button
-                      className="btn-secondary"
-                      onClick={() => setActiveTab('copilot')}
-                      style={{ padding: '0.5rem 1.1rem', fontSize: '0.82rem' }}
-                    >
-                      <Sparkles size={14} color="var(--accent-monad)" />
-                      Policy Compiler
-                    </button>
+                      Swap up to 0.2 MON on the approved contract for 1 hour.
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Executive KPI Banner */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                <div className="kpi-card emerald">
-                  <div className="kpi-label">
-                    <span>Active Mandates</span>
-                    <ShieldCheck size={16} color="var(--accent-emerald)" />
-                  </div>
-                  <div className="kpi-value">
-                    {networkMode === 'MONAD_TESTNET'
-                      ? (activeMandates.length > 0 ? activeMandates.length.toString().padStart(2, '0') : '—')
-                      : activeMandates.length.toString().padStart(2, '0')}
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {networkMode === 'MONAD_TESTNET'
-                      ? (walletAddress ? `${activeMandates.length} on-chain policies` : 'Connect wallet to query')
-                      : 'Sandbox mandates created this session'}
-                  </span>
-                </div>
-
-                <div className="kpi-card emerald">
-                  <div className="kpi-label">
-                    <span>Available Budget</span>
-                    <Lock size={16} color="var(--accent-emerald)" />
-                  </div>
-                  <div className="kpi-value">
-                    {networkMode === 'MONAD_TESTNET'
-                      ? (walletAddress ? `${formatEther(totalVaultSecured)} MON` : '— MON')
-                      : `${formatEther(totalVaultSecured)} MON`}
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {networkMode === 'MONAD_TESTNET'
-                      ? (walletAddress ? 'Contract Vault Deposits' : 'Connect to load balance')
-                      : 'Sandbox only — not on-chain'}
-                  </span>
-                </div>
-
-                <div className="kpi-card rose">
-                  <div className="kpi-label">
-                    <span>Recent Decisions</span>
-                    <AlertTriangle size={16} color="var(--accent-rose)" />
-                  </div>
-                  <div className="kpi-value">
-                    {networkMode === 'MONAD_TESTNET'
-                      ? (currentActivities.length > 0 ? currentActivities.length.toString().padStart(2, '0') : '—')
-                      : blockedActionsCount.toString().padStart(2, '0')}
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {networkMode === 'MONAD_TESTNET'
-                      ? (currentActivities.length > 0 ? 'Confirmed testnet events' : 'Awaiting evidence')
-                      : 'Sandbox Revert Invariants'}
-                  </span>
-                </div>
-
-                <div className="kpi-card amber">
-                  <div className="kpi-label">
-                    <span>Receipt Verifier</span>
-                    <SearchCode size={16} color="var(--accent-amber)" />
-                  </div>
-                  <div className="kpi-value" style={{ fontSize: '1.25rem', color: 'var(--accent-emerald)' }}>
-                    READY
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    Monad Chain 10143
-                  </span>
-                </div>
-              </div>
-
-              {/* Quick Feature Spotlight Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
-                {/* AI Copilot Teaser Card */}
+                {/* Center Divider with Lock Badge */}
                 <div
-                  className="security-card"
                   style={{
-                    background: 'linear-gradient(135deg, rgba(131, 110, 249, 0.08), rgba(14, 17, 24, 0.95))',
-                    border: '1px solid var(--accent-monad-border)',
-                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
+                    height: '100%',
+                    padding: '0 0.5rem',
                   }}
-                  onClick={() => setActiveTab('copilot')}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <Sparkles size={18} color="var(--accent-monad)" />
-                    <strong style={{ fontSize: '1rem', color: '#fff' }}>AI Policy Copilot</strong>
-                    <span className="badge badge-monad" style={{ fontSize: '0.65rem' }}>Natural Language</span>
+                  {/* Vertical rule line */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      bottom: 0,
+                      width: '1px',
+                      background: '#e5e7eb',
+                      zIndex: 1,
+                    }}
+                  />
+
+                  {/* Circular Enforced Badge */}
+                  <div
+                    style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '50%',
+                      background: '#4f46e5',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#ffffff',
+                      boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)',
+                      zIndex: 2,
+                    }}
+                  >
+                    <Lock size={18} strokeWidth={2.4} />
                   </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    Describe required permissions in plain English. The Copilot compiles deterministic target allowlists and spending limits ready for hardware passkey authorization.
-                  </p>
-                  <div style={{ marginTop: '1rem', fontSize: '0.8rem', color: 'var(--accent-monad)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    Draft Scoped Mandate <ArrowRight size={14} />
+
+                  <div
+                    style={{
+                      fontSize: '0.68rem',
+                      color: '#6b7280',
+                      textAlign: 'center',
+                      marginTop: '0.5rem',
+                      zIndex: 2,
+                      background: '#ffffff',
+                      padding: '0 4px',
+                      lineHeight: 1.25,
+                      fontWeight: 500,
+                    }}
+                  >
+                    Enforced by<br />
+                    <span style={{ color: '#374151', fontWeight: 600 }}>MandateManager</span>
                   </div>
                 </div>
 
-                {/* Attack Lab Teaser Card */}
-                <div
-                  className="security-card"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(244, 63, 94, 0.08), rgba(14, 17, 24, 0.95))',
-                    border: '1px solid var(--accent-rose-border)',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => setActiveTab('attack-lab')}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <FlaskConical size={18} color="var(--accent-rose)" />
-                    <strong style={{ fontSize: '1rem', color: '#fff' }}>Attack Simulation Lab</strong>
-                    <span className="badge badge-rose" style={{ fontSize: '0.65rem' }}>Security Invariants</span>
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    Execute live security stress tests against unwhitelisted targets, excess spending, caller impersonation, and revoked mandates.
-                  </p>
-                  <div style={{ marginTop: '1rem', fontSize: '0.8rem', color: 'var(--accent-rose)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    Enter Attack Lab <ArrowRight size={14} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Active Mandate Highlights & Recent Activity Split */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '1.5rem' }}>
+                {/* Right Column: ON-CHAIN POLICY */}
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Active Mandate Highlights</h3>
+                  <div
+                    style={{
+                      fontSize: '0.725rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      color: '#6b7280',
+                      textTransform: 'uppercase',
+                      marginBottom: '1rem',
+                    }}
+                  >
+                    ON-CHAIN POLICY
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                    {/* Row 1: Target */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingBottom: '0.65rem',
+                        borderBottom: '1px solid #f1f5f9',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#6b7280', fontSize: '0.85rem' }}>
+                        <Target size={16} color="#6b7280" />
+                        <span>Target</span>
+                      </div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#111827' }}>
+                        Approved contract
+                      </div>
+                    </div>
+
+                    {/* Row 2: Method */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingBottom: '0.65rem',
+                        borderBottom: '1px solid #f1f5f9',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#6b7280', fontSize: '0.85rem' }}>
+                        <Code size={16} color="#6b7280" />
+                        <span>Method</span>
+                      </div>
+                      <div style={{ fontSize: '0.825rem', fontFamily: 'var(--font-mono)', fontWeight: 500, color: '#111827' }}>
+                        swapExactTokensForTokens
+                      </div>
+                    </div>
+
+                    {/* Row 3: Per transaction */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingBottom: '0.65rem',
+                        borderBottom: '1px solid #f1f5f9',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#6b7280', fontSize: '0.85rem' }}>
+                        <Coins size={16} color="#6b7280" />
+                        <span>Per transaction</span>
+                      </div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#111827' }}>
+                        0.2 MON
+                      </div>
+                    </div>
+
+                    {/* Row 4: Total budget */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingBottom: '0.65rem',
+                        borderBottom: '1px solid #f1f5f9',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#6b7280', fontSize: '0.85rem' }}>
+                        <CreditCard size={16} color="#6b7280" />
+                        <span>Total budget</span>
+                      </div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 500, color: '#6b7280' }}>
+                        Not set
+                      </div>
+                    </div>
+
+                    {/* Row 5: Expiry */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#6b7280', fontSize: '0.85rem' }}>
+                        <Clock size={16} color="#6b7280" />
+                        <span>Expiry</span>
+                      </div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 500, color: '#111827' }}>
+                        1 hour after authorization
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom 2 Cards Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                {/* Left Card: Latest policy decisions */}
+                <div
+                  className="security-card"
+                  style={{
+                    padding: '1.75rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    minHeight: '260px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <FileText size={18} color="#111827" />
+                    <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>
+                      Latest policy decisions
+                    </h2>
+                  </div>
+
+                  {currentActivities.length === 0 ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '2rem 1rem',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {/* Document icon rounded box */}
+                      <div
+                        style={{
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '10px',
+                          background: '#f3f4f6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#9ca3af',
+                          marginBottom: '0.75rem',
+                        }}
+                      >
+                        <FileText size={24} />
+                      </div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#111827' }}>
+                        No live decisions yet
+                      </div>
+                      <p style={{ fontSize: '0.825rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                        Connect wallet or run local simulation
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      {currentActivities.slice(0, 3).map((act) => (
+                        <div
+                          key={act.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0.6rem 0.85rem',
+                            background: '#f8fafc',
+                            borderRadius: 'var(--radius-md)',
+                            border: '1px solid #f1f5f9',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                            <span
+                              className={`badge ${
+                                act.type === 'executed'
+                                  ? 'badge-emerald'
+                                  : act.type === 'blocked'
+                                  ? 'badge-rose'
+                                  : 'badge-amber'
+                              }`}
+                              style={{ fontSize: '0.68rem' }}
+                            >
+                              {act.type.toUpperCase()}
+                            </span>
+                            <span style={{ fontSize: '0.825rem', fontWeight: 600, color: '#111827' }}>
+                              Agent #{act.agentId.toString()}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{act.timestamp}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
                     <button
-                      className="btn-secondary"
-                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
+                      className="btn-link-purple"
                       onClick={() => setActiveTab('mandates')}
+                      style={{ fontSize: '0.8rem', padding: 0 }}
                     >
-                      View All ({currentMandates.length})
+                      View all mandates <ArrowRight size={14} />
                     </button>
                   </div>
-                  <MandateList
-                    mandates={activeMandates.slice(0, 2)}
-                    onRevoke={handleRevoke}
-                    onOpenCreate={() => setIsModalOpen(true)}
-                    isRevokingId={revokingId}
-                    networkMode={networkMode}
-                  />
                 </div>
 
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Recent Security Events</h3>
-                    <button
-                      className="btn-secondary"
-                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
-                      onClick={() => setActiveTab('activity')}
+                {/* Right Card: Evidence you can verify */}
+                <div
+                  className="security-card"
+                  style={{
+                    padding: '1.75rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    minHeight: '260px',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                      <ShieldCheck size={18} color="#111827" />
+                      <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>
+                        Evidence you can verify
+                      </h2>
+                    </div>
+
+                    {/* Step flow diagram matching reference */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        flexWrap: 'wrap',
+                        marginTop: '0.75rem',
+                      }}
                     >
-                      Full Audit Trail
-                    </button>
+                      {/* Step 1 */}
+                      <div
+                        style={{
+                          background: '#eef2ff',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '0.55rem 0.85rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          fontSize: '0.785rem',
+                          color: '#1e293b',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <FileText size={15} color="#4f46e5" />
+                        <span>Transaction receipt</span>
+                      </div>
+
+                      <ArrowRight size={14} color="#94a3b8" />
+
+                      {/* Step 2 */}
+                      <div
+                        style={{
+                          background: '#eef2ff',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '0.55rem 0.85rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          fontSize: '0.785rem',
+                          color: '#1e293b',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <Code size={15} color="#4f46e5" />
+                        <span>Contract event</span>
+                      </div>
+
+                      <ArrowRight size={14} color="#94a3b8" />
+
+                      {/* Step 3 */}
+                      <div
+                        style={{
+                          background: '#eef2ff',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '0.55rem 0.85rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          fontSize: '0.785rem',
+                          color: '#1e293b',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <Shield size={15} color="#4f46e5" />
+                        <span>Policy fields</span>
+                      </div>
+                    </div>
+
+                    {/* Open receipt verifier link */}
+                    <div style={{ marginTop: '1.5rem' }}>
+                      <button
+                        className="btn-link-purple"
+                        onClick={() => setActiveTab('inspector')}
+                        style={{ padding: 0, fontSize: '0.85rem' }}
+                      >
+                        <ExternalLink size={14} />
+                        <span>Open receipt verifier</span>
+                      </button>
+                    </div>
                   </div>
-                  <SecurityActivityFeed
-                    activities={currentActivities.slice(0, 4)}
-                    networkMode={networkMode}
-                  />
+
+                  {/* Disclaimer subtext */}
+                  <div
+                    style={{
+                      fontSize: '0.725rem',
+                      color: '#94a3b8',
+                      marginTop: '1.25rem',
+                      display: 'flex',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <span>Example policy</span>
+                    <span>·</span>
+                    <span>Not authorized</span>
+                    <span>·</span>
+                    <span>No live chain activity displayed</span>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
+          {/* TAB: MANDATES */}
           {activeTab === 'mandates' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
+                    Mandates Ledger
+                  </h1>
+                  <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
+                    Cryptographically authorized delegation bounds enforced by Monad smart contracts.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setActiveTab('copilot')}
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    <Sparkles size={14} color="#4f46e5" />
+                    AI Copilot Draft
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={() => {
+                      setCopilotDraft(null);
+                      setIsModalOpen(true);
+                    }}
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    <Plus size={15} strokeWidth={2.5} />
+                    Create Mandate
+                  </button>
+                </div>
+              </div>
+
               {networkMode === 'MONAD_TESTNET' && isContractDeployed === false && (
                 <div
                   className="security-card"
                   style={{
                     padding: '1.25rem',
-                    borderLeft: '4px solid var(--accent-amber)',
+                    borderLeft: '4px solid #f59e0b',
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: '0.85rem',
+                    background: '#fffbeb',
                   }}
                 >
-                  <AlertTriangle size={20} color="var(--accent-amber)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <AlertCircle size={20} color="#d97706" style={{ marginTop: '2px', flexShrink: 0 }} />
                   <div>
-                    <strong style={{ fontSize: '0.9rem', color: '#fff' }}>
-                      Contract Not Deployed on Monad Testnet
+                    <strong style={{ fontSize: '0.9rem', color: '#92400e' }}>
+                      Contract Bytecode Not Deployed on Monad Testnet
                     </strong>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                      The configured address <code style={{ color: '#fff' }}>{DEFAULT_MANDATE_MANAGER_ADDRESS}</code> currently has 0 bytes bytecode on Monad Testnet (RPC: <code style={{ color: '#fff' }}>https://testnet-rpc.monad.xyz</code>).
+                    <p style={{ fontSize: '0.825rem', color: '#78350f', marginTop: '0.25rem' }}>
+                      The configured address <code style={{ fontWeight: 600 }}>{DEFAULT_MANDATE_MANAGER_ADDRESS}</code> currently has 0 bytes bytecode on Monad Testnet RPC.
                     </p>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                      To interact with live contracts, run <code style={{ color: '#fff' }}>forge script script/Deploy.s.sol --rpc-url https://testnet-rpc.monad.xyz --broadcast</code> with a funded private key, or switch to <strong>LOCAL SIMULATION</strong> to demo the full lifecycle safely offline.
+                    <p style={{ fontSize: '0.8rem', color: '#b45309', marginTop: '0.35rem' }}>
+                      You can deploy contract bytecode with <code style={{ fontWeight: 600 }}>forge script script/Deploy.s.sol</code> or switch to <strong>Local Simulation</strong> to demo the passkey authorization lifecycle instantly.
                     </p>
                   </div>
                 </div>
@@ -1087,23 +1419,141 @@ export default function SecurityConsoleDashboard() {
             </div>
           )}
 
-          {activeTab === 'copilot' && (
-            <AiPolicyCopilot onDraftApproved={handleCopilotDraftApproved} />
-          )}
-
+          {/* TAB: ATTACK LAB */}
           {activeTab === 'attack-lab' && (
-            <AttackLab onScenarioExecuted={handleScenarioRun} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
+                  Attack Simulation Lab
+                </h1>
+                <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
+                  Test contract security invariants against prompt injection, unapproved targets, ceiling violations, and stranger hijacking.
+                </p>
+              </div>
+
+              <AttackLab onScenarioExecuted={handleScenarioRun} />
+            </div>
           )}
 
+          {/* TAB: RECEIPTS (INSPECTOR) */}
           {activeTab === 'inspector' && (
-            <ReceiptInspector />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
+                  Trust & Receipt Explorer
+                </h1>
+                <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
+                  Independently audit transaction receipts, contract logs, and cryptographic bounds against the Monad RPC.
+                </p>
+              </div>
+
+              <ReceiptInspector />
+            </div>
           )}
 
+          {/* TAB: DOCS */}
+          {activeTab === 'docs' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <div>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
+                  AgentTrust Architecture & Documentation
+                </h1>
+                <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
+                  How AgentTrust enforces cryptographic bounds on autonomous AI agents on Monad.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+                <div className="security-card">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    <KeyRound size={20} color="#4f46e5" />
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>1. Hardware Passkey Signatures</h3>
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: '#4b5563', lineHeight: 1.5 }}>
+                    Users authorize agent mandates via Apple TouchID, FaceID, or Windows Hello WebAuthn credentials. The signature challenge strictly binds the Monad Chain ID (10143), contract address, target allowlist, and per-tx spending ceiling.
+                  </p>
+                </div>
+
+                <div className="security-card">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    <Shield size={20} color="#4f46e5" />
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>2. On-Chain MandateManager</h3>
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: '#4b5563', lineHeight: 1.5 }}>
+                    Smart contracts on Monad inspect execution calldata at runtime. Any transaction attempting unapproved selector calls, target contracts outside allowlist, or excess budget limits immediately reverts on-chain.
+                  </p>
+                </div>
+
+                <div className="security-card">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    <SearchCode size={20} color="#4f46e5" />
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#111827' }}>3. Independent Receipt Auditing</h3>
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: '#4b5563', lineHeight: 1.5 }}>
+                    The AgentTrust TypeScript SDK verifies Monad transaction receipts directly via RPC. Third parties and decentralized auditors can independently prove that agent actions adhered to mandate limits without trusting server logs.
+                  </p>
+                </div>
+              </div>
+
+              <div className="security-card" style={{ padding: '2rem' }}>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>
+                  Monad Testnet Deployment Parameters
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Network Name</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#111827' }}>Monad Testnet</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Chain ID</span>
+                    <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#111827' }}>10143</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>RPC Endpoint</span>
+                    <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', fontWeight: 500, color: '#111827' }}>https://testnet-rpc.monad.xyz</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.65rem 0' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Configured MandateManager Address</span>
+                    <span style={{ fontSize: '0.85rem', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#4f46e5' }}>{DEFAULT_MANDATE_MANAGER_ADDRESS}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: COPILOT */}
+          {activeTab === 'copilot' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
+                  AI Policy Copilot
+                </h1>
+                <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
+                  Translate plain English agent permissions into deterministic on-chain mandate parameters.
+                </p>
+              </div>
+
+              <AiPolicyCopilot onDraftApproved={handleCopilotDraftApproved} />
+            </div>
+          )}
+
+          {/* TAB: ACTIVITY */}
           {activeTab === 'activity' && (
-            <SecurityActivityFeed
-              activities={currentActivities}
-              networkMode={networkMode}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
+                  Security Activity Feed
+                </h1>
+                <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
+                  Full audit trail of passkey creations, executed actions, and blocked invariants.
+                </p>
+              </div>
+
+              <SecurityActivityFeed
+                activities={currentActivities}
+                networkMode={networkMode}
+              />
+            </div>
           )}
         </main>
       </div>

@@ -49,15 +49,15 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
         });
 
   return (
-    <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+    <div className="security-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       {/* Top Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111827' }}>
             Mandate #{mandate.id.toString()}
           </span>
-          <span className="badge badge-monad" style={{ fontSize: '0.7rem' }}>
-            Agent ID #{mandate.agentId.toString()}
+          <span className="badge badge-monad" style={{ fontSize: '0.72rem' }}>
+            Agent #{mandate.agentId.toString()}
           </span>
         </div>
 
@@ -67,7 +67,7 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
               <ShieldAlert size={12} /> Revoked
             </span>
           ) : isExpired ? (
-            <span className="badge badge-revoked">
+            <span className="badge badge-amber">
               <Clock size={12} /> Expired
             </span>
           ) : (
@@ -80,9 +80,9 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
 
       {/* Spending Progress */}
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.4rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.45rem' }}>
           <span style={{ color: 'var(--text-muted)' }}>Cumulative Budget Used</span>
-          <span style={{ fontWeight: 600 }}>
+          <span style={{ fontWeight: 600, color: '#111827' }}>
             {spentEth.toFixed(4)} / {totalEth.toFixed(4)} MON ({percentSpent}%)
           </span>
         </div>
@@ -97,21 +97,21 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
           gap: '0.75rem',
-          background: 'rgba(255, 255, 255, 0.02)',
-          padding: '0.85rem',
-          borderRadius: '10px',
-          border: '1px solid var(--border-subtle)',
+          background: '#f8fafc',
+          padding: '0.85rem 1rem',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid #e2e8f0',
         }}
       >
         <div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-faint)' }}>Per-Action Cap</div>
-          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>
+          <div style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: 500 }}>Per-Action Cap</div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827', marginTop: '2px' }}>
             {formatEther(mandate.maxValuePerTx)} MON
           </div>
         </div>
         <div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-faint)' }}>Expires</div>
-          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>
+          <div style={{ fontSize: '0.725rem', color: '#64748b', fontWeight: 500 }}>Expires</div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#111827', marginTop: '2px' }}>
             {expiryDateString}
           </div>
         </div>
@@ -119,7 +119,7 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
 
       {/* Permissions / Allowed Targets */}
       <div>
-        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4b5563', marginBottom: '0.5rem' }}>
           Allowlisted Operations ({mandate.targets.length})
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -130,19 +130,21 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                fontSize: '0.75rem',
-                background: 'rgba(0,0,0,0.25)',
-                padding: '0.4rem 0.6rem',
-                borderRadius: '6px',
-                border: '1px solid rgba(255,255,255,0.04)',
+                fontSize: '0.785rem',
+                background: '#f8fafc',
+                padding: '0.45rem 0.65rem',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid #e2e8f0',
               }}
             >
-              <span className="hash-pill">
+              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500, color: '#334155' }}>
                 {t.target.slice(0, 8)}...{t.target.slice(-6)}
               </span>
-              <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <ArrowRight size={10} />
-                <span className="hash-pill">{t.selector}</span>
+              <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <ArrowRight size={12} />
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#4f46e5' }}>
+                  {t.selector}
+                </span>
               </span>
             </div>
           ))}
@@ -154,8 +156,8 @@ export function MandateCard({ mandate, onRevoke, isRevoking }: MandateCardProps)
         <button
           onClick={() => onRevoke(mandate.id)}
           disabled={isRevoking}
-          className="btn btn-danger"
-          style={{ width: '100%', fontSize: '0.8rem', padding: '0.5rem', marginTop: 'auto' }}
+          className="btn-danger"
+          style={{ width: '100%', fontSize: '0.825rem', padding: '0.55rem', marginTop: 'auto' }}
         >
           <Trash2 size={14} />
           {isRevoking ? 'Revoking on Monad...' : 'Revoke Passkey Mandate'}

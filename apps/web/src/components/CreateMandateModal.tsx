@@ -165,25 +165,25 @@ export function CreateMandateModal({
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <div
               style={{
-                width: '34px',
-                height: '34px',
+                width: '36px',
+                height: '36px',
                 borderRadius: 'var(--radius-md)',
-                background: 'var(--accent-emerald-subtle)',
-                border: '1px solid var(--accent-emerald-border)',
+                background: '#ede9fe',
+                border: '1px solid #ddd6fe',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--accent-emerald)',
+                color: '#4f46e5',
                 flexShrink: 0,
               }}
             >
-              <ShieldCheck size={20} />
+              <ShieldCheck size={22} />
             </div>
             <div>
-              <h2 id="modal-title" style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff' }}>
+              <h2 id="modal-title" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#111827' }}>
                 Authorize Scoped Mandate
               </h2>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              <p style={{ fontSize: '0.785rem', color: '#64748b' }}>
                 {networkMode === 'MONAD_TESTNET'
                   ? 'Hardware Passkey Delegation on Monad Testnet (Chain 10143)'
                   : 'Passkey Delegation Sandbox (Local Simulation)'}
@@ -196,34 +196,34 @@ export function CreateMandateModal({
             style={{
               background: 'transparent',
               border: 'none',
-              color: 'var(--text-muted)',
+              color: '#94a3b8',
               cursor: isLoading ? 'not-allowed' : 'pointer',
               padding: '0.25rem',
             }}
             aria-label="Close dialog"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
         {/* Security Scope Explanation Box */}
         <div
           style={{
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '0.65rem 0.85rem',
+            background: '#eef2ff',
+            border: '1px solid #e0e7ff',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.75rem 1rem',
             marginBottom: '1.25rem',
-            fontSize: '0.75rem',
-            color: 'var(--text-secondary)',
+            fontSize: '0.8rem',
+            color: '#334155',
             display: 'flex',
             alignItems: 'flex-start',
-            gap: '0.55rem',
+            gap: '0.65rem',
           }}
         >
-          <Info size={15} color="var(--accent-emerald)" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <Info size={16} color="#4f46e5" style={{ flexShrink: 0, marginTop: '2px' }} />
           <div>
-            <strong style={{ color: '#fff' }}>Scoped Delegation, Not Key Handover: </strong>
+            <strong style={{ color: '#1e293b' }}>Scoped Delegation, Not Key Handover: </strong>
             You are authorizing an immutable smart contract mandate with exact method allowlists and spending caps. The AI agent never receives your private key, and cannot execute any transaction outside these bounds.
           </div>
         </div>

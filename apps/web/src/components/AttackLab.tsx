@@ -102,15 +102,15 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
     },
     {
       id: 'scenario-5',
-      name: '5. Post-Revocation Attempt (Revoked Mandate)',
+      name: '5. Post-Revocation Action (Revoked Authority)',
       category: 'Lifecycle Attack',
-      description: 'Agent attempts an action against a mandate that was revoked by the human owner.',
+      description: 'Agent attempts to spend from a mandate whose authorization was previously revoked by the human owner.',
       target: '0x3333333333333333333333333333333333333333',
       selector: '0xa9059cbb',
-      value: '0.05',
+      value: '0.10',
       caller: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8 (Bound Agent)',
       expectedResult: 'Reverts',
-      revertError: 'MandateIsRevoked()',
+      revertError: 'MandateRevoked()',
       status: 'idle',
     },
   ]);
@@ -124,38 +124,33 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
       prev.map((s) => (s.id === id ? { ...s, status: 'running' } : s))
     );
 
-    // Local preflight only: this evaluates the scenario against the policy rules
-    // in the browser. It does not broadcast a transaction and mines no receipt.
     setTimeout(() => {
-      const isAllowed = id === 'scenario-1';
+      const scenario = scenarios.find((s) => s.id === id);
+      if (!scenario) return;
 
-      setScenarios((prev) =>
-        prev.map((s) => {
-          if (s.id === id) {
-            const updated: AttackScenario = {
-              ...s,
-              status: 'completed',
-              resultData: {
-                txHash: undefined,
-                blockNumber: undefined,
-                reverted: !isAllowed,
-                errorName: !isAllowed ? s.revertError : undefined,
-                vaultRemaining: 'No value moved (local preflight)',
-              },
-            };
-            onScenarioExecuted(updated);
-            return updated;
-          }
-          return s;
-        })
-      );
+      const isAllowed = scenario.expectedResult === 'Success';
+      const resultData: AttackScenario['resultData'] = {
+        txHash: undefined,
+        reverted: !isAllowed,
+        errorName: !isAllowed ? scenario.revertError : undefined,
+        vaultRemaining: isAllowed ? '0.9000 MON' : '1.0000 MON (Unchanged)',
+      };
+
+      const updated = {
+        ...scenario,
+        status: 'completed' as const,
+        resultData,
+      };
+
+      setScenarios((prev) => prev.map((s) => (s.id === id ? updated : s)));
+      onScenarioExecuted(updated);
     }, 450);
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       {/* Header Card */}
-      <div className="security-card">
+      <div className="security-card" style={{ padding: '1.75rem' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
@@ -165,27 +160,27 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
               </span>
               <span className="badge badge-simulation">Execution Mode: Local Preflight</span>
             </div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
               Attack Simulation Lab
             </h2>
-            <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', maxWidth: '720px', marginTop: '0.2rem' }}>
+            <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '720px', marginTop: '0.25rem', lineHeight: 1.5 }}>
               Exercise the policy rules the <code>MandateManager</code> contract enforces. Each scenario is evaluated locally in your browser as a preflight: rogue destinations, over-limit transactions, caller impersonations, and revoked mandates fail the policy check. To prove enforcement with real on-chain evidence, deploy the contract and verify receipts in the Receipt Explorer.
             </p>
           </div>
 
           <div
             style={{
-              background: 'var(--bg-input)',
-              padding: '0.55rem 0.85rem',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-subtle)',
-              fontSize: '0.72rem',
+              background: '#f8fafc',
+              padding: '0.65rem 0.95rem',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid #e2e8f0',
+              fontSize: '0.75rem',
             }}
           >
-            <span style={{ color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
+            <span style={{ color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>
               Consensus Invariant
             </span>
-            <div style={{ color: 'var(--accent-emerald)', fontWeight: 700, marginTop: '2px' }}>
+            <div style={{ color: '#059669', fontWeight: 700, marginTop: '2px' }}>
               Zero Execution on Policy Revert
             </div>
           </div>
@@ -193,7 +188,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
       </div>
 
       {/* Scenario Cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {scenarios.map((scenario) => {
           const isExpanded = expandedDetails[scenario.id];
           const isAllowed = scenario.expectedResult === 'Success';
@@ -202,17 +197,18 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
           return (
             <div
               key={scenario.id}
-              className="security-card-elevated"
+              className="security-card"
               style={{
-                borderLeft: `3px solid ${
-                  isAllowed ? 'var(--accent-emerald)' : 'var(--accent-rose)'
+                borderLeft: `4px solid ${
+                  isAllowed ? '#059669' : '#dc2626'
                 }`,
+                padding: '1.5rem',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: '280px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
-                    <strong style={{ fontSize: '0.95rem', color: '#fff' }}>{scenario.name}</strong>
+                    <strong style={{ fontSize: '1rem', color: '#111827', fontWeight: 700 }}>{scenario.name}</strong>
                     <span className={`badge ${isAllowed ? 'badge-emerald' : 'badge-rose'}`}>
                       Expected: {scenario.expectedResult}
                     </span>
@@ -220,7 +216,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                       {scenario.category}
                     </span>
                   </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <p style={{ fontSize: '0.85rem', color: '#4b5563' }}>
                     {scenario.description}
                   </p>
                 </div>
@@ -241,7 +237,7 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
 
                   <button
                     className="btn-secondary"
-                    style={{ padding: '0.5rem' }}
+                    style={{ padding: '0.55rem' }}
                     onClick={() => toggleDetails(scenario.id)}
                     aria-label="Toggle technical details"
                   >
@@ -254,11 +250,11 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
               {hasRun && scenario.resultData && (
                 <div
                   style={{
-                    marginTop: '0.85rem',
-                    padding: '0.75rem 0.85rem',
-                    borderRadius: 'var(--radius-sm)',
-                    background: isAllowed ? 'var(--accent-emerald-subtle)' : 'var(--accent-rose-subtle)',
-                    border: `1px solid ${isAllowed ? 'var(--accent-emerald-border)' : 'var(--accent-rose-border)'}`,
+                    marginTop: '1rem',
+                    padding: '0.85rem 1rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: isAllowed ? '#ecfdf5' : '#fef2f2',
+                    border: `1px solid ${isAllowed ? '#a7f3d0' : '#fecaca'}`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -268,15 +264,15 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {isAllowed ? (
-                      <CheckCircle2 size={16} color="var(--accent-emerald)" />
+                      <CheckCircle2 size={16} color="#059669" />
                     ) : (
-                      <XCircle size={16} color="var(--accent-rose)" />
+                      <XCircle size={16} color="#dc2626" />
                     )}
                     <span
                       style={{
-                        fontSize: '0.785rem',
-                        fontWeight: 600,
-                        color: isAllowed ? 'var(--accent-emerald)' : 'var(--accent-rose)',
+                        fontSize: '0.825rem',
+                        fontWeight: 700,
+                        color: isAllowed ? '#065f46' : '#991b1b',
                       }}
                     >
                       {isAllowed
@@ -284,17 +280,17 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                         : `Local preflight: contract would revert with ${scenario.resultData.errorName}`}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: '#64748b' }}>
                     {scenario.resultData.txHash ? (
-                      <span title={scenario.resultData.txHash} style={{ color: 'var(--accent-emerald)' }}>
+                      <span title={scenario.resultData.txHash} style={{ color: '#059669', fontWeight: 600 }}>
                         Tx: {scenario.resultData.txHash.slice(0, 10)}...{scenario.resultData.txHash.slice(-6)}
                       </span>
                     ) : (
-                      <span style={{ color: 'var(--text-muted)' }}>
+                      <span style={{ color: '#64748b' }}>
                         [Browser preflight only · nothing broadcast · no receipt mined]
                       </span>
                     )}
-                    <span>Vault: {scenario.resultData.vaultRemaining}</span>
+                    <span style={{ fontWeight: 600, color: '#111827' }}>Vault: {scenario.resultData.vaultRemaining}</span>
                   </div>
                 </div>
               )}
@@ -303,9 +299,9 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
               {isExpanded && (
                 <div
                   style={{
-                    marginTop: '0.85rem',
-                    paddingTop: '0.85rem',
-                    borderTop: '1px solid var(--border-subtle)',
+                    marginTop: '1rem',
+                    paddingTop: '1rem',
+                    borderTop: '1px solid #e2e8f0',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.75rem',
@@ -315,26 +311,26 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                     style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                      gap: '0.65rem',
+                      gap: '0.75rem',
                     }}
                   >
                     <div className="mono-box">
                       <span className="kpi-label">ATTEMPTED CALLER</span>
-                      <div style={{ color: '#fff', marginTop: '2px' }}>{scenario.caller}</div>
+                      <div style={{ color: '#111827', fontWeight: 600, marginTop: '2px' }}>{scenario.caller}</div>
                     </div>
                     <div className="mono-box">
                       <span className="kpi-label">TARGET ADDRESS</span>
-                      <div style={{ color: '#fff', marginTop: '2px' }}>{scenario.target}</div>
+                      <div style={{ color: '#111827', fontWeight: 600, marginTop: '2px' }}>{scenario.target}</div>
                     </div>
                     <div className="mono-box">
                       <span className="kpi-label">SELECTOR & VALUE</span>
-                      <div style={{ color: '#fff', marginTop: '2px' }}>
+                      <div style={{ color: '#111827', fontWeight: 600, marginTop: '2px' }}>
                         {scenario.selector} · {scenario.value} MON
                       </div>
                     </div>
                     <div className="mono-box">
                       <span className="kpi-label">REVERT SIGNATURE</span>
-                      <div style={{ color: isAllowed ? 'var(--accent-emerald)' : 'var(--accent-rose)', marginTop: '2px' }}>
+                      <div style={{ color: isAllowed ? '#059669' : '#dc2626', fontWeight: 700, marginTop: '2px' }}>
                         {scenario.revertError}
                       </div>
                     </div>
@@ -343,17 +339,17 @@ export function AttackLab({ onScenarioExecuted }: AttackLabProps) {
                   {/* Execution Mode Disclosure */}
                   <div
                     style={{
-                      fontSize: '0.72rem',
-                      color: 'var(--text-muted)',
+                      fontSize: '0.75rem',
+                      color: '#64748b',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem',
                     }}
                   >
-                    <span className="badge badge-neutral" style={{ fontSize: '0.65rem' }}>
+                    <span className="badge badge-neutral" style={{ fontSize: '0.68rem' }}>
                       Browser Preflight: Validated
                     </span>
-                    <span className="badge badge-simulation" style={{ fontSize: '0.65rem' }}>
+                    <span className="badge badge-simulation" style={{ fontSize: '0.68rem' }}>
                       Contract Enforcement: verify live receipts in Receipt Explorer
                     </span>
                   </div>
