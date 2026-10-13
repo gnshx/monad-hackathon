@@ -1,0 +1,50 @@
+# Security model
+
+AgentMandates protects a human's funds from their own AI agent. The agent's key is assumed to be compromised: prompt injection, a malicious tool, a leaked environment variable. The contract is the only component that has to be correct. The SDK, MCP server, relayer and console are conveniences, and each of them can be malicious without breaking the guarantees below.
+
+## Guarantees
+
+| # | Guarantee | Enforced by |
+|---|---|---|
+| G1 | Only the owner's passkey can create, revoke or withdraw from a mandate | `WebAuthnP256.verify` against the passkey stored for `ownerKey` |
+| G2 | A relayer cannot alter what the owner signed | Every term (agent, agent ID, permissions, caps, expiry, recipient, amount) is inside the signed digest |
+| G3 | Signatures cannot be replayed | Per-owner nonce, plus `block.chainid` and `address(this)` in every digest, plus a distinct typehash per action |
+| G4 | Only the named agent wallet can execute | `msg.sender == mandate.agent` |
+| G5 | The agent must still hold its ERC-8004 identity | `getAgentWallet(agentId)` or `ownerOf(agentId)` must equal the agent, checked at creation **and on every execute**. Fails closed if the registry reverts |
+| G6 | The agent can only call what was allowed | `(target, selector)` allowlist. The selector is read from the calldata itself, never trusted from an argument. Plain transfers need an explicit wildcard |
+| G7 | The agent cannot spend more than allowed | `value ≤ maxPerCall`, `spent + value ≤ budget`, `value ≤ vault balance`. Fuzzed: `spent ≤ budget` and `balance + spent == deposits` |
+| G8 | One mandate's funds are isolated from another's | Per-mandate `balance` |
+| G9 | The owner can stop everything at once | `revokeAll` bumps the owner's epoch; mandates from older epochs fail `_isLive` |
+| G10 | No reentrancy into accounting | Checks-effects-interactions and `nonReentrant` on `execute` and `withdraw` |
+
+## WebAuthn verification
+
+`contracts/src/lib/WebAuthnP256.sol` accepts an assertion only if all of these hold:
+
+1. `authenticatorData` is at least 37 bytes, and the flags have both **UP** (user present) and **UV** (user verified, i.e. biometric or PIN) set.
+2. `clientDataJSON` contains `"type":"webauthn.get"` at `typeIndex`. This rejects output from the registration ceremony (`webauthn.create`).
+3. `clientDataJSON` contains `"challenge":"<base64url(digest)>"` at `challengeIndex`, followed by a closing quote.
+4. `0 < r < n` and `0 < s ≤ n/2`, so malleated high-S signatures are rejected. The SDK normalizes s to the low half, since authenticators return either half.
+5. The P-256 verifier (Monad's precompile at `0x0100`) returns exactly 32 bytes equal to 1 for `sha256(authenticatorData ‖ sha256(clientDataJSON))`. Empty or zero output fails.
+
+Public keys are checked to be valid affine points on P-256 (`y² = x³ − 3x + b mod p`, coordinates below p) before they are stored.
+
+**Origin.** The contract does not parse `origin` from `clientDataJSON`. Passkeys are scoped to the relying party by the browser, so a phishing site cannot obtain an assertion for our credential. The rpIdHash is part of the signed `authenticatorData`, so it cannot be altered after signing.
+
+## Tests
+
+`contracts/test/AgentMandates.t.sol` uses real P-256 keys (`vm.signP256`) and a real RIP-7212 implementation etched at `0x0100`. There is no mock verifier. The tests cover:
+
+- Relayed creation, wrong passkey, tampered terms, replay, cross-chain replay, missing UV, `webauthn.create` type, high-S and off-curve keys
+- ERC-8004: unbound agent, unknown agent ID (registry reverts), NFT owner accepted, wallet rotated after creation
+- Execution: stranger, wrong target, wrong selector, plain transfer without wildcard, per-call cap, budget, vault isolation and expiry
+- Owner controls: relayed revoke, revoke with the wrong key, revoke-all, withdraw, and a relayer trying to redirect a withdrawal
+- `checkAction` reasons, plus a fuzzed budget invariant
+
+## Known limits
+
+- **ERC-20 amounts.** Caps apply to native MON (`msg.value`). For token transfers, allow a specific function on a specific token, and fund the agent's allowance accordingly. Calldata-level argument limits are on the roadmap (see [adoption.md](adoption.md)).
+- **Passkey loss.** If the owner loses every device with the passkey (and it is not synced), they can no longer revoke. Mandates still expire. Multi-passkey owners and a recovery passkey are on the roadmap.
+- **Relayer censorship.** A relayer can refuse to forward an action. Anyone else can submit the same signed payload, including the owner from any wallet. The console falls back to an injected wallet when no relayer is configured.
+- **Public key storage.** The console stores the passkey's public key in browser storage. On a new device, the user re-imports it (the on-chain `passkeys` mapping holds it, keyed by `ownerKey`).
+- **Not audited.** This is hackathon code.

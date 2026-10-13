@@ -1,5 +1,37 @@
 # @agenttrust/sdk
 
+TypeScript SDK for **AgentMandates**: passkey-owned spending mandates for AI agents on Monad.
+
+```ts
+import {
+  AgentMandates, createBrowserPasskey, signWithBrowserPasskey, createSoftwarePasskey,
+  encode, ownerKeyOf, ANY_SELECTOR,
+} from '@agenttrust/sdk';
+```
+
+| Export | Use |
+|---|---|
+| `new AgentMandates(address, publicClient, walletClient?)` | Reads (`getMandate`, `getPermissions`, `mandatesOf`, `mandatesForAgent`, `checkAction`), challenges for owner actions (`createChallenge`, `revokeChallenge`, `revokeAllChallenge`, `withdrawChallenge`), `relay(data)` and agent `execute()` |
+| `createBrowserPasskey(name)` | Create a device passkey and get its P-256 public key |
+| `signWithBrowserPasskey(challenge, credentialId?)` | Prompt Face ID / Touch ID, returning the assertion struct the contract expects (low-S normalized, indices located, UV checked) |
+| `createSoftwarePasskey()` | Byte-compatible WebAuthn assertions from a software key, for scripts, CI and tests |
+| `encode.createMandate / revoke / revokeAll / withdraw` | Calldata any relayer can submit |
+| `createDigest`, `revokeDigest`, … | Off-chain mirrors of the contract's digests |
+| `MandateDeniedError` | Thrown by `execute()` with the contract's reason before any gas is spent |
+
+```ts
+const mandates = new AgentMandates(address, publicClient, agentWallet);
+const res = await mandates.checkAction(id, agent, target, data, value); // { allowed, reason? }
+await mandates.execute(id, target, data, value);
+```
+
+---
+
+## v1 API (MandateManager)
+
+The rest of this file documents the v1 `AgentTrustClient` for the wallet-owned `MandateManager` contract.
+
+
 > Deterministic On-Chain Permission Boundary & Mandate Enforcement SDK for AI Agents on Monad.
 
 [![Monad Testnet: Chain 10143](https://img.shields.io/badge/Monad_Testnet-10143-6930C3.svg)](https://testnet.monadexplorer.com)

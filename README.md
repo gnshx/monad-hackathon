@@ -1,298 +1,170 @@
-# 🛡️ AgentTrust — Hardware Passkey Mandates for AI Agents
-
 <p align="center">
-  <img src="./docs/assets/agenttrust_logo.jpg" alt="AgentTrust Architecture Logo" width="220" style="border-radius: 20px; box-shadow: 0 12px 40px rgba(89, 68, 219, 0.25);" />
+  <img src="./docs/assets/agenttrust_logo.jpg" alt="AgentTrust" width="140" />
 </p>
 
-<p align="center">
-  <strong>Passkey-Authorized Hardware Delegation · Monad Native RIP-7212 P-256 Precompile · Isolated Vault Accounting · Cryptographic Execution Receipts</strong>
-</p>
+<h1 align="center">AgentTrust</h1>
+
+<p align="center"><strong>Passkey-owned spending mandates for AI agents, enforced on Monad.</strong><br/>
+Give your agent a budget, not your keys.</p>
 
 <p align="center">
-  <a href="https://agenttrust.vercel.app"><img src="https://img.shields.io/badge/Live_Console-agenttrust.vercel.app-5944db?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Console" /></a>
-  <a href="https://github.com/gnshx/monad-hackathon"><img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Repo" /></a>
-  <img src="https://img.shields.io/badge/Monad_Testnet-Chain_10143-836ef9?style=for-the-badge&logo=ethereum&logoColor=white" alt="Monad Network" />
+  <a href="https://agenttrust.vercel.app">Live console</a> ·
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#integrate">Integrate</a> ·
+  <a href="docs/security.md">Security model</a> ·
+  <a href="docs/adoption.md">Adoption plan</a> ·
+  <a href="docs/demo-and-pitch.md">Demo &amp; pitch scripts</a>
 </p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Contracts-29%2F29_Passed_(1k_Fuzz)-success?style=flat-square&logo=solidity" alt="Foundry Tests" />
-  <img src="https://img.shields.io/badge/SDK-25%2F25_Passed_(Vitest)-success?style=flat-square&logo=typescript" alt="SDK Tests" />
-  <img src="https://img.shields.io/badge/Precompile-RIP--7212_@_0x100_PROVEN-emerald?style=flat-square" alt="RIP-7212" />
-  <img src="https://img.shields.io/badge/ERC--8004-Identity_Bound-blue?style=flat-square" alt="ERC-8004" />
-  <img src="https://img.shields.io/badge/Next.js-15.5.27_Turbopack-black?style=flat-square&logo=next.js" alt="Next.js" />
-  <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License" />
-</p>
-
-<p align="center">
-  <a href="docs/judges.md">👨‍⚖️ Master Judges Dossier</a> •
-  <a href="docs/submission-package.md">🏆 Official Submission Package</a> •
-  <a href="docs/storyboard-and-outreach.md">🎬 Video Storyboard & Outreach</a> •
-  <a href="#-reproducible-judge-evaluation-guide">📋 Evaluation Guide</a> •
-  <a href="#-15-minute-integrator-quickstart-drop-in-guard-middleware">🔌 SDK Quickstart</a> •
-  <a href="docs/claim-vs-evidence.md">📊 Claims vs. Evidence</a> •
-  <a href="docs/interview-brief.md">🎙️ Interview Defense</a>
-</p>
-
-> 💡 **Judge Note on Live Deployment:** The public console is permanently hosted at **[https://agenttrust.vercel.app](https://agenttrust.vercel.app)** (Vercel). If you prefer to run locally: `npm run build:web && npm run start:web` → `http://localhost:3000`. No wallet funds required to evaluate.
 
 ---
 
-## 📋 Reproducible Judge Evaluation Guide
+## The problem
 
-### 1. What problem is solved?
-Autonomous AI agents are increasingly tasked with transacting on-chain (DEX swaps, yield rebalancing, micro-payments). Giving an agent an unconstrained private key creates existential risk: prompt injection, model hallucinations, logic bugs, or leaked credentials can instantly drain an entire treasury. **AgentTrust replaces unconstrained key access with hardware passkey-delegated, bounded mandates enforced on-chain by Monad.**
+AI agents now pay for APIs, trade, mint and tip. To do that they hold a private key, and whoever controls the model's context controls the key. One prompt injection, hallucinated tool call or leaked `.env` file can drain everything the key can reach. The usual fixes move the problem instead of solving it: a custodial "agent wallet" service, a policy server you have to trust, or session keys tied to one wallet vendor.
 
-### 2. Who needs it?
-- **AI Agent Developers & Frameworks** (Eliza, LangChain, CrewAI, AutoGPT) that need safe execution authority without custody liabilities.
-- **DeFi Users & Protocol Treasuries** delegating routine transactions to autonomous agents while guaranteeing hard spending limits.
-- **Auditors & Counterparties** who need independent cryptographic receipts to verify agent compliance without trusting off-chain assertions.
+## The primitive
 
-### 3. What is the security model?
-1. **Human Root of Trust:** The owner authorizes a mandate using their device hardware passkey (TouchID, FaceID, YubiKey) generating a standard SECP256R1 (P-256) signature envelope.
-2. **On-Chain Enforcement:** `MandateManager.sol` validates the passkey signature natively via Monad's RIP-7212 precompile (`0x0100`).
-3. **Hard Boundaries:** Calls are gated by allowlisted target contracts, 4-byte function selectors, per-transaction spending caps, cumulative budgets, and expiration windows.
-4. **Caller Guard (CRIT-01):** Only the explicitly designated agent wallet (`msg.sender == mandate.agentAddress`) can trigger execution.
-5. **Instant Revocation:** The human owner retains instant on-chain revocation power at any time, locking the mandate and enabling unspent vault recovery.
-6. **Spending Cap Boundary:** The spending cap (`maxValuePerTx`) specifically restricts native MON passed as `msg.value` via `target.call{value: value}(callData)`. It does not parse arbitrary calldata parameters (e.g. ERC-20 token amounts). Presets explicitly declare this as "maximum native MON per call."
+**AgentMandates** is a single Monad contract that lets a human hand an agent a *mandate* instead of a key:
 
-### 4. How can I run the local demo?
+| | |
+|---|---|
+| **Owner = a passkey** | The mandate belongs to a P-256 public key (Face ID, Touch ID, Windows Hello, YubiKey), not to a wallet. Every owner action is a WebAuthn assertion, verified on-chain by Monad's P-256 precompile at `0x0100`. |
+| **Relayable, gasless for the human** | Because the signature *is* the authorization, anyone can submit it. The human needs no wallet, seed phrase or MON. A relayer can delay an action but cannot forge or change one. |
+| **Agent = an ERC-8004 identity** | The agent wallet must be the registered wallet (or owner) of its ERC-8004 identity. This is re-checked **on every call**, so rotating or losing that identity cuts the agent off immediately. |
+| **Hard limits** | Allowlisted `(contract, function)` pairs, a per-call cap, a lifetime budget, an expiry and an isolated per-mandate vault. Everything is enforced in the contract, nothing in the agent. |
+| **One-tap kill switch** | `revoke(id)` stops one mandate. `revokeAll()` kills every mandate a passkey has ever issued, in one transaction. |
+| **Composable verification** | `checkAction(id, agent, target, data, value)` runs exactly the checks `execute()` runs. Any contract, relayer, API or merchant can ask "did a human authorize this agent to do this?" before serving it. |
+
+No platform sits in the middle. The owner's identity is a key on their own device, the agent's identity is an open ERC-8004 record, and the rules live in an immutable contract that anyone can read. There is no server, vendor or token for anyone to capture.
+
+```
+ Human (passkey)                Relayer (anyone)           Monad
+ ───────────────                ────────────────           ─────────────────────────────────────────
+ sign createMandate  ─────────▶ submit tx  ──────────────▶ AgentMandates
+   WebAuthn assertion                                         ├─ P-256 precompile 0x0100: verify passkey
+                                                              ├─ store terms, fund isolated vault
+ AI agent (hot key)                                           │
+ ──────────────────                                           │
+ execute(target, data, value) ───────────────────────────────▶├─ ERC-8004: agent wallet still bound?
+                                                              ├─ allowlist, per-call cap, budget, expiry
+                                                              └─ call target, emit ActionExecuted
+ Any app / contract
+ ──────────────────
+ checkAction(...)  ──────────────────────────────────────────▶ same checks, read-only
+```
+
+## Quickstart
+
+Requirements: Node 20+, [Foundry](https://getfoundry.sh).
+
 ```bash
-git clone https://github.com/gnshx/monad-hackathon.git
-cd monad-hackathon
+git clone https://github.com/gnshx/monad-hackathon.git && cd monad-hackathon
 npm install
-npm run demo
-```
-This runs `scripts/run-demo.ts` on a local Anvil EVM node (Chain ID 31337), executing:
-- Mandate creation with passkey envelope
-- Authorized 0.1 MON payable router call
-- Rogue target block (`TargetNotAllowed`)
-- Over-limit spend block (`ExceedsPerTxLimit`)
-- Unauthorized caller block (`CallerNotAuthorized`)
-- Owner mandate revocation & fund recovery
-- Standalone fail-closed receipt verification via `@agenttrust/sdk`
-
-### 5. How can I connect to Monad Testnet?
-- Open the live console at **[https://agenttrust.vercel.app](https://agenttrust.vercel.app)**.
-- Connect MetaMask or Rabby. The app prompts to switch to **Monad Testnet (Chain ID 10143, RPC: `https://testnet-rpc.monad.xyz`)**.
-- The app checks contract bytecode (`client.getBytecode`) on Monad Testnet before permitting live transactions.
-
-### 6. What is real versus simulated?
-| Component | Reality Status |
-| :--- | :--- |
-| **Monad Testnet Deployment** | **PROVEN LIVE ON MONAD TESTNET (CHAIN 10143).** `MandateManager` deployed at [`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`](https://testnet.monadexplorer.com/address/0x3550f9fc84640a9cfd7c51330615a1e05cb948be) and `MockTarget` at [`0x0758fdc78e20f748fa89e2d53f84748697cb177f`](https://testnet.monadexplorer.com/address/0x0758fdc78e20f748fa89e2d53f84748697cb177f). All 6 on-chain security scenarios executed and mined into blocks #70689675–#70689714. |
-| **P-256 Precompile (`0x0100`)** | **PROVEN OPERATIONAL ON MONAD TESTNET.** Address `0x0100` on `https://testnet-rpc.monad.xyz` queried via `cast call 0x000...0100 <160_bytes_vector>`. A valid Secp256r1 signature vector returns `0x000...0001` (true), while a tampered signature vector returns `0x` (fail-closed). Directly reproducible via `npm run verify:p256`. |
-| **ERC-8004 Agent Registry** | **PROVEN ON MONAD TESTNET (`0x8004A818...`).** Address `0x8004A818BFB912233c491871b3d84c89A494BD9e` queried on Monad Testnet. SDK reads `getAgentWallet(agentId)` and `ownerOf(agentId)` to prove that mandate execution permissions cryptographically bind to registered on-chain agent identities. Directly reproducible via `npm run verify:erc8004`. |
-| **Receipt Inspector** | **REAL & FAIL-CLOSED.** Queries live Monad Testnet RPC (`Chain ID: 10143`); validates bytecode deployment; verifies log topics, selector match, value caps, and on-chain ERC-8004 identity binding. Flags untrusted custom contracts. |
-| **WebAuthn Passkey Signing** | **REAL.** Enforces User Presence bit (`flags & 0x01`); fails closed on device prompt dismissal or errors; extracts SPKI DER P-256 public keys. |
-| **Smart Contract Logic** | **PROVEN REAL.** 29/29 Foundry tests pass including 1,000-run fuzz tests. |
-| **Attack Lab Scenarios** | **EXPLAINABLE SIMULATION.** Exercises local contract invariants in the browser; labeled `Execution Mode: Local Preflight` — nothing is broadcast and no transaction receipts are fabricated. |
-
-### 7. Where can I verify deployment / transactions?
-- **Deployed Contracts (Chain 10143):** `MandateManager` at [`0x3550f9fc84640a9cfd7c51330615a1e05cb948be`](https://testnet.monadexplorer.com/address/0x3550f9fc84640a9cfd7c51330615a1e05cb948be), `MockTarget` at [`0x0758fdc78e20f748fa89e2d53f84748697cb177f`](https://testnet.monadexplorer.com/address/0x0758fdc78e20f748fa89e2d53f84748697cb177f).
-- **All-in-One On-Chain Matrix Audit:** Run `npm run verify:all` to audit and verify all 7 on-chain mined transactions across all scenarios directly against Monad RPC in 5 seconds.
-- **Single Tx Receipt Verifier:** Run `npm run verify:tx <txHash>` to independently audit any specific transaction receipt.
-- **P-256 Precompile Verification:** Run `npm run verify:p256` to test Monad's live precompile math with a NIST P-256 test vector. (For human biometric passkeys, use the WebAuthn flow in `apps/web`).
-- **ERC-8004 Identity Registry Binding:** Run `npm run verify:erc8004` to verify on-chain agent identity binding against Monad Testnet registry `0x8004A818BFB912233c491871b3d84c89A494BD9e`.
-- **Receipt Auditor Tool:** Integrated in the live console under the **Receipts** tab with fail-closed checks against Monad Testnet or any specified EVM RPC.
-
----
-
-## ⚡ 3-Minute Developer & SDK Quickstart
-
-AgentTrust provides a zero-backend TypeScript SDK (`@agenttrust/sdk`) so autonomous agents and monitoring services can create mandates and verify receipts independently.
-
-### 1. Verify an Execution Receipt in 5 Lines of Code
-
-```typescript
-import { verifyReceipt } from '@agenttrust/sdk';
-
-const result = await verifyReceipt(publicClient, contractAddress, txHash, {
-  expectedChainId: 31337,
-  expectedSelector: '0x50824e4f', // MockTarget.doSomething
-  expectedMaxValue: 200000000000000000n, // 0.2 MON
-});
-
-console.log(result.status); // 'success' | 'reverted' | 'not_found' | 'wrong_network'
-console.log(result.verified); // true
-console.log(result.value); // 100000000000000000n (0.1 MON)
+cd contracts && forge build && forge test && cd ..   # 62 tests, including 33 for AgentMandates with real P-256 signatures
+npm run e2e                                          # full lifecycle on a local chain with the P-256 precompile
 ```
 
-### 2. Run Local Security Enforcement Demo
+`npm run e2e` starts anvil (Osaka hardfork, which has the same P-256 precompile at `0x0100` as Monad), deploys the contracts, and then:
 
----
+1. Signs a mandate with a passkey; a relayer submits it and funds the vault.
+2. The agent makes an allowed call.
+3. Over-limit, wrong-target and stranger calls are sent anyway and revert on-chain.
+4. The owner revokes with the passkey; the agent's next call reverts.
+5. The owner withdraws the rest to a cold wallet.
 
-## ⚡ Why Monad? (The Architectural Moat)
+Add `--testnet` with `DEPLOYER_PRIVATE_KEY` set to run the same flow on Monad testnet and record every transaction in `deployments.mandates.json` ([deploy guide](docs/deploy.md)).
 
-AgentTrust is purpose-built for Monad because high-frequency autonomous agent security requires primitives that only Monad provides:
+## Integrate
 
-1. **Native RIP-7212 P-256 Precompile at `0x0100`:**
-   - Standard EVM chains require ~350,000 gas to verify a Secp256r1 WebAuthn signature in Solidity bytecode.
-   - Monad's native precompile executes verification in **6,900 gas per Monad's docs, roughly 50x cheaper than a Solidity verifier**, making passkey hardware delegation cheaper than centralized key-management servers or ERC-4337 bundlers.
-   - Cryptographically proven live on Monad Testnet: `npm run verify:p256`.
+### Give an AI agent a bounded wallet (MCP)
 
-2. **Synchronous Tool-Call Execution & Low Latency:**
-   - Autonomous AI agents require immediate policy enforcement between API and on-chain tool executions.
-   - Monad enables **synchronous tool-call gating**: an agent's tool execution can be checked and confirmed on-chain with instant cryptographic receipts.
+Works with Claude Desktop, Claude Code, Cursor and any MCP client.
 
-3. **Composable ERC-8004 Agent Identity Ecosystem:**
-   - Monad Testnet hosts the canonical ERC-8004 Agent Identity Registry (`0x8004A818BFB912233c491871b3d84c89A494BD9e`).
-   - AgentTrust anchors human hardware mandates directly to on-chain agent identities, ensuring only verified agent wallets can trigger delegated actions.
-
----
-
-## 🔌 15-Minute Integrator Quickstart: Drop-in `guard()` Middleware
-
-External agent builders (LangChain, AutoGPT, Eliza, CrewAI) can guard their tools in under 15 minutes without modifying smart contracts:
-
-```typescript
-import { createAgentGuard } from '@agenttrust/sdk';
-
-// 1. Initialize guard with human owner's on-chain mandate
-const guard = createAgentGuard({
-  contractAddress: '0x3550f9fc84640a9cfd7c51330615a1e05cb948be',
-  mandateId: 0n,
-  agentId: 1n,
-  publicClient,
-  walletClient,
-});
-
-// 2. Wrap tool execution — fail-closed on spend caps or rogue targets
-const result = await guard.execute({
-  target: '0x1234567890123456789012345678901234567890',
-  selector: '0xa9059cbb', // transfer(address,uint256)
-  callData: '0x...',
-  value: parseEther('0.05'),
-});
-
-console.log(`✓ Guarded Tx Broadcasted: ${result.transactionHash}`);
-console.log(`✓ Receipt Verified: ${result.receipt.verified}`);
+```json
+{
+  "mcpServers": {
+    "agenttrust": {
+      "command": "node",
+      "args": ["/path/to/monad-hackathon/packages/mcp/dist/index.js"],
+      "env": {
+        "AGENTTRUST_CONTRACT": "0x<AgentMandates>",
+        "AGENTTRUST_MANDATE_ID": "1",
+        "AGENT_PRIVATE_KEY": "0x<agent hot key>"
+      }
+    }
+  }
+}
 ```
 
-*See full runnable example in [`examples/integrator-guard-example.ts`](examples/integrator-guard-example.ts) and outreach guide in [`docs/integrator-quickstart.md`](docs/integrator-quickstart.md).*
+Build it with `npm run build:mcp`. Once the package is on npm, the command becomes `npx -y @agenttrust/mcp`. The agent gets three tools: `mandate_status`, `check_action` and `execute_action`. A disallowed call comes back as `{ ok: false, blockedBy: "ExceedsPerCallLimit" }` before any gas is spent. Even if the model is fully compromised, the most it can do is spend the remaining budget on the calls the human allowed. See [`packages/mcp`](packages/mcp/README.md).
 
----
+### TypeScript SDK
 
-## 🔒 Six-Scenario On-Chain Security Execution Matrix (Monad Testnet — Chain 10143)
+```ts
+import { AgentMandates, createBrowserPasskey, signWithBrowserPasskey, encode } from '@agenttrust/sdk';
 
-| Scenario | On-Chain Action | Status / Block | Mined Transaction Hash | Monad Explorer Link |
-| :--- | :--- | :--- | :--- | :--- |
-| **Setup** | WebAuthn Credential Registration | Confirmed | `0x3eafdec02f64...` | [View Tx](https://testnet.monadexplorer.com/tx/0x3eafdec02f64a2fb78e0ae3fef6f7ba4eea5da0cb142e58041d100605a5d21d2) |
-| **Mandate Creation** | P-256 WebAuthn Envelope Authorization | Block #70689675 | `0xd9e9a355baa9...` | [View Tx](https://testnet.monadexplorer.com/tx/0xd9e9a355baa9d16c37c3411349a9437c6c09c9dcf2ffc0940cf049c7c8182e32) |
-| **Scenario 1** | Allowed Agent Action (0.02 MON spend) | Block #70689680 | `0xdf928824bdde...` | [View Tx](https://testnet.monadexplorer.com/tx/0xdf928824bddee386bac134559d4148ac88fa5d79fdf9dcb710d8bcd2947e7e77) |
-| **Scenario 2** | Rogue Target Call Attempt | Block #70689692 (Reverted) | `0x83df0f92e513...` | [View Tx](https://testnet.monadexplorer.com/tx/0x83df0f92e51350248df49713c9a19c6a9b2b2d0e7eb40dca6dd8155318228c7a) |
-| **Scenario 3** | Over-Limit Spend (0.1 > 0.05 MON cap) | Block #70689698 (Reverted) | `0x959dbe12d492...` | [View Tx](https://testnet.monadexplorer.com/tx/0x959dbe12d49225b19d1fea8344077f849b89a3dc5a1d7b38b9aa24ba3a0cc0bd) |
-| **Scenario 4** | Stranger Caller Hijack Attempt | Block #70689703 (Reverted) | `0xc9ca8bfa0738...` | [View Tx](https://testnet.monadexplorer.com/tx/0xc9ca8bfa073880c6818d0b43ac023ef490a56b31a7a95e5fcc3653fe909cd691) |
-| **Scenario 5** | Human Owner Instant Revocation | Block #70689710 | `0x5b082de83351...` | [View Tx](https://testnet.monadexplorer.com/tx/0x5b082de833511df83bd84d7351dcca5aff57eaf43a30aa2f5200a80d952e33ff) |
-| **Recovery** | Unspent Vault Balance Reclaim | Block #70689714 | `0x56d206d2ae77...` | [View Tx](https://testnet.monadexplorer.com/tx/0x56d206d2ae776e4aad9997059c87caeeefa44de887f1eea0c094d45f1a572f84) |
-| **Scenario 6** | Standalone SDK Receipt Audit | 100% Cryptographic Proof | Verified via CLI & SDK | `npm run verify:tx <txHash>` |
+const mandates = new AgentMandates(address, publicClient, walletClient);
 
-*All transaction hashes can be audited independently using `npm run verify:tx <txHash>` or directly on the [Monad Explorer](https://testnet.monadexplorer.com). Full judge evidence dossier: [`docs/evidence.md`](docs/evidence.md).*
+// Owner (browser): one passkey prompt, no wallet
+const { publicKey, credentialId } = await createBrowserPasskey('alice');
+const challenge = await mandates.createChallenge(publicKey, terms);
+const auth = await signWithBrowserPasskey(challenge, credentialId);
+await fetch('/api/relay', { method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ data: encode.createMandate(publicKey, terms, auth) }) });
 
----
-
-## 👨‍⚖️ Zero-Gas Judge Access Instructions
-
-Judges **do not need testnet MON or wallet funds** to evaluate AgentTrust:
-
-1. **Interactive In-Browser Evidence Testing (Zero Gas):**
-   - Open **[https://agenttrust.vercel.app](https://agenttrust.vercel.app)**.
-   - Navigate to the **"Evidence & Proofs"** tab in the sidebar.
-   - Click **"Run Live Precompile Verification Test"** to witness an interactive `eth_call` to Monad Testnet's native precompile (`0x0100`) returning `0x01` in real-time.
-   - Query live agent identities on the Monad ERC-8004 Registry (`0x8004A818...`).
-
-2. **Zero-Gas Relayer Mandate Creation:**
-   - In production evaluation, judges tap TouchID/FaceID to produce a WebAuthn passkey assertion. The mandate transaction is submitted via our sponsored agent relayer without consuming judge funds.
-
-3. **Receipt Auditor Tool:**
-   - Click the **"Receipts"** tab in the console.
-   - Paste any Monad testnet transaction hash to verify contract bytecode, log topics, and policy compliance directly against the RPC (or use the 1-click sample buttons).
-
-## 🏗️ System Architecture
-
-```
-                                  ┌──────────────────────────┐
-                                  │       Human Owner        │
-                                  │ (FaceID / TouchID P-256) │
-                                  └─────────────┬────────────┘
-                                                │ 1. WebAuthn Hardware Assertion
-                                                ▼
-                                  ┌──────────────────────────┐
-                                  │  AgentTrust Web Console  │
-                                  │ (Next.js 15 Warm Editorial)│
-                                  └─────────────┬────────────┘
-                                                │ 2. Submit Mandate Envelope
-                                                ▼
-                 ┌─────────────────────────────────────────────────────────────┐
-                 │                       Monad Blockchain                      │
-                 │                                                             │
-                 │  ┌────────────────────────┐     ┌────────────────────────┐  │
-                 │  │   MandateManager.sol   │◄────┤  RIP-7212 Precompile   │  │
-                 │  │ (Allowlists, Vaults)   │     │ (P-256 Native @ 0x100) │  │
-                 │  └───────────┬────────────┘     └────────────────────────┘  │
-                 │              │                                              │
-                 │              │ 3. Execute allowed call                      │
-                 │              ▼                                              │
-                 │  ┌────────────────────────┐     ┌────────────────────────┐  │
-                 │  │ Allowed Target Router  │     │  ActionExecuted Event  │  │
-                 │  └────────────────────────┘     └───────────┬────────────┘  │
-                 └─────────────────────────────────────────────┼───────────────┘
-                                                               │ 4. Verify Log
-                                                               ▼
-                                                   ┌───────────────────────┐
-                                                   │   @agenttrust/sdk     │
-                                                   │  (Receipt Auditor)    │
-                                                   └───────────────────────┘
+// Agent
+await mandates.checkAction(id, agent, target, data, value); // { allowed: false, reason: 'ExceedsBudget' }
+await mandates.execute(id, target, data, value);            // throws MandateDeniedError before spending gas
 ```
 
----
+### Solidity: gate agent traffic in your protocol
 
-## 🧪 Testing & Quality Assurance
-
-```bash
-# 1. Foundry Contract Test Suite (29 tests + 1,000-run fuzz tests)
-cd contracts && ~/.foundry/bin/forge test -vvv
-
-# 2. TypeScript SDK Unit & Receipt Verification Tests (25 tests)
-npm --prefix packages/sdk run test
-
-# 3. Next.js Web Production Build
-npm run build:web
+```solidity
+(bool ok, ) = IAgentMandates(MANDATES).checkAction(mandateId, msg.sender, address(this), msg.data, msg.value);
+require(ok, "agent not authorized by its owner");
 ```
 
----
+## Contract API
 
-## 📦 Monorepo Structure
+| Function | Who | What |
+|---|---|---|
+| `createMandate(passkey, terms, assertion)` | anyone (relayer) | Creates a mandate signed by `passkey`. `msg.value` funds its vault. |
+| `execute(id, target, data, value)` | the mandate's agent | Runs a call within the mandate. |
+| `revoke(id, assertion)` | anyone (relayer) | Owner-signed revoke of one mandate. |
+| `revokeAll(ownerKey, assertion)` | anyone (relayer) | Owner-signed revoke of every mandate from this passkey. |
+| `withdraw(id, to, amount, assertion)` | anyone (relayer) | Owner-signed vault withdrawal to a signed recipient. |
+| `deposit(id)` | anyone | Top up a vault. |
+| `checkAction(id, agent, target, data, value)` | view | `(allowed, reasonSelector)` with the same checks as `execute`. |
+| `getMandate`, `getPermissions`, `mandatesOf(ownerKey)`, `mandatesForAgent(agent)`, `remainingBudget`, `isActive` | view | State for UIs, indexers and agents. |
+| `createDigest`, `revokeDigest`, `revokeAllDigest`, `withdrawDigest` | view | The exact challenge the passkey signs (mirrored in the SDK). |
 
-```text
-monad-hackathon/
-├── contracts/                  # Foundry Smart Contracts
-│   ├── src/
-│   │   ├── MandateManager.sol      # Core contract enforcing mandates & vaults
-│   │   ├── MockTarget.sol          # Target contract for testing DeFi router calls
-│   │   └── interfaces/             # IP256Verifier, IERC8004Registry
-│   └── test/
-│       └── MandateManager.t.sol    # 29 unit & fuzz tests
-│
-├── packages/
-│   └── sdk/                    # Zero-Backend TypeScript SDK (@agenttrust/sdk)
-│       ├── src/
-│       │   ├── client.ts           # AgentTrustClient
-│       │   ├── mandate.ts          # createMandate, revokeMandate, hashing
-│       │   ├── verify.ts           # Fail-closed verifyReceipt implementation
-│       │   └── abi.ts              # Contract ABIs
-│       └── test/                   # 25 Vitest unit & regression tests
-│
-├── apps/
-│   ├── web/                    # Next.js 15 Web3 Security Console
-│   │   ├── src/app/page.tsx        # Console dashboard with testnet isolation
-│   │   ├── src/components/         # Policy-to-Proof, Attack Lab, Receipts
-│   │   └── src/lib/webauthn.ts     # Fail-closed WebAuthn P-256 implementation
-│   └── demo-agent/             # Autonomous AI Agent demo
-│
-└── docs/                       # Hackathon artifacts, threat model & scripts
+Each digest commits to chain id, contract address, owner key and a per-owner nonce, so a signature can't be replayed across chains, deployments or actions. The full list of checks and their rationale is in [docs/security.md](docs/security.md).
+
+## Repository
+
+```
+contracts/src/AgentMandates.sol        the primitive
+contracts/src/lib/WebAuthnP256.sol     strict WebAuthn verification on the P-256 precompile
+contracts/test/AgentMandates.t.sol     33 tests with real P-256 signatures + fuzzing
+packages/sdk                           @agenttrust/sdk: client, digests, WebAuthn helpers
+packages/mcp                           @agenttrust/mcp: MCP server for AI agents
+apps/web                               console: passkey mandates, relayer API, verifier
+scripts/mandates-e2e.ts                local + testnet end-to-end run
+contracts/src/MandateManager.sol       v1 (wallet-owned mandates), kept for its recorded testnet evidence
 ```
 
----
+## What's real
 
-## 📄 License
-This project is licensed under the [MIT License](LICENSE). Built for the Monad Hackathon.
+| | Status |
+|---|---|
+| AgentMandates contract, WebAuthn library | Implemented, 33 Foundry tests with real P-256 signatures, fuzzed budget invariant |
+| Passkey flow in the browser | Implemented. Verified in Chromium with a WebAuthn virtual authenticator against a local chain |
+| Relayer | Implemented (`apps/web/src/app/api/relay`). Forwards only owner actions and simulates before sending |
+| MCP server | Implemented, exercised by a real MCP client (`npm run mcp:smoke`) |
+| Monad P-256 precompile | Proven on testnet for v1: `npm run verify:p256` |
+| AgentMandates on Monad testnet | See [`deployments.mandates.json`](deployments.mandates.json) once deployed (`npm run e2e -- --testnet`) |
+| Spending caps | Apply to native MON (`msg.value`). ERC-20 amounts inside calldata are limited only by the function allowlist |
+
+## License
+
+MIT

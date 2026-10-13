@@ -17,8 +17,11 @@ const AGENT_ID = BigInt(process.env.AGENT_ID || '42');
 const MANDATE_ID = BigInt(process.env.MANDATE_ID || '0');
 
 // Demo agent private key (for sending execution transactions)
-const AGENT_PRIVATE_KEY = (process.env.AGENT_PRIVATE_KEY ||
-  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80') as Hex;
+const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY as Hex;
+if (!AGENT_PRIVATE_KEY) {
+  console.error('Set AGENT_PRIVATE_KEY to the agent wallet key');
+  process.exit(1);
+}
 
 console.log('🤖 [AgentTrust Demo AI Agent] Initializing...');
 
