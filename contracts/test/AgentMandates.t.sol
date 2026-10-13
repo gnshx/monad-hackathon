@@ -6,6 +6,7 @@ import {AgentMandates, IERC8004Identity} from "../src/AgentMandates.sol";
 import {WebAuthnP256} from "../src/lib/WebAuthnP256.sol";
 import {P256Verifier} from "./utils/P256Verifier.sol";
 import {MockTarget} from "./MockTarget.sol";
+import {MockERC20} from "./utils/MockERC20.sol";
 
 /// @dev ERC-8004 Identity Registry stand-in: ownerOf reverts for unknown ids, like ERC-721.
 contract MockIdentityRegistry is IERC8004Identity {
@@ -391,6 +392,108 @@ contract AgentMandatesTest is Test {
         vm.prank(stranger);
         (bool ok,) = address(am).call{value: 1}("");
         assertFalse(ok);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ERC-20 budgets
+    // ─────────────────────────────────────────────────────────────────────────
+
+    address internal payee = makeAddr("apiMerchant");
+
+    function _createWithToken(MockERC20 token, uint256 deposit) internal returns (uint256 id) {
+        AgentMandates.MandateTerms memory t = _terms();
+        t.permissions = new AgentMandates.Permission[](2);
+        t.permissions[0] = AgentMandates.Permission(address(target), MockTarget.doSomething.selector);
+        t.permissions[1] = AgentMandates.Permission(payee, bytes4(0));
+        t.tokenLimits = new AgentMandates.TokenLimit[](1);
+        t.tokenLimits[0] = AgentMandates.TokenLimit(address(token), 10e6, 25e6); // 10 USDC per call, 25 total
+        WebAuthnP256.Assertion memory a = _sign(am.createDigest(ownerKey, t, am.nonces(ownerKey)));
+        id = am.createMandate(_passkey(), t, a);
+        token.mint(relayer, deposit);
+        vm.startPrank(relayer);
+        token.approve(address(am), deposit);
+        am.depositToken(id, address(token), deposit);
+        vm.stopPrank();
+    }
+
+    function test_token_payWithinLimits() public {
+        MockERC20 usdc = new MockERC20();
+        uint256 id = _createWithToken(usdc, 100e6);
+        vm.prank(agent);
+        am.payToken(id, address(usdc), payee, 10e6);
+        assertEq(usdc.balanceOf(payee), 10e6);
+        AgentMandates.TokenAllowance memory ta = am.getTokenAllowance(id, address(usdc));
+        assertEq(ta.spent, 10e6);
+        assertEq(ta.balance, 90e6);
+    }
+
+    function test_token_limitsEnforced() public {
+        MockERC20 usdc = new MockERC20();
+        uint256 id = _createWithToken(usdc, 100e6);
+        vm.startPrank(agent);
+        vm.expectRevert(AgentMandates.ExceedsPerCallLimit.selector);
+        am.payToken(id, address(usdc), payee, 11e6);
+        vm.expectRevert(AgentMandates.PermissionDenied.selector);
+        am.payToken(id, address(usdc), stranger, 1e6);
+        am.payToken(id, address(usdc), payee, 10e6);
+        am.payToken(id, address(usdc), payee, 10e6);
+        vm.expectRevert(AgentMandates.ExceedsBudget.selector);
+        am.payToken(id, address(usdc), payee, 6e6);
+        vm.stopPrank();
+        vm.prank(stranger);
+        vm.expectRevert(AgentMandates.NotAgent.selector);
+        am.payToken(id, address(usdc), payee, 1e6);
+    }
+
+    function test_token_unlistedTokenRejected() public {
+        MockERC20 usdc = new MockERC20();
+        MockERC20 other = new MockERC20();
+        uint256 id = _createWithToken(usdc, 10e6);
+        other.mint(relayer, 1e6);
+        vm.startPrank(relayer);
+        other.approve(address(am), 1e6);
+        vm.expectRevert(AgentMandates.TokenNotAllowed.selector);
+        am.depositToken(id, address(other), 1e6);
+        vm.stopPrank();
+        vm.prank(agent);
+        vm.expectRevert(AgentMandates.TokenNotAllowed.selector);
+        am.payToken(id, address(other), payee, 1);
+    }
+
+    function test_token_executeCannotTouchVaultToken() public {
+        MockERC20 usdc = new MockERC20();
+        // Mandate B tries to drain pooled USDC via a generic call permission on the token itself.
+        AgentMandates.MandateTerms memory t = _terms();
+        t.permissions[0] = AgentMandates.Permission(address(usdc), bytes4(0));
+        uint256 b = am.createMandate(_passkey(), t, _sign(am.createDigest(ownerKey, t, am.nonces(ownerKey))));
+        _createWithToken(usdc, 50e6);
+        vm.prank(agent);
+        vm.expectRevert(AgentMandates.TargetIsVaultToken.selector);
+        am.execute(b, address(usdc), abi.encodeWithSignature("transfer(address,uint256)", agent, 50e6), 0);
+    }
+
+    function test_token_noReturnTokenAndWithdraw() public {
+        MockERC20 usdt = new MockERC20();
+        usdt.setNoReturn(true);
+        uint256 id = _createWithToken(usdt, 30e6);
+        vm.prank(agent);
+        am.payToken(id, address(usdt), payee, 5e6);
+        address cold = makeAddr("cold");
+        WebAuthnP256.Assertion memory a =
+            _sign(am.withdrawTokenDigest(ownerKey, id, address(usdt), cold, 25e6, am.nonces(ownerKey)));
+        vm.prank(relayer);
+        am.withdrawToken(id, address(usdt), cold, 25e6, a);
+        assertEq(usdt.balanceOf(cold), 25e6);
+        assertEq(am.getTokenAllowance(id, address(usdt)).balance, 0);
+    }
+
+    function test_token_revokeStopsPayments() public {
+        MockERC20 usdc = new MockERC20();
+        uint256 id = _createWithToken(usdc, 30e6);
+        am.revoke(id, _sign(am.revokeDigest(ownerKey, id, am.nonces(ownerKey))));
+        (bool ok, bytes4 why) = am.checkPayment(id, agent, address(usdc), payee, 1e6);
+        assertFalse(ok);
+        assertEq(why, AgentMandates.MandateInactive.selector);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

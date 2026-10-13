@@ -20,14 +20,38 @@ export interface Permission {
   selector: Hex;
 }
 
+export interface TokenLimit {
+  token: Address;
+  /** In the token's smallest unit (e.g. 10_000_000n = 10 USDC with 6 decimals). */
+  maxPerCall: bigint;
+  budget: bigint;
+}
+
 export interface MandateTerms {
   agent: Address;
   agentId: bigint;
+  /** Allowed calls. A (payee, ANY_SELECTOR) entry also allows token payments to payee. */
   permissions: Permission[];
+  /** Native MON caps. */
   maxPerCall: bigint;
   budget: bigint;
   /** Unix seconds; 0n = never. */
   expiresAt: bigint;
+  /** ERC-20 spending caps, paid out with payToken(). Optional. */
+  tokenLimits?: TokenLimit[];
+}
+
+export interface TokenAllowance {
+  maxPerCall: bigint;
+  budget: bigint;
+  spent: bigint;
+  balance: bigint;
+  enabled: boolean;
+}
+
+/** Fill optional fields so terms match the on-chain struct exactly. */
+export function normalizeTerms(t: MandateTerms): Required<MandateTerms> {
+  return { ...t, tokenLimits: t.tokenLimits ?? [] };
 }
 
 export interface OnchainMandate {
@@ -53,6 +77,7 @@ const TYPEHASH = {
   revoke: keccak256(toHex('AgentMandates.Revoke.v1')),
   revokeAll: keccak256(toHex('AgentMandates.RevokeAll.v1')),
   withdraw: keccak256(toHex('AgentMandates.Withdraw.v1')),
+  withdrawToken: keccak256(toHex('AgentMandates.WithdrawToken.v1')),
 };
 
 /** keccak256(abi.encode(x, y)): the passkey's identity on-chain. */
@@ -73,17 +98,26 @@ export function createDigest(d: Domain, ownerKey: Hex, t: MandateTerms, nonce: b
       [t.permissions.map((p) => ({ target: p.target, selector: p.selector }))]
     )
   );
+  const tokenLimitsHash = keccak256(
+    encodeAbiParameters(
+      [{
+        type: 'tuple[]',
+        components: [{ name: 'token', type: 'address' }, { name: 'maxPerCall', type: 'uint256' }, { name: 'budget', type: 'uint256' }],
+      }],
+      [(t.tokenLimits ?? []).map((l) => ({ token: l.token, maxPerCall: l.maxPerCall, budget: l.budget }))]
+    )
+  );
   return keccak256(
     encodeAbiParameters(
       [
         { type: 'bytes32' }, { type: 'uint256' }, { type: 'address' }, { type: 'bytes32' }, { type: 'address' },
         { type: 'uint256' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint64' },
-        { type: 'uint256' },
+        { type: 'bytes32' }, { type: 'uint256' },
       ],
       [
         TYPEHASH.create, BigInt(d.chainId), d.contract, ownerKey, t.agent,
         t.agentId, permissionsHash, t.maxPerCall, t.budget, t.expiresAt,
-        nonce,
+        tokenLimitsHash, nonce,
       ]
     )
   );
@@ -119,16 +153,32 @@ export function withdrawDigest(d: Domain, ownerKey: Hex, mandateId: bigint, to: 
   );
 }
 
+export function withdrawTokenDigest(
+  d: Domain, ownerKey: Hex, mandateId: bigint, token: Address, to: Address, amount: bigint, nonce: bigint
+): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: 'bytes32' }, { type: 'uint256' }, { type: 'address' }, { type: 'bytes32' }, { type: 'uint256' },
+        { type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' },
+      ],
+      [TYPEHASH.withdrawToken, BigInt(d.chainId), d.contract, ownerKey, mandateId, token, to, amount, nonce]
+    )
+  );
+}
+
 /** Calldata for owner actions, so any relayer can submit them. */
 export const encode = {
   createMandate: (pk: PasskeyPublicKey, terms: MandateTerms, auth: WebAuthnAssertion) =>
-    encodeFunctionData({ abi: AgentMandatesABI, functionName: 'createMandate', args: [pk, terms, auth] }),
+    encodeFunctionData({ abi: AgentMandatesABI, functionName: 'createMandate', args: [pk, normalizeTerms(terms), auth] }),
   revoke: (mandateId: bigint, auth: WebAuthnAssertion) =>
     encodeFunctionData({ abi: AgentMandatesABI, functionName: 'revoke', args: [mandateId, auth] }),
   revokeAll: (ownerKey: Hex, auth: WebAuthnAssertion) =>
     encodeFunctionData({ abi: AgentMandatesABI, functionName: 'revokeAll', args: [ownerKey, auth] }),
   withdraw: (mandateId: bigint, to: Address, amount: bigint, auth: WebAuthnAssertion) =>
     encodeFunctionData({ abi: AgentMandatesABI, functionName: 'withdraw', args: [mandateId, to, amount, auth] }),
+  withdrawToken: (mandateId: bigint, token: Address, to: Address, amount: bigint, auth: WebAuthnAssertion) =>
+    encodeFunctionData({ abi: AgentMandatesABI, functionName: 'withdrawToken', args: [mandateId, token, to, amount, auth] }),
 };
 
 export interface CheckResult {
@@ -198,6 +248,32 @@ export class AgentMandates {
     return allowed ? { allowed } : { allowed, reason: MANDATE_ERRORS[reason] ?? reason };
   }
 
+  /** Token-payment counterpart of checkAction(). */
+  async checkPayment(mandateId: bigint, agent: Address, token: Address, to: Address, amount: bigint): Promise<CheckResult> {
+    const [allowed, reason] = await this.publicClient.readContract({
+      address: this.address, abi: AgentMandatesABI, functionName: 'checkPayment',
+      args: [mandateId, agent, token, to, amount],
+    });
+    return allowed ? { allowed } : { allowed, reason: MANDATE_ERRORS[reason] ?? reason };
+  }
+
+  async getTokens(mandateId: bigint): Promise<readonly Address[]> {
+    return this.publicClient.readContract({
+      address: this.address, abi: AgentMandatesABI, functionName: 'getTokens', args: [mandateId],
+    });
+  }
+
+  async getTokenAllowance(mandateId: bigint, token: Address): Promise<TokenAllowance> {
+    return (await this.publicClient.readContract({
+      address: this.address, abi: AgentMandatesABI, functionName: 'getTokenAllowance', args: [mandateId, token],
+    })) as TokenAllowance;
+  }
+
+  async withdrawTokenChallenge(owner: PasskeyPublicKey, mandateId: bigint, token: Address, to: Address, amount: bigint): Promise<Hex> {
+    const key = ownerKeyOf(owner);
+    return withdrawTokenDigest(await this.domain(), key, mandateId, token, to, amount, await this.nonce(key));
+  }
+
   /** Digest the passkey must sign to create `terms`, using the owner's current nonce. */
   async createChallenge(owner: PasskeyPublicKey, terms: MandateTerms): Promise<Hex> {
     const key = ownerKeyOf(owner);
@@ -247,6 +323,37 @@ export class AgentMandates {
     return { hash };
   }
 
+  /** Pay an allowlisted payee from the mandate's token vault, as the agent. Pre-checked like execute(). */
+  async payToken(mandateId: bigint, token: Address, to: Address, amount: bigint): Promise<{ hash: Hex }> {
+    const wallet = this.requireWallet();
+    const check = await this.checkPayment(mandateId, wallet.account!.address, token, to, amount);
+    if (!check.allowed) throw new MandateDeniedError(check.reason ?? 'denied');
+    const hash = await wallet.writeContract({
+      account: wallet.account!, chain: wallet.chain, address: this.address, abi: AgentMandatesABI,
+      functionName: 'payToken', args: [mandateId, token, to, amount],
+    });
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== 'success') throw new Error(`payToken reverted: ${hash}`);
+    return { hash };
+  }
+
+  /** Fund a mandate's token vault from this wallet (approves, then deposits). */
+  async depositToken(mandateId: bigint, token: Address, amount: bigint): Promise<{ hash: Hex }> {
+    const wallet = this.requireWallet();
+    const approve = await wallet.writeContract({
+      account: wallet.account!, chain: wallet.chain, address: token, abi: ERC20_APPROVE_ABI,
+      functionName: 'approve', args: [this.address, amount],
+    });
+    await this.publicClient.waitForTransactionReceipt({ hash: approve });
+    const hash = await wallet.writeContract({
+      account: wallet.account!, chain: wallet.chain, address: this.address, abi: AgentMandatesABI,
+      functionName: 'depositToken', args: [mandateId, token, amount],
+    });
+    const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== 'success') throw new Error(`depositToken reverted: ${hash}`);
+    return { hash };
+  }
+
   private requireWallet(): WalletClient {
     if (!this.walletClient?.account) throw new Error('A WalletClient with an account is required');
     return this.walletClient;
@@ -259,3 +366,10 @@ export class MandateDeniedError extends Error {
     this.name = 'MandateDeniedError';
   }
 }
+
+const ERC20_APPROVE_ABI = [
+  {
+    type: 'function', name: 'approve', stateMutability: 'nonpayable',
+    inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }],
+  },
+] as const;

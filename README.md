@@ -32,6 +32,7 @@ AI agents now pay for APIs, trade, mint and tip. To do that they hold a private 
 | **Relayable, gasless for the human** | Because the signature *is* the authorization, anyone can submit it. The human needs no wallet, seed phrase or MON. A relayer can delay an action but cannot forge or change one. |
 | **Agent = an ERC-8004 identity** | The agent wallet must be the registered wallet (or owner) of its ERC-8004 identity. This is re-checked **on every call**, so rotating or losing that identity cuts the agent off immediately. |
 | **Hard limits** | Allowlisted `(contract, function)` pairs, a per-call cap, a lifetime budget, an expiry and an isolated per-mandate vault. Everything is enforced in the contract, nothing in the agent. |
+| **Stablecoin budgets** | Per-token caps (e.g. 10 USDC per call, 25 USDC total) to allowlisted payees, from an isolated token vault. Generic calls can never touch custodied tokens. |
 | **One-tap kill switch** | `revoke(id)` stops one mandate. `revokeAll()` kills every mandate a passkey has ever issued, in one transaction. |
 | **Composable verification** | `checkAction(id, agent, target, data, value)` runs exactly the checks `execute()` runs. Any contract, relayer, API or merchant can ask "did a human authorize this agent to do this?" before serving it. |
 
@@ -60,17 +61,17 @@ Requirements: Node 20+, [Foundry](https://getfoundry.sh).
 ```bash
 git clone https://github.com/gnshx/monad-hackathon.git && cd monad-hackathon
 npm install
-cd contracts && forge build && forge test && cd ..   # 62 tests, including 33 for AgentMandates with real P-256 signatures
+cd contracts && forge build && forge test && cd ..   # 70 tests; the AgentMandates suite uses real P-256 signatures
 npm run e2e                                          # full lifecycle on a local chain with the P-256 precompile
 ```
 
 `npm run e2e` starts anvil (Osaka hardfork, which has the same P-256 precompile at `0x0100` as Monad), deploys the contracts, and then:
 
 1. Signs a mandate with a passkey; a relayer submits it and funds the vault.
-2. The agent makes an allowed call.
-3. Over-limit, wrong-target and stranger calls are sent anyway and revert on-chain.
+2. The agent makes an allowed call and pays a merchant 10 test-USDC.
+3. Over-limit (MON and USDC), wrong-target and stranger calls are sent anyway and revert on-chain.
 4. The owner revokes with the passkey; the agent's next call reverts.
-5. The owner withdraws the rest to a cold wallet.
+5. The owner withdraws the remaining MON and USDC to a cold wallet.
 
 Add `--testnet` with `DEPLOYER_PRIVATE_KEY` set to run the same flow on Monad testnet and record every transaction in `deployments.mandates.json` ([deploy guide](docs/deploy.md)).
 
@@ -96,7 +97,7 @@ Works with Claude Desktop, Claude Code, Cursor and any MCP client.
 }
 ```
 
-Build it with `npm run build:mcp`. Once the package is on npm, the command becomes `npx -y @agenttrust/mcp`. The agent gets three tools: `mandate_status`, `check_action` and `execute_action`. A disallowed call comes back as `{ ok: false, blockedBy: "ExceedsPerCallLimit" }` before any gas is spent. Even if the model is fully compromised, the most it can do is spend the remaining budget on the calls the human allowed. See [`packages/mcp`](packages/mcp/README.md).
+Build it with `npm run build:mcp`. Once the package is on npm, the command becomes `npx -y @agenttrust/mcp`. The agent gets four tools: `mandate_status`, `check_action`, `execute_action` and `pay_token`. A disallowed call comes back as `{ ok: false, blockedBy: "ExceedsPerCallLimit" }` before any gas is spent. Even if the model is fully compromised, the most it can do is spend the remaining budget on the calls the human allowed. See [`packages/mcp`](packages/mcp/README.md).
 
 ### TypeScript SDK
 
@@ -133,7 +134,10 @@ require(ok, "agent not authorized by its owner");
 | `revoke(id, assertion)` | anyone (relayer) | Owner-signed revoke of one mandate. |
 | `revokeAll(ownerKey, assertion)` | anyone (relayer) | Owner-signed revoke of every mandate from this passkey. |
 | `withdraw(id, to, amount, assertion)` | anyone (relayer) | Owner-signed vault withdrawal to a signed recipient. |
-| `deposit(id)` | anyone | Top up a vault. |
+| `deposit(id)` | anyone | Top up the MON vault. |
+| `payToken(id, token, to, amount)` | the mandate's agent | Pay an allowlisted payee in an ERC-20, within that token's caps. |
+| `depositToken(id, token, amount)` / `withdrawToken(id, token, to, amount, assertion)` | anyone / relayer (owner-signed) | Fund or drain the token vault. |
+| `checkPayment(id, agent, token, to, amount)` | view | Token counterpart of `checkAction`. |
 | `checkAction(id, agent, target, data, value)` | view | `(allowed, reasonSelector)` with the same checks as `execute`. |
 | `getMandate`, `getPermissions`, `mandatesOf(ownerKey)`, `mandatesForAgent(agent)`, `remainingBudget`, `isActive` | view | State for UIs, indexers and agents. |
 | `createDigest`, `revokeDigest`, `revokeAllDigest`, `withdrawDigest` | view | The exact challenge the passkey signs (mirrored in the SDK). |
@@ -145,7 +149,8 @@ Each digest commits to chain id, contract address, owner key and a per-owner non
 ```
 contracts/src/AgentMandates.sol        the primitive
 contracts/src/lib/WebAuthnP256.sol     strict WebAuthn verification on the P-256 precompile
-contracts/test/AgentMandates.t.sol     33 tests with real P-256 signatures + fuzzing
+contracts/test/AgentMandates.t.sol     39 tests with real P-256 signatures + fuzzing
+contracts/test/DigestVector.t.sol      digest vectors shared with the SDK tests
 packages/sdk                           @agenttrust/sdk: client, digests, WebAuthn helpers
 packages/mcp                           @agenttrust/mcp: MCP server for AI agents
 apps/web                               console: passkey mandates, relayer API, verifier
@@ -157,13 +162,13 @@ contracts/src/MandateManager.sol       v1 (wallet-owned mandates), kept for its 
 
 | | Status |
 |---|---|
-| AgentMandates contract, WebAuthn library | Implemented, 33 Foundry tests with real P-256 signatures, fuzzed budget invariant |
+| AgentMandates contract, WebAuthn library | Implemented, 39 Foundry tests with real P-256 signatures, fuzzed budget invariant, digest vectors pinned in both Solidity and the SDK |
 | Passkey flow in the browser | Implemented. Verified in Chromium with a WebAuthn virtual authenticator against a local chain |
 | Relayer | Implemented (`apps/web/src/app/api/relay`). Forwards only owner actions and simulates before sending |
 | MCP server | Implemented, exercised by a real MCP client (`npm run mcp:smoke`) |
 | Monad P-256 precompile | Proven on testnet for v1: `npm run verify:p256` |
 | AgentMandates on Monad testnet | See [`deployments.mandates.json`](deployments.mandates.json) once deployed (`npm run e2e -- --testnet`) |
-| Spending caps | Apply to native MON (`msg.value`). ERC-20 amounts inside calldata are limited only by the function allowlist |
+| Spending caps | Native MON via `execute`, and ERC-20s via `payToken` with per-token caps. ERC-20 calls made through `execute` to non-custodied tokens are limited only by the function allowlist |
 
 ## License
 

@@ -22,11 +22,13 @@ import {
   createWalletClient,
   encodeFunctionData,
   formatEther,
+  formatUnits,
   http,
   isAddress,
   isHex,
   parseAbiItem,
   parseEther,
+  parseUnits,
   type Address,
   type Hex,
   type PublicClient,
@@ -69,11 +71,24 @@ server.tool(
   'Show what this agent is allowed to do: allowed contracts and functions, per-call cap, remaining budget, vault balance and expiry. Call this before planning any spend.',
   {},
   async () => {
-    const [m, permissions, active] = await Promise.all([
+    const [m, permissions, active, tokens] = await Promise.all([
       mandates.getMandate(mandateId),
       mandates.getPermissions(mandateId),
       mandates.isActive(mandateId),
+      mandates.getTokens(mandateId),
     ]);
+    const tokenBudgets = await Promise.all(
+      tokens.map(async (token) => {
+        const [ta, meta] = await Promise.all([mandates.getTokenAllowance(mandateId, token), tokenMeta(token)]);
+        return {
+          token,
+          symbol: meta.symbol,
+          maxPerCall: formatUnits(ta.maxPerCall, meta.decimals),
+          remainingBudget: formatUnits(ta.budget - ta.spent, meta.decimals),
+          vaultBalance: formatUnits(ta.balance, meta.decimals),
+        };
+      })
+    );
     return text({
       mandateId: mandateId.toString(),
       active,
@@ -86,8 +101,9 @@ server.tool(
       expiresAt: m.expiresAt === 0n ? 'never' : new Date(Number(m.expiresAt) * 1000).toISOString(),
       permissions: permissions.map((p) => ({
         target: p.target,
-        selector: p.selector === '0x00000000' ? 'any' : p.selector,
+        selector: p.selector === '0x00000000' ? 'any (also an allowed token payee)' : p.selector,
       })),
+      tokenBudgets,
     });
   }
 );
@@ -144,6 +160,46 @@ server.tool(
     }
   }
 );
+
+server.tool(
+  'pay_token',
+  'Pay an allowed payee in an ERC-20 token (e.g. a stablecoin) from the mandate\'s token vault, within the per-token caps the owner signed.',
+  {
+    token: z.string().describe('ERC-20 token address (see tokenBudgets in mandate_status)'),
+    to: z.string().describe('Payee address; must be allowlisted in the mandate'),
+    amount: z.string().describe('Amount in whole tokens as a decimal string, e.g. "2.5"'),
+  },
+  async ({ token, to, amount }) => {
+    if (!isAddress(token) || !isAddress(to)) throw new Error('token and to must be addresses');
+    const units = parseUnits(amount, (await tokenMeta(token)).decimals);
+    try {
+      const { hash } = await mandates.payToken(mandateId, token, to, units);
+      return text({ ok: true, transactionHash: hash, ...(chainId === 10143 ? { explorer: `${EXPLORER}/tx/${hash}` } : {}) });
+    } catch (e) {
+      if (e instanceof MandateDeniedError) {
+        return text({ ok: false, blockedBy: e.reason, note: 'The human owner did not authorize this. Do not retry with variations.' });
+      }
+      throw e;
+    }
+  }
+);
+
+const metaCache = new Map<string, { symbol: string; decimals: number }>();
+async function tokenMeta(token: Address) {
+  const hit = metaCache.get(token);
+  if (hit) return hit;
+  const abi = [
+    { type: 'function', name: 'decimals', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
+    { type: 'function', name: 'symbol', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
+  ] as const;
+  const [decimals, symbol] = await Promise.all([
+    publicClient.readContract({ address: token, abi, functionName: 'decimals' }).catch(() => 18),
+    publicClient.readContract({ address: token, abi, functionName: 'symbol' }).catch(() => 'TOKEN'),
+  ]);
+  const meta = { symbol, decimals: Number(decimals) };
+  metaCache.set(token, meta);
+  return meta;
+}
 
 await server.connect(new StdioServerTransport());
 console.error(`agenttrust-mcp ready: mandate #${mandateId} on ${chain.name} as ${account.address}`);

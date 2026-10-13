@@ -32,6 +32,7 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import {
   AgentMandates,
   AgentMandatesABI,
+  ANY_SELECTOR,
   createSoftwarePasskey,
   encode,
   ownerKeyOf,
@@ -47,6 +48,10 @@ const ANVIL_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f
 const EXPLORER = 'https://testnet.monadexplorer.com';
 
 loadDotEnv();
+
+const MINT_ABI = [
+  { type: 'function', name: 'mint', inputs: [{ type: 'address' }, { type: 'uint256' }], outputs: [], stateMutability: 'nonpayable' },
+] as const;
 
 const TARGET_ABI = [
   { type: 'function', name: 'doSomething', inputs: [{ name: 'v', type: 'uint256' }], outputs: [{ type: 'uint256' }], stateMutability: 'payable' },
@@ -76,6 +81,7 @@ async function main() {
     const passkey = createSoftwarePasskey();
     const ownerKey = ownerKeyOf(passkey.publicKey);
     const coldWallet = privateKeyToAccount(generatePrivateKey()).address;
+    const merchant = privateKeyToAccount(generatePrivateKey()).address; // e.g. a pay-per-call API
     const record: Record<string, Hex> = {};
     const wait = async (hash: Hex) => publicClient.waitForTransactionReceipt({ hash });
 
@@ -87,10 +93,12 @@ async function main() {
     step('1/8', 'Deploy');
     const registry = TESTNET ? MONAD_TESTNET_ERC8004_REGISTRY : await deploy(relayer, publicClient, 'AgentMandates.t.sol/MockIdentityRegistry.json', []);
     const target = await deploy(relayer, publicClient, 'MockTarget.sol/MockTarget.json', []);
+    const usdc = await deploy(relayer, publicClient, 'MockERC20.sol/MockERC20.json', []); // test stablecoin, 6 decimals
     const mandatesAddress = await deploy(relayer, publicClient, 'AgentMandates.sol/AgentMandates.json', [registry, '0x0000000000000000000000000000000000000000']);
     log(`AgentMandates  ${mandatesAddress}`);
     log(`ERC-8004       ${registry}`);
     log(`MockTarget     ${target}`);
+    log(`Test USDC      ${usdc}`);
 
     step('2/8', 'Give the agent gas and an ERC-8004 identity');
     record.fundAgent = await relayer.sendTransaction({ to: agentAccount.address, value: parseEther(TESTNET ? '0.05' : '1') });
@@ -116,26 +124,33 @@ async function main() {
     const terms = {
       agent: agentAccount.address,
       agentId,
-      permissions: [{ target, selector }],
+      permissions: [{ target, selector }, { target: merchant, selector: ANY_SELECTOR }],
       maxPerCall: parseEther('0.01'),
       budget: parseEther('0.02'),
       expiresAt: BigInt(Math.floor(Date.now() / 1000) + 7 * 24 * 3600),
+      tokenLimits: [{ token: usdc, maxPerCall: 10_000_000n, budget: 25_000_000n }], // 10 USDC per call, 25 total
     };
 
     step('3/8', 'Owner signs the mandate with a passkey; the relayer submits and funds it');
     const createAuth = passkey.sign(await ownerSdk.createChallenge(passkey.publicKey, terms));
     record.createMandate = await ownerSdk.relay(encode.createMandate(passkey.publicKey, terms, createAuth), parseEther('0.03'));
     const mandateId = await publicClient.readContract({ address: mandatesAddress, abi: AgentMandatesABI, functionName: 'mandateCount' });
-    log(`mandate #${mandateId}: 0.01 MON per call, 0.02 MON budget, doSomething() only   ${link(record.createMandate)}`);
+    log(`mandate #${mandateId}: 0.01 MON/call, 0.02 MON budget, doSomething() only; 10 USDC/call, 25 USDC budget to the merchant   ${link(record.createMandate)}`);
+    record.mintUsdc = await relayer.writeContract({ address: usdc, abi: MINT_ABI, functionName: 'mint', args: [relayer.account.address, 30_000_000n] });
+    await wait(record.mintUsdc);
+    record.depositUsdc = (await ownerSdk.depositToken(mandateId, usdc, 30_000_000n)).hash;
+    log(`funded token vault with 30 USDC   ${link(record.depositUsdc)}`);
 
     step('4/8', 'Agent makes an allowed call');
     record.allowedCall = (await agentSdk.execute(mandateId, target, call(1), parseEther('0.01'))).hash;
     log(`allowed: 0.01 MON to doSomething()   ${link(record.allowedCall)}`);
+    record.allowedPayment = (await agentSdk.payToken(mandateId, usdc, merchant, 10_000_000n)).hash;
+    log(`allowed: paid the merchant 10 USDC   ${link(record.allowedPayment)}`);
 
     if (SERVE) {
       log(`\nLeaving the mandate live. Point the MCP server at it:\n`);
       log(`  AGENTTRUST_RPC_URL=${RPC_URL} AGENTTRUST_CONTRACT=${mandatesAddress} AGENTTRUST_MANDATE_ID=${mandateId} AGENT_PRIVATE_KEY=<agent key> node packages/mcp/dist/index.js`);
-      fs.writeFileSync(path.join(ROOT, '.mcp-local.env'), `AGENTTRUST_RPC_URL=${RPC_URL}\nAGENTTRUST_CONTRACT=${mandatesAddress}\nAGENTTRUST_MANDATE_ID=${mandateId}\nAGENT_PRIVATE_KEY=${TESTNET ? '<agent key>' : agentKey}\nTARGET=${target}\n`);
+      fs.writeFileSync(path.join(ROOT, '.mcp-local.env'), `AGENTTRUST_RPC_URL=${RPC_URL}\nAGENTTRUST_CONTRACT=${mandatesAddress}\nAGENTTRUST_MANDATE_ID=${mandateId}\nAGENT_PRIVATE_KEY=${TESTNET ? '<agent key>' : agentKey}\nTARGET=${target}\nUSDC=${usdc}\nMERCHANT=${merchant}\n`);
       log('\nWrote .mcp-local.env (gitignored). Ctrl+C to stop.');
       await new Promise(() => {});
     }
@@ -148,6 +163,13 @@ async function main() {
     ];
     if (!TESTNET) await relayer.sendTransaction({ to: stranger.account.address, value: parseEther('1') });
     else await wait(await relayer.sendTransaction({ to: stranger.account.address, value: parseEther('0.02') }));
+    {
+      const check = await agentSdk.checkPayment(mandateId, agentAccount.address, usdc, merchant, 15_000_000n);
+      record.tokenOverLimitBlocked = await agent.writeContract({ address: mandatesAddress, abi: AgentMandatesABI, functionName: 'payToken', args: [mandateId, usdc, merchant, 15_000_000n], gas: 300_000n });
+      const rcpt = await wait(record.tokenOverLimitBlocked);
+      log(`${'tokenOverLimitBlocked'.padEnd(20)} checkPayment → ${check.reason}, on-chain status: ${rcpt.status}   ${link(record.tokenOverLimitBlocked)}`);
+      if (rcpt.status !== 'reverted') throw new Error('tokenOverLimitBlocked should have reverted');
+    }
     for (const [name, wallet, to, data, value] of attempts) {
       const check = await agentSdk.checkAction(mandateId, wallet.account.address, to, data, value);
       record[name] = await forceExecute(wallet, mandatesAddress, mandateId, to, data, value);
@@ -166,17 +188,21 @@ async function main() {
     const left = (await ownerSdk.getMandate(mandateId)).balance;
     record.withdraw = await ownerSdk.relay(encode.withdraw(mandateId, coldWallet, left, passkey.sign(await ownerSdk.withdrawChallenge(passkey.publicKey, mandateId, coldWallet, left))));
     log(`withdrew ${formatEther(left)} MON to ${coldWallet}   ${link(record.withdraw)}`);
+    const leftUsdc = (await ownerSdk.getTokenAllowance(mandateId, usdc)).balance;
+    record.withdrawToken = await ownerSdk.relay(encode.withdrawToken(mandateId, usdc, coldWallet, leftUsdc, passkey.sign(await ownerSdk.withdrawTokenChallenge(passkey.publicKey, mandateId, usdc, coldWallet, leftUsdc))));
+    log(`withdrew ${Number(leftUsdc) / 1e6} USDC to ${coldWallet}   ${link(record.withdrawToken)}`);
 
     step('8/8', 'Final state');
     const m = await ownerSdk.getMandate(mandateId);
-    log(`spent ${formatEther(m.spent)} / ${formatEther(m.budget)} MON, vault ${formatEther(m.balance)} MON, revoked ${m.revoked}`);
+    const ta = await ownerSdk.getTokenAllowance(mandateId, usdc);
+    log(`spent ${formatEther(m.spent)} / ${formatEther(m.budget)} MON and ${Number(ta.spent) / 1e6} / ${Number(ta.budget) / 1e6} USDC, vaults empty: ${m.balance === 0n && ta.balance === 0n}, revoked ${m.revoked}`);
 
     if (TESTNET) {
       const out = {
         network: 'Monad Testnet',
         chainId,
         timestamp: new Date().toISOString(),
-        contracts: { agentMandates: mandatesAddress, erc8004IdentityRegistry: registry, mockTarget: target, p256Precompile: '0x0000000000000000000000000000000000000100' },
+        contracts: { agentMandates: mandatesAddress, erc8004IdentityRegistry: registry, mockTarget: target, testUsdc: usdc, p256Precompile: '0x0000000000000000000000000000000000000100' },
         mandateId: Number(mandateId),
         agentId: Number(agentId),
         agent: agentAccount.address,

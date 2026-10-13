@@ -4,6 +4,10 @@ pragma solidity ^0.8.24;
 import {WebAuthnP256} from "./lib/WebAuthnP256.sol";
 import {ReentrancyGuard} from "./lib/ReentrancyGuard.sol";
 
+interface IERC20Minimal {
+    function balanceOf(address) external view returns (uint256);
+}
+
 /// @notice Canonical ERC-8004 Identity Registry surface used for agent binding.
 interface IERC8004Identity {
     function ownerOf(uint256 agentId) external view returns (address);
@@ -18,7 +22,8 @@ interface IERC8004Identity {
 ///         Monad's P-256 precompile at 0x0100, so anyone can relay it and the human never needs
 ///         gas, a seed phrase or a browser wallet. The agent is an ERC-8004 identity, re-checked
 ///         on every call. Execution is bounded by a (target, selector) allowlist, a per-call cap,
-///         a lifetime budget and an expiry, all enforced here and nowhere else.
+///         a lifetime budget and an expiry, all enforced here and nowhere else. ERC-20 spending
+///         (e.g. stablecoin payments) gets its own per-token caps and an isolated token vault.
 contract AgentMandates is ReentrancyGuard {
     // ─────────────────────────────────────────────────────────────────────────
     // Types
@@ -47,13 +52,28 @@ contract AgentMandates is ReentrancyGuard {
         bool revoked;
     }
 
+    struct TokenLimit {
+        address token;
+        uint256 maxPerCall;
+        uint256 budget;
+    }
+
+    struct TokenAllowance {
+        uint256 maxPerCall;
+        uint256 budget;
+        uint256 spent;
+        uint256 balance;
+        bool enabled;
+    }
+
     struct MandateTerms {
         address agent;
         uint256 agentId;
-        Permission[] permissions;
+        Permission[] permissions; // a (payee, bytes4(0)) entry also allows token payments to payee
         uint256 maxPerCall;
         uint256 budget;
         uint64 expiresAt;
+        TokenLimit[] tokenLimits;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -64,8 +84,10 @@ contract AgentMandates is ReentrancyGuard {
     bytes32 public constant REVOKE_TYPEHASH = keccak256("AgentMandates.Revoke.v1");
     bytes32 public constant REVOKE_ALL_TYPEHASH = keccak256("AgentMandates.RevokeAll.v1");
     bytes32 public constant WITHDRAW_TYPEHASH = keccak256("AgentMandates.Withdraw.v1");
+    bytes32 public constant WITHDRAW_TOKEN_TYPEHASH = keccak256("AgentMandates.WithdrawToken.v1");
 
     uint256 public constant MAX_PERMISSIONS = 16;
+    uint256 public constant MAX_TOKENS = 8;
 
     /// @notice ERC-8004 Identity Registry. address(0) disables identity binding (local dev only).
     IERC8004Identity public immutable identityRegistry;
@@ -87,6 +109,12 @@ contract AgentMandates is ReentrancyGuard {
     /// ownerKey → mandate ids it created; agent → mandate ids it can act under
     mapping(bytes32 => uint256[]) internal _byOwner;
     mapping(address => uint256[]) internal _byAgent;
+    /// mandateId → token → allowance and isolated token vault
+    mapping(uint256 => mapping(address => TokenAllowance)) internal _tokens;
+    mapping(uint256 => address[]) internal _tokenList;
+    /// Tokens this contract custodies. execute() may never call them, so no mandate can move
+    /// pooled tokens through a generic call; token spending goes through payToken() only.
+    mapping(address => bool) public isVaultToken;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Events
@@ -106,6 +134,9 @@ contract AgentMandates is ReentrancyGuard {
     event AllMandatesRevoked(bytes32 indexed ownerKey, uint64 newEpoch);
     event Deposited(uint256 indexed mandateId, address indexed from, uint256 amount);
     event Withdrawn(uint256 indexed mandateId, address indexed to, uint256 amount);
+    event TokenDeposited(uint256 indexed mandateId, address indexed token, address indexed from, uint256 amount);
+    event TokenPaid(uint256 indexed mandateId, address indexed token, address indexed to, uint256 amount, uint256 spent);
+    event TokenWithdrawn(uint256 indexed mandateId, address indexed token, address indexed to, uint256 amount);
     event ActionExecuted(
         uint256 indexed mandateId,
         address indexed agent,
@@ -134,6 +165,8 @@ contract AgentMandates is ReentrancyGuard {
     error InvalidTerms();
     error CallFailed(bytes returnData);
     error TransferFailed();
+    error TokenNotAllowed();
+    error TargetIsVaultToken();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -159,6 +192,7 @@ contract AgentMandates is ReentrancyGuard {
         if (terms.permissions.length == 0 || terms.permissions.length > MAX_PERMISSIONS) revert InvalidTerms();
         if (terms.maxPerCall > terms.budget) revert InvalidTerms();
         if (terms.expiresAt != 0 && terms.expiresAt <= block.timestamp) revert InvalidTerms();
+        if (terms.tokenLimits.length > MAX_TOKENS) revert InvalidTerms();
 
         bytes32 ownerKey = _registerPasskey(passkey);
         _checkAgentIdentity(terms.agent, terms.agentId);
@@ -184,6 +218,16 @@ contract AgentMandates is ReentrancyGuard {
         }
         _byOwner[ownerKey].push(mandateId);
         _byAgent[terms.agent].push(mandateId);
+        for (uint256 i; i < terms.tokenLimits.length; ++i) {
+            TokenLimit calldata tl = terms.tokenLimits[i];
+            if (tl.token == address(0) || tl.maxPerCall > tl.budget) revert InvalidTerms();
+            TokenAllowance storage ta = _tokens[mandateId][tl.token];
+            if (ta.enabled) revert InvalidTerms(); // duplicate token
+            ta.maxPerCall = tl.maxPerCall;
+            ta.budget = tl.budget;
+            ta.enabled = true;
+            _tokenList[mandateId].push(tl.token);
+        }
 
         emit MandateCreated(
             mandateId, ownerKey, terms.agent, terms.agentId, terms.maxPerCall, terms.budget, terms.expiresAt
@@ -231,6 +275,38 @@ contract AgentMandates is ReentrancyGuard {
         emit Deposited(mandateId, msg.sender, msg.value);
     }
 
+    /// @notice Fund a mandate's token vault. Only tokens the owner signed a limit for are accepted.
+    ///         Credits the amount actually received, so fee-on-transfer tokens are accounted correctly.
+    function depositToken(uint256 mandateId, address token, uint256 amount) external nonReentrant {
+        _existing(mandateId);
+        TokenAllowance storage ta = _tokens[mandateId][token];
+        if (!ta.enabled) revert TokenNotAllowed();
+        isVaultToken[token] = true;
+        uint256 before = IERC20Minimal(token).balanceOf(address(this));
+        _callToken(token, abi.encodeWithSelector(0x23b872dd, msg.sender, address(this), amount)); // transferFrom
+        uint256 received = IERC20Minimal(token).balanceOf(address(this)) - before;
+        ta.balance += received;
+        emit TokenDeposited(mandateId, token, msg.sender, received);
+    }
+
+    /// @notice Move token vault funds to `to`. Signed by the owner's passkey, relayable by anyone.
+    function withdrawToken(
+        uint256 mandateId,
+        address token,
+        address to,
+        uint256 amount,
+        WebAuthnP256.Assertion calldata auth
+    ) external nonReentrant {
+        Mandate storage m = _existing(mandateId);
+        bytes32 ownerKey = m.ownerKey;
+        _verifyOwner(ownerKey, withdrawTokenDigest(ownerKey, mandateId, token, to, amount, nonces[ownerKey]), auth);
+        TokenAllowance storage ta = _tokens[mandateId][token];
+        if (amount > ta.balance) revert InsufficientBalance();
+        ta.balance -= amount;
+        emit TokenWithdrawn(mandateId, token, to, amount);
+        _callToken(token, abi.encodeWithSelector(0xa9059cbb, to, amount)); // transfer
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Agent execution
     // ─────────────────────────────────────────────────────────────────────────
@@ -244,6 +320,7 @@ contract AgentMandates is ReentrancyGuard {
     {
         Mandate storage m = _existing(mandateId);
         if (msg.sender != m.agent) revert NotAgent();
+        if (isVaultToken[target]) revert TargetIsVaultToken();
 
         bytes4 reason = _check(mandateId, m, target, data, value);
         if (reason != bytes4(0)) _revertWith(reason);
@@ -256,6 +333,20 @@ contract AgentMandates is ReentrancyGuard {
         if (!ok) revert CallFailed(result);
 
         emit ActionExecuted(mandateId, msg.sender, target, _selectorOf(data), value, m.spent, keccak256(data));
+    }
+
+    /// @notice Pay `amount` of `token` from the mandate's token vault to an allowlisted payee.
+    function payToken(uint256 mandateId, address token, address to, uint256 amount) external nonReentrant {
+        Mandate storage m = _existing(mandateId);
+        if (msg.sender != m.agent) revert NotAgent();
+        bytes4 reason = _checkPayment(mandateId, m, token, to, amount);
+        if (reason != bytes4(0)) _revertWith(reason);
+
+        TokenAllowance storage ta = _tokens[mandateId][token];
+        ta.balance -= amount;
+        ta.spent += amount;
+        emit TokenPaid(mandateId, token, to, amount, ta.spent);
+        _callToken(token, abi.encodeWithSelector(0xa9059cbb, to, amount)); // transfer
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -275,6 +366,27 @@ contract AgentMandates is ReentrancyGuard {
         if (agent != m.agent) return (false, NotAgent.selector);
         reason = _check(mandateId, m, target, data, value);
         allowed = reason == bytes4(0);
+    }
+
+    /// @notice Token-payment counterpart of checkAction().
+    function checkPayment(uint256 mandateId, address agent, address token, address to, uint256 amount)
+        external
+        view
+        returns (bool allowed, bytes4 reason)
+    {
+        Mandate storage m = _mandates[mandateId];
+        if (m.ownerKey == 0) return (false, MandateNotFound.selector);
+        if (agent != m.agent) return (false, NotAgent.selector);
+        reason = _checkPayment(mandateId, m, token, to, amount);
+        allowed = reason == bytes4(0);
+    }
+
+    function getTokenAllowance(uint256 mandateId, address token) external view returns (TokenAllowance memory) {
+        return _tokens[mandateId][token];
+    }
+
+    function getTokens(uint256 mandateId) external view returns (address[] memory) {
+        return _tokenList[mandateId];
     }
 
     function isActive(uint256 mandateId) public view returns (bool) {
@@ -324,6 +436,7 @@ contract AgentMandates is ReentrancyGuard {
                 terms.maxPerCall,
                 terms.budget,
                 terms.expiresAt,
+                keccak256(abi.encode(terms.tokenLimits)),
                 nonce
             )
         );
@@ -347,6 +460,21 @@ contract AgentMandates is ReentrancyGuard {
         );
     }
 
+    function withdrawTokenDigest(
+        bytes32 ownerKey,
+        uint256 mandateId,
+        address token,
+        address to,
+        uint256 amount,
+        uint256 nonce
+    ) public view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                WITHDRAW_TOKEN_TYPEHASH, block.chainid, address(this), ownerKey, mandateId, token, to, amount, nonce
+            )
+        );
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Internals
     // ─────────────────────────────────────────────────────────────────────────
@@ -363,6 +491,29 @@ contract AgentMandates is ReentrancyGuard {
         if (m.spent + value > m.budget) return ExceedsBudget.selector;
         if (value > m.balance) return InsufficientBalance.selector;
         return bytes4(0);
+    }
+
+    function _checkPayment(uint256 mandateId, Mandate storage m, address token, address to, uint256 amount)
+        internal
+        view
+        returns (bytes4)
+    {
+        if (!_isLive(m)) return MandateInactive.selector;
+        if (!_agentIdentityHolds(m.agent, m.agentId)) return AgentIdentityMismatch.selector;
+        TokenAllowance storage ta = _tokens[mandateId][token];
+        if (!ta.enabled) return TokenNotAllowed.selector;
+        if (!_isPermitted(mandateId, to, bytes4(0))) return PermissionDenied.selector;
+        if (amount > ta.maxPerCall) return ExceedsPerCallLimit.selector;
+        if (ta.spent + amount > ta.budget) return ExceedsBudget.selector;
+        if (amount > ta.balance) return InsufficientBalance.selector;
+        return bytes4(0);
+    }
+
+    /// @dev ERC-20 call that tolerates tokens returning nothing, and rejects false or non-contracts.
+    function _callToken(address token, bytes memory data) internal {
+        if (token.code.length == 0) revert TransferFailed();
+        (bool ok, bytes memory ret) = token.call(data);
+        if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) revert TransferFailed();
     }
 
     function _isLive(Mandate storage m) internal view returns (bool) {

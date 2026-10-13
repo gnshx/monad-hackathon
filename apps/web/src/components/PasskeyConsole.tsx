@@ -18,9 +18,11 @@ import {
 } from 'lucide-react';
 import {
   formatEther,
+  formatUnits,
   isAddress,
   isHex,
   parseEther,
+  parseUnits,
   toFunctionSelector,
   type Address,
   type Hex,
@@ -35,6 +37,7 @@ import {
   type OnchainMandate,
   type PasskeyPublicKey,
   type Permission,
+  type TokenAllowance,
 } from '@agenttrust/sdk';
 import { AGENT_MANDATES_ADDRESS, EXPLORER, mandatesClient } from '../lib/agentMandates';
 import { DEFAULT_MOCK_TARGET_ADDRESS } from '../lib/contracts';
@@ -56,11 +59,31 @@ interface RelayInfo {
 
 type Notice = { kind: 'ok' | 'err' | 'warn'; text: string; hash?: Hex } | null;
 
+interface TokenRow extends TokenAllowance {
+  token: Address;
+  symbol: string;
+  decimals: number;
+}
+
 interface Row {
   id: bigint;
   m: OnchainMandate;
   permissions: readonly Permission[];
+  tokens: TokenRow[];
   active: boolean;
+}
+
+const ERC20_META = [
+  { type: 'function', name: 'decimals', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
+  { type: 'function', name: 'symbol', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
+] as const;
+
+async function tokenMeta(client: NonNullable<ReturnType<typeof mandatesClient>>, token: Address) {
+  const [decimals, symbol] = await Promise.all([
+    client.publicClient.readContract({ address: token, abi: ERC20_META, functionName: 'decimals' }).catch(() => 18),
+    client.publicClient.readContract({ address: token, abi: ERC20_META, functionName: 'symbol' }).catch(() => 'TOKEN'),
+  ]);
+  return { decimals: Number(decimals), symbol };
 }
 
 const PRESETS = [
@@ -97,6 +120,10 @@ export function PasskeyConsole() {
     budget: PRESETS[0].budget,
     days: PRESETS[0].days,
     sponsor: true,
+    token: process.env.NEXT_PUBLIC_DEMO_TOKEN || '',
+    payee: '',
+    tokenPerCall: '10',
+    tokenBudget: '25',
   });
   const [preset, setPreset] = useState(0);
   const [withdrawTo, setWithdrawTo] = useState('');
@@ -123,6 +150,13 @@ export function PasskeyConsole() {
           id,
           m: await client.getMandate(id),
           permissions: await client.getPermissions(id),
+          tokens: await Promise.all(
+            (await client.getTokens(id)).map(async (token) => ({
+              token,
+              ...(await client.getTokenAllowance(id, token)),
+              ...(await tokenMeta(client, token)),
+            }))
+          ),
           active: await client.isActive(id),
         }))
       );
@@ -197,7 +231,18 @@ export function PasskeyConsole() {
         maxPerCall: parseEther(form.perCall),
         budget: parseEther(form.budget),
         expiresAt: BigInt(Math.floor(Date.now() / 1000) + Math.round(Number(form.days) * 86400)),
+        tokenLimits: [],
       };
+      if (form.token) {
+        if (!isAddress(form.token) || !isAddress(form.payee)) throw new Error('Stablecoin budget needs a token address and a payee address');
+        const { decimals } = await tokenMeta(client, form.token);
+        terms.permissions.push({ target: form.payee, selector: ANY_SELECTOR });
+        terms.tokenLimits!.push({
+          token: form.token,
+          maxPerCall: parseUnits(form.tokenPerCall, decimals),
+          budget: parseUnits(form.tokenBudget, decimals),
+        });
+      }
       const challenge = await client.createChallenge(passkey.publicKey, terms);
       const auth = await signWithBrowserPasskey(challenge, passkey.credentialId);
       const sponsorMax = BigInt(relay?.sponsorMaxWei || '0');
@@ -403,6 +448,26 @@ export function PasskeyConsole() {
               <label>Expires in (days)</label>
               <input className={s.input} value={form.days} onChange={set('days')} inputMode="decimal" />
             </div>
+            <div className={`${s.field} ${s.full}`} style={{ marginTop: '0.35rem' }}>
+              <label>Stablecoin budget (optional)</label>
+              <small>Let the agent pay one payee in an ERC-20, with its own caps and vault. Leave the token empty to skip.</small>
+            </div>
+            <div className={s.field}>
+              <label>Token</label>
+              <input className={`${s.input} ${s.monoInput}`} value={form.token} onChange={set('token')} placeholder="0x… e.g. USDC" />
+            </div>
+            <div className={s.field}>
+              <label>Payee</label>
+              <input className={`${s.input} ${s.monoInput}`} value={form.payee} onChange={set('payee')} placeholder="0x… API / merchant" />
+            </div>
+            <div className={s.field}>
+              <label>Token per call</label>
+              <input className={s.input} value={form.tokenPerCall} onChange={set('tokenPerCall')} inputMode="decimal" />
+            </div>
+            <div className={s.field}>
+              <label>Token budget</label>
+              <input className={s.input} value={form.tokenBudget} onChange={set('tokenBudget')} inputMode="decimal" />
+            </div>
             {relay?.enabled && BigInt(relay.sponsorMaxWei || '0') > 0n && (
               <div className={s.field} style={{ justifyContent: 'flex-end' }}>
                 <label style={{ display: 'flex', gap: '0.45rem', alignItems: 'center', fontWeight: 500 }}>
@@ -486,6 +551,12 @@ export function PasskeyConsole() {
                       <span>
                         Expires <b>{row.m.expiresAt === 0n ? 'never' : new Date(Number(row.m.expiresAt) * 1000).toLocaleString()}</b>
                       </span>
+                      {row.tokens.map((t) => (
+                        <span key={t.token}>
+                          {t.symbol} <b>{formatUnits(t.spent, t.decimals)}</b> / {formatUnits(t.budget, t.decimals)} · vault{' '}
+                          <b>{formatUnits(t.balance, t.decimals)}</b>
+                        </span>
+                      ))}
                       {row.permissions.map((p, i) => (
                         <span key={i} className={s.mono}>
                           {short(p.target)} · {p.selector === ANY_SELECTOR ? 'any fn' : p.selector}

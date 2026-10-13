@@ -18,4 +18,6 @@ await show('check_action', { target: env.TARGET, functionSignature: 'doSomething
 await show('execute_action', { target: env.TARGET, functionSignature: 'doSomething(uint256)', args: ['7'], valueMON: '0.005' });
 await show('execute_action', { target: env.TARGET, functionSignature: 'doSomething(uint256)', args: ['8'], valueMON: '0.5' });
 await show('execute_action', { target: '0x000000000000000000000000000000000000dEaD', valueMON: '0.001' });
+await show('pay_token', { token: env.USDC, to: env.MERCHANT, amount: '2.5' });
+await show('pay_token', { token: env.USDC, to: env.MERCHANT, amount: '50' });
 await client.close();

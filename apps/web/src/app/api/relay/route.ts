@@ -8,14 +8,14 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Gas relayer for passkey-signed owner actions. It only forwards calls to the AgentMandates
- * contract, only for the four owner functions, and simulates first so it never pays for a revert.
+ * contract, only for the owner functions, and simulates first so it never pays for a revert.
  * It holds no authority: every call it forwards is authorized by the owner's passkey signature,
  * which the contract checks. A relayer can delay an action, never forge or alter one.
  */
 const selectorOf = (name: string) =>
   toFunctionSelector(AgentMandatesABI.find((x) => x.type === 'function' && x.name === name) as any);
 const CREATE = selectorOf('createMandate');
-const RELAYABLE = new Set([CREATE, selectorOf('revoke'), selectorOf('revokeAll'), selectorOf('withdraw')]);
+const RELAYABLE = new Set([CREATE, selectorOf('revoke'), selectorOf('revokeAll'), selectorOf('withdraw'), selectorOf('withdrawToken')]);
 const SPONSOR_MAX = BigInt(process.env.RELAYER_SPONSOR_MAX_WEI || '0');
 const recent = new Map<string, number[]>();
 

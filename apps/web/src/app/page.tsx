@@ -596,7 +596,7 @@ export default function SecurityConsoleDashboard() {
         {/* Top Header matching reference image */}
         <header className="top-bar">
           {/* Breadcrumb Left */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="top-bar-crumbs" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span
               style={{
                 fontSize: '0.75rem',
@@ -623,7 +623,7 @@ export default function SecurityConsoleDashboard() {
           </div>
 
           {/* Controls Right */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div className="top-bar-controls" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             {/* Network Selector Pill Dropdown */}
             <div style={{ position: 'relative' }} ref={dropdownRef}>
               <button

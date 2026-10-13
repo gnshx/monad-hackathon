@@ -38,7 +38,6 @@ AgentMandates is infrastructure. Its users are developers who already have agent
 - Deploy to Monad mainnet once the P-256 precompile and ERC-8004 registry addresses are final there.
 
 **Weeks 3–6: features adopters ask for first**
-- ERC-20 budgets: per-token caps, enforced by decoding `transfer`/`approve` arguments for allowlisted tokens.
 - Rolling budgets (per day/week), so mandates don't need re-issuing.
 - Multiple passkeys per owner and a recovery passkey.
 - A subgraph/indexer for `MandateCreated` and `ActionExecuted`, so agent explorers can show authority and spend history.
