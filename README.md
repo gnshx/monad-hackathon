@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://21a38397015334.lhr.life"><img src="https://img.shields.io/badge/Live_Console-3ed34c0a87e119.lhr.life-10b981?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Live Console" /></a>
+  <a href="https://7074576f983ea6.lhr.life"><img src="https://img.shields.io/badge/Live_Console-3ed34c0a87e119.lhr.life-10b981?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Live Console" /></a>
   <a href="https://github.com/gnshx/monad-hackathon"><img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Repo" /></a>
   <img src="https://img.shields.io/badge/Monad_Testnet-Chain_10143-836ef9?style=for-the-badge&logo=ethereum&logoColor=white" alt="Monad Network" />
 </p>
@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://21a38397015334.lhr.life">🌐 Live Web Console</a> •
+  <a href="https://7074576f983ea6.lhr.life">🌐 Live Web Console</a> •
   <a href="#-reproducible-judge-evaluation-guide">📋 Judge Evaluation Guide</a> •
   <a href="docs/claim-vs-evidence.md">📊 Claim vs. Evidence Matrix</a> •
   <a href="docs/acceptance-checklist.md">✅ 10/10 Acceptance Checklist</a> •
@@ -68,7 +68,7 @@ This runs `scripts/run-demo.ts` on a local EVM node, executing:
 - Standalone receipt verification via `@agenttrust/sdk`
 
 ### 5. How can I connect to Monad Testnet?
-- Open the live console at **[https://21a38397015334.lhr.life](https://21a38397015334.lhr.life)**.
+- Open the live console at **[https://7074576f983ea6.lhr.life](https://7074576f983ea6.lhr.life)**.
 - Connect MetaMask or Rabby. The app will prompt to switch to **Monad Testnet (Chain ID 10143, RPC: `https://testnet-rpc.monad.xyz`)**.
 - The app checks contract bytecode (`client.getBytecode`) on Monad Testnet before permitting live transactions.
 
