@@ -9,6 +9,7 @@ import { AttackLab, type AttackScenario } from '../components/AttackLab';
 import { ReceiptInspector } from '../components/ReceiptInspector';
 import { EvidenceHub } from '../components/EvidenceHub';
 import { PasskeyConsole } from '../components/PasskeyConsole';
+import { JudgeMode } from '../components/JudgeMode';
 import { SecurityActivityFeed } from '../components/SecurityActivityFeed';
 import { CreateMandateModal } from '../components/CreateMandateModal';
 import type { MandateItem } from '../components/MandateCard';
@@ -556,6 +557,8 @@ export default function SecurityConsoleDashboard() {
   const breadcrumbTitle =
     activeTab === 'passkey'
       ? 'PASSKEY MANDATES'
+      : activeTab === 'judge'
+      ? 'JUDGE MODE (LIVE TESTNET)'
       : activeTab === 'overview'
       ? 'OVERVIEW'
       : activeTab === 'policy-to-proof'
@@ -835,11 +838,23 @@ export default function SecurityConsoleDashboard() {
 
         {/* Main Content Area */}
         <main className="page-container">
-          {activeTab === 'passkey' && <PasskeyConsole />}
+          {activeTab === 'passkey' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <JudgeMode />
+              <PasskeyConsole />
+            </div>
+          )}
+
+          {activeTab === 'judge' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <JudgeMode />
+            </div>
+          )}
 
           {/* TAB: OVERVIEW */}
           {activeTab === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <JudgeMode />
               {/* Notification Banner matching reference */}
               <div
                 style={{

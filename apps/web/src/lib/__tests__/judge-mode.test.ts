@@ -1,0 +1,99 @@
+import { strict as assert } from 'node:assert';
+import { test } from 'node:test';
+import {
+  checkJudgeStatus,
+  decodeCustomError,
+  signDigestP256,
+  TARGET_SELECTOR,
+} from '../judge-mode-runner.js';
+import { parseEther, type Address, type Hex } from 'viem';
+import crypto from 'crypto';
+
+const MM_ADDRESS = '0x3550f9fc84640a9cfd7c51330615a1e05cb948be' as Address;
+const TARGET_ADDRESS = '0x0758fdc78e20f748fa89e2d53f84748697cb177f' as Address;
+const DUMMY_KEY = '0x1111111111111111111111111111111111111111111111111111111111111111' as Hex;
+
+test('Judge Mode Runner & Status Tests', async (t) => {
+  await t.test('honesty: checkJudgeStatus fails when chain ID is not 10143', async () => {
+    const mockClient: any = {
+      getChainId: async () => 1, // Mainnet instead of Monad 10143
+    };
+
+    const result = await checkJudgeStatus(mockClient, MM_ADDRESS, TARGET_ADDRESS, DUMMY_KEY);
+    assert.equal(result.deployed, false);
+    assert.equal(result.chainId, 1);
+    assert.ok(result.message?.includes('expected 10143'));
+  });
+
+  await t.test('honesty: checkJudgeStatus fails when bytecode is empty (Not deployed on Monad testnet)', async () => {
+    const mockClient: any = {
+      getChainId: async () => 10143,
+      getBytecode: async ({ address }: { address: Address }) => {
+        if (address === MM_ADDRESS) return '0x'; // Empty bytecode
+        return '0x60806040';
+      },
+    };
+
+    const result = await checkJudgeStatus(mockClient, MM_ADDRESS, TARGET_ADDRESS, DUMMY_KEY);
+    assert.equal(result.deployed, false);
+    assert.equal(result.message, 'Not deployed on Monad testnet');
+  });
+
+  await t.test('honesty: checkJudgeStatus flags low funds when relayer balance < 0.005 MON', async () => {
+    const mockClient: any = {
+      getChainId: async () => 10143,
+      getBytecode: async () => '0x60806040',
+      getBalance: async () => parseEther('0.001'), // 0.001 MON < 0.005 MON
+    };
+
+    const result = await checkJudgeStatus(mockClient, MM_ADDRESS, TARGET_ADDRESS, DUMMY_KEY);
+    assert.equal(result.deployed, true);
+    assert.equal(result.lowFunds, true);
+    assert.equal(result.message, 'Relayer low on funds');
+  });
+
+  await t.test('checkJudgeStatus passes with full readiness when deployed and funded on chain 10143', async () => {
+    const mockClient: any = {
+      getChainId: async () => 10143,
+      getBytecode: async () => '0x60806040',
+      getBalance: async () => parseEther('1.5'),
+    };
+
+    const result = await checkJudgeStatus(mockClient, MM_ADDRESS, TARGET_ADDRESS, DUMMY_KEY);
+    assert.equal(result.deployed, true);
+    assert.equal(result.lowFunds, false);
+    assert.equal(result.chainId, 10143);
+    assert.ok(result.relayerAddress);
+    assert.equal(result.relayerBalance, '1.5 MON');
+  });
+
+  await t.test('decodeCustomError maps custom errors accurately', () => {
+    assert.equal(decodeCustomError(new Error('execution reverted: ExceedsPerTxLimit')), 'ExceedsPerTxLimit()');
+    assert.equal(decodeCustomError(new Error('execution reverted: TargetNotAllowed')), 'TargetNotAllowed()');
+    assert.equal(decodeCustomError(new Error('execution reverted: MandateIsRevoked')), 'MandateIsRevoked()');
+    assert.equal(decodeCustomError(new Error('execution reverted: UnauthorizedAgent')), 'UnauthorizedAgent()');
+  });
+
+  await t.test('signDigestP256 generates normalized low-S signatures compliant with RIP-7212', () => {
+    const { privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const signer = crypto.createSign('SHA256');
+    signer.update('test-digest');
+    const derSig = signer.sign(privateKey);
+
+    const sig = signDigestP256(derSig);
+    assert.ok(sig.r.startsWith('0x'));
+    assert.ok(sig.s.startsWith('0x'));
+    assert.equal(sig.r.length, 66); // 32 bytes hex + '0x'
+    assert.equal(sig.s.length, 66);
+
+    const P256_N = BigInt('0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551');
+    const P256_N_DIV_2 = P256_N / 2n;
+    const sVal = BigInt(sig.s);
+    assert.ok(sVal <= P256_N_DIV_2, 's must be normalized to lower half of curve order');
+  });
+
+  await t.test('verifies fixed target selector is doSomething(uint256)', () => {
+    // toFunctionSelector('doSomething(uint256)') === '0xa6b206bf'
+    assert.equal(TARGET_SELECTOR, '0xa6b206bf');
+  });
+});

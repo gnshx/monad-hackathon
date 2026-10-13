@@ -1,35 +1,33 @@
 # @agenttrust/mcp
 
-An MCP server that gives an AI agent a wallet bounded by an on-chain, passkey-signed [AgentMandates](../../README.md) mandate.
+An MCP server (Model Context Protocol over stdio) that gives an AI agent a wallet bounded by an on-chain, passkey-signed [AgentMandates](../../README.md) mandate on Monad.
 
-The key this server holds is only as powerful as the mandate behind it: allowlisted contracts and functions, a per-call cap, a total budget and an expiry, all enforced by the contract. If the model is prompt-injected, the worst case is spending the remaining budget on calls the human already approved. The human can revoke with one passkey tap.
+The key this server holds is only as powerful as the mandate behind it: allowlisted contracts and functions, a per-call cap, a total budget, and an expiry, all enforced by the smart contract. If the model is prompt-injected or hallucinating, the worst case is spending up to the pre-approved budget on allowed calls. The human can revoke authority with one passkey tap.
 
 ## Tools
 
 | Tool | What it does |
 |---|---|
-| `mandate_status` | Allowed contracts and functions, per-call cap, remaining budget, vault balance, expiry |
-| `check_action` | Dry run against the contract: `{ allowed: true }` or `{ allowed: false, reason: "ExceedsBudget" }` |
-| `execute_action` | Executes through the contract. Disallowed calls return `blockedBy` without spending gas |
+| `agenttrust_check_mandate(mandateId)` | Returns the mandate's limits, expiry, vault balances, and revoked status read from chain |
+| `agenttrust_execute(target, selector, callData, value)` | Runs the call through SDK guard; returns the tx hash on success or a typed denial reason (`ExceedsPerCallLimit`, `PermissionDenied`, `MandateInactive`) |
+| `agenttrust_verify_receipt(txHash)` | Returns the same checks as `npm run verify:tx` (receipt status, block number, gas used, emitted action) |
+| `check_action(target, ...)` | Preflight dry-run check: `{ allowed: true }` or `{ allowed: false, reason: "..." }` |
+| `pay_token(token, to, amount)` | Pays an allowed payee in an ERC-20 token (e.g. stablecoin) from the mandate's isolated token vault |
 
-Calls take `target`, plus either `functionSignature` and `args` (for example `"transfer(address,uint256)"`, `["0x…", "1000"]`) or raw `data`, plus `valueMON`.
+## MCP Client Configuration (10 lines)
 
-## Setup
-
-```bash
-npm install && npm run build:mcp
-```
+Add this snippet to your MCP client configuration (`claude_desktop_config.json`, Cursor, etc.):
 
 ```json
 {
   "mcpServers": {
     "agenttrust": {
       "command": "node",
-      "args": ["/path/to/monad-hackathon/packages/mcp/dist/index.js"],
+      "args": ["packages/mcp/dist/index.js"],
       "env": {
-        "AGENTTRUST_CONTRACT": "0x<AgentMandates>",
+        "AGENTTRUST_CONTRACT": "0x3550f9fc84640a9cfd7c51330615a1e05cb948be",
         "AGENTTRUST_MANDATE_ID": "1",
-        "AGENT_PRIVATE_KEY": "0x<the mandate's agent key>",
+        "AGENT_PRIVATE_KEY": "0x<the-agent-private-key>",
         "AGENTTRUST_RPC_URL": "https://testnet-rpc.monad.xyz"
       }
     }
@@ -37,11 +35,14 @@ npm install && npm run build:mcp
 }
 ```
 
-For Claude Code: `claude mcp add agenttrust -e AGENTTRUST_CONTRACT=0x… -e AGENTTRUST_MANDATE_ID=1 -e AGENT_PRIVATE_KEY=0x… -- node /path/to/packages/mcp/dist/index.js`
-
-## Try it locally
-
+For Claude Code CLI:
 ```bash
-npm run e2e:serve     # terminal 1: local chain + a live mandate, writes .mcp-local.env
-npm run mcp:smoke     # terminal 2: drives the server with a real MCP client
+claude mcp add agenttrust -e AGENTTRUST_CONTRACT=0x3550f9fc84640a9cfd7c51330615a1e05cb948be -e AGENTTRUST_MANDATE_ID=1 -e AGENT_PRIVATE_KEY=0x<key> -- node packages/mcp/dist/index.js
+```
+
+## Running Tests
+
+Test all denial paths (over limit, wrong target, revoked/inactive mandate) with in-memory MCP clients:
+```bash
+npm run test:mcp
 ```

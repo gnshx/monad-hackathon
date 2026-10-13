@@ -18,6 +18,8 @@
     "verify:all": "npx -y tsx scripts/verify-all-testnet.ts",
     "deploy:testnet": "npx -y tsx scripts/deploy-and-run-testnet.ts",
     "test:auditor": "npx tsx --test scripts/verify-all-testnet.test.ts",
+    "test:judge": "npx tsx --test apps/web/src/lib/__tests__/*.test.ts",
+    "test:mcp": "npm run --workspace=@agenttrust/mcp test",
     "start:web": "npm run --workspace=@agenttrust/web start",
     "e2e": "npm run build:sdk && npx -y tsx scripts/mandates-e2e.ts",
     "test:contracts": "cd contracts && forge test",

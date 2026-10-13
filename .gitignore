@@ -15,6 +15,7 @@ yarn-error.log*
 .next/
 out/
 next-env.d.ts
+.vercel/
 
 # TypeScript
 dist/

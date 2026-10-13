@@ -10,12 +10,14 @@ import {
   ShieldCheck,
   BookOpen,
   Fingerprint,
+  Gavel,
   Menu,
   X,
 } from 'lucide-react';
 
 export type NavTab =
   | 'passkey'
+  | 'judge'
   | 'overview'
   | 'policy-to-proof'
   | 'mandates'
@@ -53,6 +55,12 @@ export function Sidebar({
       label: 'Passkey Mandates',
       icon: Fingerprint,
       badge: 'No wallet',
+    },
+    {
+      id: 'judge' as NavTab,
+      label: 'Judge Mode',
+      icon: Gavel,
+      badge: 'Live 10143',
     },
     {
       id: 'overview' as NavTab,
