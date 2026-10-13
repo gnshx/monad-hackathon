@@ -9,7 +9,7 @@ import { Developers } from '../components/Developers';
 import { MandateList } from '../components/MandateList';
 import { PolicyToProofExplorer } from '../components/PolicyToProofExplorer';
 import { AiPolicyCopilot } from '../components/AiPolicyCopilot';
-import { AttackLab, type AttackScenario } from '../components/AttackLab';
+import { AttackLab, type ScenarioOutcome } from '../components/AttackLab';
 import { ReceiptInspector } from '../components/ReceiptInspector';
 import { EvidenceHub } from '../components/EvidenceHub';
 import { PasskeyConsole } from '../components/PasskeyConsole';
@@ -18,18 +18,15 @@ import { SecurityActivityFeed } from '../components/SecurityActivityFeed';
 import { CreateMandateModal } from '../components/CreateMandateModal';
 import type { MandateItem } from '../components/MandateCard';
 import type { ActivityItem } from '../components/ActivityFeed';
+import { signMandateWithPasskey } from '../lib/webauthn';
 import {
-  registerPasskey,
-  signMandateWithPasskey,
-  generateSimulatedSignature,
-} from '../lib/webauthn';
-import {
-  parseEther,
   formatEther,
   createPublicClient,
   createWalletClient,
   custom,
   http,
+  BaseError,
+  ContractFunctionRevertedError,
   type Address,
   type Hex,
 } from 'viem';
@@ -40,6 +37,9 @@ import {
 } from '@agenttrust/sdk';
 import {
   DEFAULT_MANDATE_MANAGER_ADDRESS,
+  DEFAULT_MOCK_TARGET_ADDRESS,
+  DO_SOMETHING_SELECTOR,
+  DO_SOMETHING_SIGNATURE,
   MONAD_TESTNET_CONFIG,
 } from '../lib/contracts';
 import { RPC_URL } from '../lib/agentMandates';
@@ -102,16 +102,24 @@ export default function SecurityConsoleDashboard() {
   // Persisted runtime mode (LOCAL_SIMULATION | MONAD_TESTNET), read after mount to keep SSR and client in sync
   const [networkMode, setNetworkMode] = useState<'LOCAL_SIMULATION' | 'MONAD_TESTNET'>('MONAD_TESTNET');
   useEffect(() => {
-    const stored = localStorage.getItem('agenttrust.networkMode');
-    if (stored === 'LOCAL_SIMULATION' || stored === 'MONAD_TESTNET') setNetworkMode(stored);
+    // Storage can throw (blocked site data, some embedded or private contexts); fall back to the default mode.
+    try {
+      const stored = window.localStorage.getItem('agenttrust.networkMode');
+      if (stored === 'LOCAL_SIMULATION' || stored === 'MONAD_TESTNET') setNetworkMode(stored);
+    } catch {
+      /* keep MONAD_TESTNET */
+    }
   }, []);
 
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [connectedChainId, setConnectedChainId] = useState<number | null>(null);
+  // null = not checked yet (or the last check could not reach the RPC); false = getBytecode returned no code
   const [isContractDeployed, setIsContractDeployed] = useState<boolean | null>(null);
+  const [contractCheckError, setContractCheckError] = useState<string | null>(null);
   const [isCheckingContract, setIsCheckingContract] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [createProgress, setCreateProgress] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<bigint | null>(null);
   const [copilotDraft, setCopilotDraft] = useState<Partial<CreateMandateParams> | null>(null);
   const [isNetworkDropdownOpen, setIsNetworkDropdownOpen] = useState(false);
@@ -162,12 +170,16 @@ export default function SecurityConsoleDashboard() {
       });
       const code = await client.getBytecode({ address: DEFAULT_MANDATE_MANAGER_ADDRESS });
       const deployed = !!code && code !== '0x' && code.length > 2;
+      setContractCheckError(null);
       setIsContractDeployed(deployed);
       return deployed;
-    } catch (err) {
+    } catch (err: any) {
+      // An RPC failure says nothing about the contract. Leave the state unknown so it is retried
+      // (on the next Lab tab change, the Retry button, or the next create attempt).
       console.warn('Could not read MandateManager bytecode:', err);
-      setIsContractDeployed(false);
-      return false;
+      setContractCheckError(err?.shortMessage || err?.message || 'RPC request failed');
+      setIsContractDeployed(null);
+      return null;
     } finally {
       setIsCheckingContract(false);
     }
@@ -190,7 +202,11 @@ export default function SecurityConsoleDashboard() {
           setStatusAlert({ type: 'info', message: 'Connected simulated test wallet (0xf39F...2266).' });
           return;
         }
-        alert('MetaMask or Web3 wallet extension not detected. Running in sandbox read-only mode.');
+        setStatusAlert({
+          type: 'warning',
+          message:
+            'No browser wallet found. Live v1 Lab actions need one. Switch the Lab to Local Simulation, or use Passkey Mandates, which needs no wallet.',
+        });
         return;
       }
 
@@ -240,15 +256,22 @@ export default function SecurityConsoleDashboard() {
   const handleToggleNetworkMode = (mode: 'LOCAL_SIMULATION' | 'MONAD_TESTNET') => {
     setNetworkMode(mode);
     setIsNetworkDropdownOpen(false);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('agenttrust.networkMode', mode);
+    try {
+      window.localStorage.setItem('agenttrust.networkMode', mode);
+    } catch {
+      /* storage blocked: the mode still applies for this visit */
+    }
+    // The simulated Hardhat test wallet (chain 31337) only exists in the sandbox. Never show it as connected on Monad.
+    if (mode === 'MONAD_TESTNET' && connectedChainId === 31337) {
+      setWalletAddress(null);
+      setConnectedChainId(null);
     }
     setStatusAlert({
       type: 'info',
       message:
         mode === 'MONAD_TESTNET'
-          ? 'Switched to Monad Testnet mode (Chain 10143). Queries routed to live RPC.'
-          : 'Switched to Local Simulation sandbox mode. Offline scenario execution active.',
+          ? 'Switched the Lab to Monad Testnet mode (chain 10143). Lab reads and writes go to the live RPC.'
+          : 'Switched the Lab to Local Simulation. Nothing in this mode is sent on-chain.',
     });
   };
 
@@ -333,43 +356,78 @@ export default function SecurityConsoleDashboard() {
     }
   };
 
-  // Create Mandate Handler
+  // One readable line from a viem error, naming the contract's custom error when there is one.
+  const describeContractError = (err: unknown): string => {
+    if (err instanceof BaseError) {
+      const reverted = err.walk((e) => e instanceof ContractFunctionRevertedError);
+      if (reverted instanceof ContractFunctionRevertedError) {
+        if (reverted.data?.errorName) return `${reverted.data.errorName}()`;
+        if (reverted.reason) return reverted.reason;
+      }
+      return err.shortMessage || err.message;
+    }
+    return err instanceof Error ? err.message : String(err);
+  };
+
+  // Create Mandate Handler. Errors are rethrown so the open modal shows them inline (a toast would sit behind the overlay).
   const handleCreateMandate = async (params: CreateMandateParams) => {
     setStatusAlert(null);
     setIsAuthorizing(true);
+    setCreateProgress(null);
 
     try {
       if (networkMode === 'MONAD_TESTNET') {
         if (!walletAddress) {
-          throw new Error('Please connect your Web3 wallet first to authorize on Monad Testnet.');
+          throw new Error('Connect a browser wallet first (top right). Live v1 creation is sent from your own wallet on Monad Testnet. Nothing was sent.');
         }
         if (connectedChainId !== 10143) {
-          throw new Error('Wallet must be on Monad Testnet (Chain ID 10143) to submit transactions.');
+          throw new Error('Your wallet must be on Monad Testnet (chain 10143). Nothing was sent.');
         }
-        if (!isContractDeployed) {
+        let deployed = isContractDeployed;
+        if (deployed === null) deployed = await checkContractOnTestnet();
+        if (deployed === null) {
+          throw new Error('Could not reach the Monad Testnet RPC to confirm the v1 contract. Try again in a moment. Nothing was sent.');
+        }
+        if (!deployed) {
+          throw new Error(`No contract code found at ${DEFAULT_MANDATE_MANAGER_ADDRESS} on Monad Testnet. Nothing was sent.`);
+        }
+
+        const owner = walletAddress as Address;
+        const publicClient = createPublicClient({
+          chain: MONAD_TESTNET_CONFIG as any,
+          transport: http(RPC_URL),
+        });
+
+        // 1. The v1 contract only accepts a passkey registered for msg.sender. This legacy Lab does not register
+        //    one, so stop before any passkey prompt or wallet popup when the wallet has none.
+        setCreateProgress('Checking whether your wallet has a passkey registered on the v1 contract...');
+        const [pubKeyX, pubKeyY] = await publicClient.readContract({
+          address: DEFAULT_MANDATE_MANAGER_ADDRESS,
+          abi: MandateManagerABI,
+          functionName: 'credentials',
+          args: [owner],
+        });
+        if (BigInt(pubKeyX) === 0n && BigInt(pubKeyY) === 0n) {
           throw new Error(
-            `MandateManager contract is not deployed at ${DEFAULT_MANDATE_MANAGER_ADDRESS} on Monad Testnet (0 bytes bytecode). Deploy contract bytecode to Monad Testnet before submitting live transactions.`
+            'Your wallet has no passkey registered on the v1 MandateManager, so the contract would reject this with NoCredential(). ' +
+              'This legacy Lab cannot register one from the browser. Nothing was sent. ' +
+              'For a working live passkey mandate, use Passkey Mandates (no wallet needed), or switch the Lab to Local Simulation.'
           );
         }
 
-        const publicClient = createPublicClient({
-          chain: MONAD_TESTNET_CONFIG as any,
-          transport: http('https://testnet-rpc.monad.xyz'),
-        });
-
-        // 1. Fetch on-chain nonce for owner
-        const nonce = (await publicClient.readContract({
+        // 2. Fetch on-chain nonce for owner
+        const nonce = await publicClient.readContract({
           address: DEFAULT_MANDATE_MANAGER_ADDRESS,
           abi: MandateManagerABI,
           functionName: 'ownerNonces',
-          args: [walletAddress as Address],
-        })) as bigint;
+          args: [owner],
+        });
 
-        // 2. Compute canonical challenge hash strictly bound to Monad chainId 10143
+        // 3. Compute canonical challenge hash strictly bound to Monad chainId 10143
         const challengeHash = computeMandateHash({
           chainId: 10143,
           mandateManagerAddress: DEFAULT_MANDATE_MANAGER_ADDRESS,
-          owner: walletAddress as Address,
+          owner,
           agentAddress: params.agentAddress,
           agentId: params.agentId,
           targets: params.targets,
@@ -379,99 +437,108 @@ export default function SecurityConsoleDashboard() {
           nonce,
         });
 
-        // 3. Hardware Passkey Prompt
+        // 4. Passkey prompt
+        setCreateProgress('Waiting for your passkey...');
         const passkeyData = await signMandateWithPasskey(challengeHash);
 
-        // 4. Submit real on-chain transaction through user's wallet
+        const callArgs = [
+          params.agentAddress,
+          params.agentId,
+          params.targets.map((t) => ({ target: t.target, selector: t.selector })),
+          params.maxValuePerTx,
+          params.maxTotalValue,
+          params.expiresAt,
+          nonce,
+          passkeyData.sigR,
+          passkeyData.sigS,
+          passkeyData.authenticatorData,
+          passkeyData.clientDataJSON,
+          passkeyData.challengeOffset,
+        ] as const;
+        const value = params.depositValue ?? 0n;
+
+        // 5. Dry run first, so a transaction the contract would reject never reaches the wallet or costs gas.
+        setCreateProgress('Checking the signed mandate against the contract (dry run, nothing sent)...');
+        try {
+          await publicClient.simulateContract({
+            account: owner,
+            address: DEFAULT_MANDATE_MANAGER_ADDRESS,
+            abi: MandateManagerABI,
+            functionName: 'createMandateWithWebAuthn',
+            args: callArgs,
+            value,
+          });
+        } catch (simErr) {
+          throw new Error(
+            `The contract would reject this mandate: ${describeContractError(simErr)}. Nothing was sent. ` +
+              'If the browser offered a different passkey than the one registered for this wallet, the signature will not match. ' +
+              'Passkey Mandates is the working live passkey flow.'
+          );
+        }
+
+        // 6. Submit the on-chain transaction through the user's wallet
+        setCreateProgress('Confirm the transaction in your wallet...');
         const walletClient = createWalletClient({
           chain: MONAD_TESTNET_CONFIG as any,
           transport: custom((window as any).ethereum),
         });
-
         const txHash = await walletClient.writeContract({
-          account: walletAddress as Address,
+          account: owner,
           chain: MONAD_TESTNET_CONFIG as any,
           address: DEFAULT_MANDATE_MANAGER_ADDRESS,
           abi: MandateManagerABI,
           functionName: 'createMandateWithWebAuthn',
-          args: [
-            params.agentAddress,
-            params.agentId,
-            params.targets.map((t) => ({ target: t.target, selector: t.selector })),
-            params.maxValuePerTx,
-            params.maxTotalValue,
-            params.expiresAt,
-            nonce,
-            passkeyData.sigR,
-            passkeyData.sigS,
-            passkeyData.authenticatorData,
-            passkeyData.clientDataJSON,
-            passkeyData.challengeOffset,
-          ],
-          value: params.depositValue ?? 0n,
+          args: callArgs,
+          value,
         });
 
-        setStatusAlert({ type: 'info', message: `Passkey verified! Mandate transaction submitted: ${txHash}. Waiting for Monad confirmation...` });
+        setCreateProgress(`Transaction submitted: ${txHash}. Waiting for Monad confirmation...`);
         const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-        if (receipt.status === 'success') {
-          const newId = (await publicClient.readContract({
+        if (receipt.status !== 'success') {
+          throw new Error(`Mandate creation reverted on-chain, so no mandate was created. Tx: ${txHash}`);
+        }
+
+        const newId =
+          (await publicClient.readContract({
             address: DEFAULT_MANDATE_MANAGER_ADDRESS,
             abi: MandateManagerABI,
             functionName: 'nextMandateId',
           })) - 1n;
 
-          const createdMandate: MandateItem = {
-            id: newId,
-            owner: walletAddress,
-            agentAddress: params.agentAddress,
-            agentId: params.agentId,
-            maxValuePerTx: params.maxValuePerTx,
-            maxTotalValue: params.maxTotalValue,
-            spentValue: 0n,
-            balance: params.depositValue ?? 0n,
-            expiresAt: params.expiresAt,
-            nonce,
-            revoked: false,
-            targets: params.targets.map((t) => ({ target: t.target, selector: t.selector })),
-          };
-
-          setTestnetMandates((prev) => [createdMandate, ...prev]);
-          setTestnetActivities((prev) => [
-            {
-              id: `tx-${txHash}`,
-              type: 'executed',
-              agentId: params.agentId,
-              mandateId: newId,
-              target: params.targets[0]?.target ?? '0x0000000000000000000000000000000000000000',
-              selector: params.targets[0]?.selector ?? '0x00000000',
-              value: params.depositValue ?? 0n,
-              timestamp: 'Just now',
-              txHash,
-            },
-            ...prev,
-          ]);
-
-          setStatusAlert({ type: 'success', message: `Mandate #${newId} confirmed on Monad Testnet! Tx: ${txHash}` });
-        }
-      } else {
-        // Local simulation path
-        const ownerAddress = walletAddress || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
-        const nextNonce = BigInt(simulatedMandates.length);
-
-        const challengeHash = computeMandateHash({
-          chainId: 31337,
-          mandateManagerAddress: DEFAULT_MANDATE_MANAGER_ADDRESS,
-          owner: ownerAddress as Address,
+        const createdMandate: MandateItem = {
+          id: newId,
+          owner: walletAddress,
           agentAddress: params.agentAddress,
           agentId: params.agentId,
-          targets: params.targets,
           maxValuePerTx: params.maxValuePerTx,
           maxTotalValue: params.maxTotalValue,
+          spentValue: 0n,
+          balance: value,
           expiresAt: params.expiresAt,
-          nonce: nextNonce,
-        });
+          nonce,
+          revoked: false,
+          targets: params.targets.map((t) => ({ target: t.target, selector: t.selector })),
+        };
 
+        setTestnetMandates((prev) => [createdMandate, ...prev]);
+        setTestnetActivities((prev) => [
+          {
+            id: `tx-${txHash}`,
+            type: 'created',
+            agentId: params.agentId,
+            mandateId: newId,
+            value,
+            timestamp: 'Just now',
+            txHash,
+          },
+          ...prev,
+        ]);
+
+        setStatusAlert({ type: 'success', message: `Mandate #${newId} confirmed on Monad Testnet. Tx: ${txHash}` });
+      } else {
+        // Local simulation path: nothing is signed or sent; the mandate lives only in this browser tab.
+        const ownerAddress = walletAddress || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
         const newId = BigInt(simulatedMandates.length + 1);
         const newMandate: MandateItem = {
           id: newId,
@@ -483,7 +550,7 @@ export default function SecurityConsoleDashboard() {
           spentValue: 0n,
           balance: params.depositValue ?? 0n,
           expiresAt: params.expiresAt,
-          nonce: nextNonce,
+          nonce: BigInt(simulatedMandates.length),
           revoked: false,
           targets: params.targets.map((t) => ({ target: t.target, selector: t.selector })),
         };
@@ -492,11 +559,9 @@ export default function SecurityConsoleDashboard() {
         setSimulatedActivities((prev) => [
           {
             id: `sim-${Date.now()}`,
-            type: 'executed',
+            type: 'created',
             agentId: params.agentId,
             mandateId: newId,
-            target: params.targets[0].target,
-            selector: params.targets[0].selector,
             value: params.depositValue ?? 0n,
             timestamp: 'Just now',
             txHash: undefined,
@@ -504,16 +569,18 @@ export default function SecurityConsoleDashboard() {
           ...prev,
         ]);
 
-        setStatusAlert({ type: 'info', message: `[SIMULATION] Mandate #${newId} created in local sandbox.` });
+        setStatusAlert({ type: 'info', message: `[SIMULATION] Mandate #${newId} created in the local sandbox. Nothing was signed or sent on-chain.` });
       }
 
       setIsModalOpen(false);
       setCopilotDraft(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Create mandate error:', err);
-      setStatusAlert({ type: 'error', message: err.message || String(err) });
+      // viem errors carry long multi-line details; the modal gets the short form.
+      throw new Error(err instanceof BaseError ? describeContractError(err) : err instanceof Error ? err.message : String(err));
     } finally {
       setIsAuthorizing(false);
+      setCreateProgress(null);
     }
   };
 
@@ -522,65 +589,44 @@ export default function SecurityConsoleDashboard() {
     setIsModalOpen(true);
   };
 
-  const handleScenarioRun = (scenario: AttackScenario) => {
-    if (networkMode === 'MONAD_TESTNET') {
-      setStatusAlert({
-        type: 'warning',
-        message: 'Attack Simulation Lab runs against isolated local contract scenarios. Switch to LOCAL SIMULATION mode to exercise the local attack scenarios.',
-      });
-      return;
+  // Log an Attack Lab result (computed in AttackLab from the sandbox mandate) and apply an allowed call's spend.
+  // Functional updates, so results that land close together do not overwrite each other.
+  const handleScenarioRun = (outcome: ScenarioOutcome) => {
+    if (networkMode !== 'LOCAL_SIMULATION') return;
+    const { action, mandateId, agentId, error, againstCopy } = outcome;
+
+    if (error === null && !againstCopy) {
+      setSimulatedMandates((prev) =>
+        prev.map((m) =>
+          m.id === mandateId && !m.revoked
+            ? {
+                ...m,
+                spentValue: m.spentValue + action.value,
+                balance: (m.balance ?? 0n) > action.value ? (m.balance ?? 0n) - action.value : 0n,
+              }
+            : m
+        )
+      );
     }
 
-    const targetMandate = simulatedMandates.find((m) => !m.revoked) || simulatedMandates[0];
-    if (!targetMandate) {
-      setStatusAlert({
-        type: 'warning',
-        message: 'No sandbox mandate exists yet. Create a mandate in LOCAL SIMULATION mode first, then run attack scenarios against it.',
-      });
-      return;
-    }
-
-    const agentId = targetMandate.agentId;
-    const mandateId = targetMandate.id;
-
-    if (scenario.expectedResult === 'Success') {
-      if (targetMandate) {
-        const newSpent = targetMandate.spentValue + parseEther('0.1');
-        setSimulatedMandates(
-          simulatedMandates.map((m) => (m.id === targetMandate.id ? { ...m, spentValue: newSpent } : m))
-        );
-      }
-      setSimulatedActivities([
-        {
-          id: `sim-${Date.now()}`,
-          type: 'executed',
-          agentId,
-          mandateId,
-          target: scenario.target,
-          selector: scenario.selector,
-          value: parseEther(scenario.value),
-          timestamp: 'Just now',
-          txHash: undefined,
-        },
-        ...simulatedActivities,
-      ]);
-    } else {
-      setSimulatedActivities([
-        {
-          id: `sim-${Date.now()}`,
-          type: 'blocked',
-          agentId: 42n,
-          mandateId: 1n,
-          target: scenario.target,
-          selector: scenario.selector,
-          value: parseEther(scenario.value),
-          timestamp: 'Just now',
-          txHash: undefined,
-          reason: `${scenario.revertError} (Contract halted unauthorized action in local simulation)`,
-        },
-        ...simulatedActivities,
-      ]);
-    }
+    setSimulatedActivities((prev) => [
+      {
+        id: `sim-${Date.now()}-${outcome.scenarioId}`,
+        type: error === null ? 'executed' : 'blocked',
+        agentId,
+        mandateId,
+        target: action.target,
+        selector: action.selector,
+        value: action.value,
+        timestamp: 'Just now',
+        txHash: undefined,
+        reason:
+          error === null
+            ? undefined
+            : `${error} (simulated in your browser${againstCopy ? ' against a revoked copy' : ''}; nothing sent)`,
+      },
+      ...prev,
+    ]);
   };
 
   const TAB_TITLES: Record<NavTab, [string, string]> = {
@@ -690,6 +736,8 @@ export default function SecurityConsoleDashboard() {
         )}
 
         <main className="page-container page-enter" key={activeTab}>
+          {isLab && <LegacyNote onGo={() => setActiveTab('passkey')} />}
+
           {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
 
           {activeTab === 'passkey' && <PasskeyConsole />}
@@ -701,7 +749,6 @@ export default function SecurityConsoleDashboard() {
           {/* TAB: OVERVIEW */}
           {activeTab === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              <LegacyNote onGo={() => setActiveTab('passkey')} />
               {/* Notification Banner matching reference */}
               <div
                 style={{
@@ -738,8 +785,14 @@ export default function SecurityConsoleDashboard() {
                   <span style={{ margin: '0 0.5rem', color: 'var(--accent-monad)' }}>·</span>
                   <span style={{ color: 'var(--text-secondary)' }}>
                     {walletAddress
-                      ? `Wallet ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} connected on ${networkMode === 'MONAD_TESTNET' ? 'Monad Testnet (10143)' : 'Local Sandbox'}.`
-                      : 'Connect a wallet to load live mandates.'}
+                      ? `Wallet ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)} connected on ${
+                          connectedChainId === 10143
+                            ? 'Monad Testnet (10143)'
+                            : connectedChainId === 31337
+                            ? 'the local sandbox (simulated test wallet)'
+                            : `chain ${connectedChainId ?? 'unknown'} (not Monad Testnet)`
+                        }. Mandates you create in this browser session are listed under Wallet Mandates.`
+                      : 'This Lab lists only mandates created in this browser session. It does not load existing on-chain mandates.'}
                   </span>
                 </div>
               </div>
@@ -794,16 +847,7 @@ export default function SecurityConsoleDashboard() {
               </div>
 
               {/* Central Comparison Showcase Card ("AGENT REQUEST" vs "ON-CHAIN POLICY") */}
-              <div
-                className="security-card"
-                style={{
-                  padding: '2rem 2.25rem',
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(280px, 1fr) auto minmax(320px, 1.2fr)',
-                  gap: '2.5rem',
-                  alignItems: 'center',
-                }}
-              >
+              <div className="security-card lab-compare">
                 {/* Left Column: AGENT REQUEST */}
                 <div>
                   <div
@@ -847,17 +891,7 @@ export default function SecurityConsoleDashboard() {
                 </div>
 
                 {/* Center Divider with Lock Badge */}
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    position: 'relative',
-                    height: '100%',
-                    padding: '0 0.5rem',
-                  }}
-                >
+                <div className="lab-compare-divider">
                   {/* Vertical rule line */}
                   <div
                     style={{
@@ -918,10 +952,10 @@ export default function SecurityConsoleDashboard() {
                       marginBottom: '1rem',
                     }}
                   >
-                    ON-CHAIN POLICY
+                    EXAMPLE ON-CHAIN POLICY
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  <div className="lab-compare-policy">
                     {/* Row 1: Target */}
                     <div
                       style={{
@@ -937,7 +971,7 @@ export default function SecurityConsoleDashboard() {
                         <span>Target</span>
                       </div>
                       <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                        Payable MockTarget Router (0x3333...3333)
+                        {`Payable MockTarget (${DEFAULT_MOCK_TARGET_ADDRESS.slice(0, 6)}...${DEFAULT_MOCK_TARGET_ADDRESS.slice(-4)})`}
                       </div>
                     </div>
 
@@ -956,7 +990,7 @@ export default function SecurityConsoleDashboard() {
                         <span>Method</span>
                       </div>
                       <div className="mono-value" style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--accent-primary)' }}>
-                        doSomething(uint256) [0x50824e4f]
+                        {`${DO_SOMETHING_SIGNATURE} [${DO_SOMETHING_SELECTOR}]`}
                       </div>
                     </div>
 
@@ -1019,7 +1053,7 @@ export default function SecurityConsoleDashboard() {
               </div>
 
               {/* Bottom 2 Cards Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              <div className="grid-2" style={{ gap: '1.5rem' }}>
                 {/* Left Card: Latest policy decisions */}
                 <div
                   className="security-card"
@@ -1066,10 +1100,10 @@ export default function SecurityConsoleDashboard() {
                         <FileText size={24} />
                       </div>
                       <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        No live decisions yet
+                        No decisions in this session yet
                       </div>
                       <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                        Connect wallet or run local simulation
+                        Create a mandate, or run Attack Lab scenarios in Local Simulation.
                       </p>
                     </div>
                   ) : (
@@ -1094,17 +1128,22 @@ export default function SecurityConsoleDashboard() {
                                   ? 'badge-emerald'
                                   : act.type === 'blocked'
                                   ? 'badge-rose'
+                                  : act.type === 'created'
+                                  ? 'badge-monad'
                                   : 'badge-amber'
                               }`}
                               style={{ fontSize: '0.68rem' }}
                             >
-                              {act.type.toUpperCase()}
+                              {act.type === 'created' ? 'MANDATE CREATED' : act.type.toUpperCase()}
                             </span>
                             <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                              Agent #{act.agentId.toString()}
+                              {act.type === 'created' ? `Mandate #${act.mandateId.toString()}` : `Agent #${act.agentId.toString()}`}
                             </span>
                           </div>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{act.timestamp}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            {act.timestamp}
+                            {networkMode === 'LOCAL_SIMULATION' ? ' · simulated' : ''}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -1266,7 +1305,7 @@ export default function SecurityConsoleDashboard() {
           {/* TAB: MANDATES */}
           {activeTab === 'mandates' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                 <PageHead eyebrow="Lab · v1" title={'Mandates Ledger'} sub={'Cryptographically authorized delegation bounds enforced by Monad smart contracts.'} />
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <button
@@ -1304,24 +1343,58 @@ export default function SecurityConsoleDashboard() {
                   }}
                 >
                   <AlertCircle size={20} color="#FBBF24" style={{ marginTop: '2px', flexShrink: 0 }} />
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <strong style={{ fontSize: '0.9rem', color: 'var(--accent-amber)' }}>
-                      Contract Bytecode Not Deployed on Monad Testnet
+                      No contract code at the configured v1 address
                     </strong>
-                    <p style={{ fontSize: '0.825rem', color: 'var(--accent-amber)', marginTop: '0.25rem' }}>
-                      The configured address <code style={{ fontWeight: 600 }}>{DEFAULT_MANDATE_MANAGER_ADDRESS}</code> currently has 0 bytes bytecode on Monad Testnet RPC.
-                    </p>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--accent-amber)', marginTop: '0.35rem' }}>
-                      You can deploy contract bytecode with <code style={{ fontWeight: 600 }}>forge script script/Deploy.s.sol</code> or switch to <strong>Local Simulation</strong> to demo the passkey authorization lifecycle instantly.
+                    <p style={{ fontSize: '0.825rem', color: 'var(--accent-amber)', marginTop: '0.25rem', overflowWrap: 'anywhere' }}>
+                      The Monad Testnet RPC returned no bytecode for <code style={{ fontWeight: 600 }}>{DEFAULT_MANDATE_MANAGER_ADDRESS}</code>.
+                      Switch to <strong>Local Simulation</strong> to try the v1 lifecycle offline.
                     </p>
                   </div>
+                </div>
+              )}
+
+              {networkMode === 'MONAD_TESTNET' && isContractDeployed === null && contractCheckError && (
+                <div
+                  className="security-card"
+                  style={{
+                    padding: '1.25rem',
+                    borderLeft: '4px solid var(--accent-amber-border)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.85rem',
+                    background: 'var(--accent-amber-subtle)',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <AlertCircle size={20} color="#FBBF24" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong style={{ fontSize: '0.9rem', color: 'var(--accent-amber)' }}>
+                      Could not reach the Monad Testnet RPC
+                    </strong>
+                    <p style={{ fontSize: '0.825rem', color: 'var(--accent-amber)', marginTop: '0.25rem', overflowWrap: 'anywhere' }}>
+                      The v1 contract check did not complete ({contractCheckError}). This says nothing about whether the contract is deployed.
+                    </p>
+                  </div>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.85rem' }}
+                    onClick={() => checkContractOnTestnet()}
+                    disabled={isCheckingContract}
+                  >
+                    {isCheckingContract ? 'Checking...' : 'Retry'}
+                  </button>
                 </div>
               )}
 
               <MandateList
                 mandates={currentMandates}
                 onRevoke={handleRevoke}
-                onOpenCreate={() => setIsModalOpen(true)}
+                onOpenCreate={() => {
+                  setCopilotDraft(null);
+                  setIsModalOpen(true);
+                }}
                 onExploreDemo={() => setActiveTab('policy-to-proof')}
                 isRevokingId={revokingId}
                 networkMode={networkMode}
@@ -1332,9 +1405,19 @@ export default function SecurityConsoleDashboard() {
           {/* TAB: ATTACK LAB */}
           {activeTab === 'attack-lab' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <PageHead eyebrow="Lab · v1" title={'Attack Simulation Lab'} sub={'Test contract security invariants against prompt injection, unapproved targets, ceiling violations, and stranger hijacking.'} />
+              <PageHead eyebrow="Lab · v1" title={'Attack Simulation Lab'} sub={'Simulate prompt injection, unapproved targets, ceiling violations and stranger calls against a sandbox mandate, in your browser.'} />
 
-              <AttackLab onScenarioExecuted={handleScenarioRun} />
+              <AttackLab
+                networkMode={networkMode}
+                activeMandate={simulatedMandates.find((m) => !m.revoked) ?? null}
+                revokedMandate={simulatedMandates.find((m) => m.revoked) ?? null}
+                onScenarioExecuted={handleScenarioRun}
+                onSwitchToSimulation={() => handleToggleNetworkMode('LOCAL_SIMULATION')}
+                onCreateMandate={() => {
+                  setCopilotDraft(null);
+                  setIsModalOpen(true);
+                }}
+              />
             </div>
           )}
 
@@ -1367,7 +1450,7 @@ export default function SecurityConsoleDashboard() {
           {/* TAB: ACTIVITY */}
           {activeTab === 'activity' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <PageHead eyebrow="Lab · v1" title={'Security Activity Feed'} sub={'Full audit trail of passkey creations, executed actions, and blocked invariants.'} />
+              <PageHead eyebrow="Lab · v1" title={'Security Activity Feed'} sub={'Mandates created, Attack Lab results and revocations from this browser session.'} />
 
               <SecurityActivityFeed
                 activities={currentActivities}
@@ -1389,6 +1472,12 @@ export default function SecurityConsoleDashboard() {
         isLoading={isAuthorizing}
         initialParams={copilotDraft}
         networkMode={networkMode}
+        progressMessage={createProgress}
+        onOpenPasskey={() => {
+          setIsModalOpen(false);
+          setCopilotDraft(null);
+          setActiveTab('passkey');
+        }}
       />
     </div>
   );

@@ -136,7 +136,7 @@ export function MandateList({
           <div className="empty-state-title">No Mandates Found</div>
           <p className="empty-state-desc">
             {networkMode === 'MONAD_TESTNET'
-              ? 'No on-chain mandates found for this wallet on Monad Testnet.'
+              ? 'No mandates created from this browser session. This Lab does not load existing on-chain mandates.'
               : filter === 'active'
               ? 'No active mandates currently in effect in local simulation.'
               : filter === 'revoked'

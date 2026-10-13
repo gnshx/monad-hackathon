@@ -850,12 +850,23 @@ button.nav-group-label:hover { color: var(--text-muted); }
 .page-eyebrow { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-monad); }
 .page-title { font-size: clamp(1.6rem, 2.6vw, 2.1rem); font-weight: 700; letter-spacing: -0.035em; color: var(--text-primary); line-height: 1.15; margin-top: 0.4rem; }
 .page-sub { font-size: 0.95rem; color: var(--text-muted); margin-top: 0.4rem; max-width: 68ch; line-height: 1.55; }
-.legacy-note { display: flex; gap: 0.6rem; align-items: center; font-size: 0.8rem; color: var(--text-muted); padding: 0.6rem 0.9rem; border-radius: 10px;
+.legacy-note { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; font-size: 0.8rem; color: var(--text-muted); padding: 0.6rem 0.9rem; border-radius: 10px;
   border: 1px dashed var(--border-default); background: rgba(255,255,255,0.015); margin-bottom: 1.5rem; }
 .legacy-note button { background: none; border: 0; color: var(--accent-monad); font: 600 0.8rem var(--font-sans); cursor: pointer; padding: 0; }
 
 .animate-spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Lab Policy Overview: request vs policy comparison card. Three columns on wide screens, stacked below 960px. */
+.lab-compare { padding: 2rem 2.25rem; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.2fr); gap: 2.5rem; align-items: center; }
+.lab-compare-divider { display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; height: 100%; padding: 0 0.5rem; }
+.lab-compare-policy { display: flex; flex-direction: column; gap: 0.85rem; min-width: 0; }
+.lab-compare-policy > div { flex-wrap: wrap; gap: 0.35rem 1rem; }
+.lab-compare-policy > div > div:last-child { overflow-wrap: anywhere; min-width: 0; }
+@media (max-width: 960px) {
+  .lab-compare { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; padding: 1.25rem; }
+  .lab-compare-divider { height: auto; padding: 0.5rem 0; }
+}
 
 /* Layout grid helpers */
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }

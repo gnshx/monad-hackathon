@@ -35,7 +35,10 @@ import {
 import {
   DEFAULT_MANDATE_MANAGER_ADDRESS,
   DEFAULT_ERC8004_REGISTRY,
+  DO_SOMETHING_SELECTOR,
+  explorerTxUrl,
 } from '../lib/contracts';
+import { AGENT_MANDATES_ADDRESS } from '../lib/agentMandates';
 
 interface VerificationCheck {
   title: string;
@@ -62,6 +65,8 @@ interface AuditResult {
   selector?: string;
   value?: string;
   revertReason?: string;
+  /** The tx belongs to the v2 AgentMandates contract, which this v1 verifier does not decode. */
+  isV2Tx?: boolean;
   checks: VerificationCheck[];
 }
 
@@ -104,9 +109,15 @@ export function ReceiptInspector() {
       setValidationError('Invalid contract address format. Must be a 42-character Ethereum address (0x...).');
       return;
     }
+    if (cleanContract.toLowerCase() === AGENT_MANDATES_ADDRESS.toLowerCase()) {
+      setValidationError(
+        'That is the v2 AgentMandates contract (Passkey Mandates). This Lab verifier only decodes v1 MandateManager receipts. Open the transaction in the explorer, or check its mandate on Verify an Agent.'
+      );
+      return;
+    }
 
     if (expectedSelector.trim() && !/^0x[0-9a-fA-F]{8}$/.test(expectedSelector.trim())) {
-      setValidationError('Expected selector must be a 4-byte hex string (e.g. 0x50824e4f or 0xa9059cbb).');
+      setValidationError(`Expected selector must be a 4-byte hex string (e.g. ${DO_SOMETHING_SELECTOR} or 0xa9059cbb).`);
       return;
     }
 
@@ -351,6 +362,35 @@ export function ReceiptInspector() {
           checks,
         });
       } else {
+        // A v2 AgentMandates transaction is not a v1 failure: say what it is instead of reporting a mismatch.
+        const v2 = AGENT_MANDATES_ADDRESS.toLowerCase();
+        const rc = await client.getTransactionReceipt({ hash: cleanTx as Hex }).catch(() => null);
+        if (rc && (rc.to?.toLowerCase() === v2 || rc.logs.some((l) => l.address.toLowerCase() === v2))) {
+          checks.push({
+            title: 'v2 AgentMandates transaction (not decoded here)',
+            description:
+              'This transaction was sent to the v2 AgentMandates contract used by Passkey Mandates. This Lab verifier only decodes v1 MandateManager receipts, so it does not judge it.',
+            status: 'warning',
+            evidence: `Contract ${AGENT_MANDATES_ADDRESS} · Receipt status: ${rc.status} · Block #${rc.blockNumber.toString()}`,
+          });
+          setAuditResult({
+            verified: false,
+            fullPolicyCompliance: false,
+            policyMatchLevel: 'unspecified',
+            statusCategory: res.status,
+            networkName: 'Monad Testnet',
+            chainId: liveChainId,
+            txHash: cleanTx,
+            blockNumber: Number(rc.blockNumber),
+            contractAddress: AGENT_MANDATES_ADDRESS,
+            isCanonicalContract: false,
+            isV2Tx: true,
+            revertReason: `v2 transaction (${rc.status}). Open it in the explorer, or check its mandate on Verify an Agent.`,
+            checks,
+          });
+          return;
+        }
+
         // Fail closed on any failure or missing bytecode
         const failureTitle =
           res.status === 'not_found'
@@ -611,7 +651,7 @@ export function ReceiptInspector() {
                 style={{ width: '100%' }}
                 value={expectedSelector}
                 onChange={(e) => setExpectedSelector(e.target.value)}
-                placeholder="e.g. 0x50824e4f"
+                placeholder={`e.g. ${DO_SOMETHING_SELECTOR}`}
               />
             </div>
             <div>
@@ -658,6 +698,8 @@ export function ReceiptInspector() {
           style={{
             border: auditResult.verified
               ? '1px solid var(--accent-emerald-border)'
+              : auditResult.isV2Tx
+              ? '1px solid var(--accent-amber-border)'
               : '1px solid var(--accent-rose-border)',
             padding: '1.75rem',
           }}
@@ -686,7 +728,9 @@ export function ReceiptInspector() {
               </div>
               <div>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  {auditResult.fullPolicyCompliance
+                  {auditResult.isV2Tx
+                    ? 'v2 transaction: not decoded by this v1 verifier'
+                    : auditResult.fullPolicyCompliance
                     ? 'Cryptographically Verified Receipt & Full Policy Compliance'
                     : auditResult.verified
                     ? 'Authentic Event Decoded · Policy Incomplete'
@@ -697,7 +741,18 @@ export function ReceiptInspector() {
                     : 'Receipt Verification Failed'}
                 </h3>
                 <span style={{ fontSize: '0.785rem', color: 'var(--text-secondary)' }}>
-                  {auditResult.fullPolicyCompliance
+                  {auditResult.isV2Tx ? (
+                    <>
+                      {auditResult.revertReason}{' '}
+                      <a href={explorerTxUrl(auditResult.txHash)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-monad)' }}>
+                        Open in explorer
+                      </a>
+                      {' · '}
+                      <a href="#verify" style={{ color: 'var(--accent-monad)' }}>
+                        Verify an Agent
+                      </a>
+                    </>
+                  ) : auditResult.fullPolicyCompliance
                     ? `ActionExecuted event decoded from Monad block #${auditResult.blockNumber} and strictly conforms to all expected policy constraints.`
                     : auditResult.verified
                     ? `ActionExecuted event decoded from Monad block #${auditResult.blockNumber}, but missing expected policy fields prevent full compliance verification.`
@@ -711,6 +766,8 @@ export function ReceiptInspector() {
                 className={
                   auditResult.fullPolicyCompliance
                     ? 'badge badge-emerald'
+                    : auditResult.isV2Tx
+                    ? 'badge badge-amber'
                     : auditResult.verified
                     ? 'badge badge-amber'
                     : auditResult.statusCategory === 'not_found'
@@ -720,6 +777,8 @@ export function ReceiptInspector() {
               >
                 {auditResult.fullPolicyCompliance
                   ? 'FULL COMPLIANCE VERIFIED'
+                  : auditResult.isV2Tx
+                  ? 'V2 TX (NOT CHECKED)'
                   : auditResult.verified
                   ? auditResult.policyMatchLevel === 'partial'
                     ? 'EVENT VERIFIED (PARTIAL POLICY)'
@@ -759,8 +818,19 @@ export function ReceiptInspector() {
               </div>
               <div>
                 <span className="kpi-label">BOUND AGENT ID</span>
-                <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginTop: '2px', fontSize: '0.8rem' }}>
-                  Unverified <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(Not in event)</span>
+                <div style={{ fontWeight: 600, color: auditResult.agentId != null ? 'var(--text-primary)' : 'var(--text-secondary)', marginTop: '2px', fontSize: '0.8rem' }}>
+                  {auditResult.agentId != null ? (
+                    <>
+                      Agent #{auditResult.agentId}{' '}
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        ({auditResult.checks.some((c) => c.title.startsWith('5. ERC-8004 Agent Identity Verified')) ? 'registry match' : 'registry not confirmed'})
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      Not checked <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(not in the event)</span>
+                    </>
+                  )}
                 </div>
               </div>
               <div>

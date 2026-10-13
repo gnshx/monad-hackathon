@@ -116,6 +116,16 @@ export async function signMandateWithPasskey(
         challenge: rawChallenge as unknown as BufferSource,
         timeout: 60000,
         userVerification: 'preferred',
+        // Pin the passkey the contract knows about. Without this the browser may offer any
+        // passkey for this site (for example a v2 Passkey Mandates one) and the contract
+        // would reject the signature.
+        ...(credentialId
+          ? {
+              allowCredentials: [
+                { type: 'public-key' as const, id: hexToUint8Array(credentialId as Hex) as unknown as BufferSource },
+              ],
+            }
+          : {}),
       },
     })) as PublicKeyCredential;
 
@@ -191,7 +201,30 @@ function parseDerSignature(der: Uint8Array): { r: Uint8Array; s: Uint8Array } {
     s = padded;
   }
 
-  return { r, s };
+  // Authenticators return a high s about half the time. MandateManager._checkSignatureBounds
+  // rejects s > n/2 (malleability guard), so normalise to the equivalent low-s value n - s.
+  let sBig = bytesToBigInt(s);
+  if (sBig > P256_N_DIV_2) sBig = P256_N - sBig;
+
+  return { r, s: bigIntToBytes32(sBig) };
+}
+
+const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+const P256_N_DIV_2 = P256_N / 2n;
+
+function bytesToBigInt(bytes: Uint8Array): bigint {
+  let v = 0n;
+  for (const b of bytes) v = (v << 8n) | BigInt(b);
+  return v;
+}
+
+function bigIntToBytes32(v: bigint): Uint8Array {
+  const out = new Uint8Array(32);
+  for (let i = 31; i >= 0; i--) {
+    out[i] = Number(v & 0xffn);
+    v >>= 8n;
+  }
+  return out;
 }
 
 export function generateSimulatedPasskey(): PasskeyKeypair {

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { parseEther, type Address, type Hex } from 'viem';
 import type { CreateMandateParams } from '@agenttrust/sdk';
+import { DO_SOMETHING_SELECTOR, DO_SOMETHING_SIGNATURE } from '../lib/contracts';
 
 interface AiPolicyCopilotProps {
   onDraftApproved: (params: CreateMandateParams) => void;
@@ -83,8 +84,8 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
           selectorName = '0x00000000 (Wildcard / Native Call)';
           isWildcard = true;
         } else if (/dosomething|router|payable/.test(lower)) {
-          selector = '0x50824e4f';
-          selectorName = 'doSomething(uint256)';
+          selector = DO_SOMETHING_SELECTOR;
+          selectorName = DO_SOMETHING_SIGNATURE;
         } else if (/mint/.test(lower)) {
           selector = '0xa0712d68';
           selectorName = 'mint(uint256)';
@@ -129,16 +130,20 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
         guarantees.push(`Ceiling Clamp: Capped at ${maxPerTx} MON / action and ${maxTotal} MON lifetime vault total`);
       }
       if (durationHours) {
-        guarantees.push(`Enforced Expiry: Mandate expires exactly ${durationHours} hours after authorization`);
+        guarantees.push(`Enforced Expiry: Mandate expires ${durationHours} hours after you click Review & Authorize (the create form keeps that exact time)`);
       }
 
+      // ERC-8004 agent ID: only what the prompt states ("agent #7", "agent id 7"). Never invented.
+      const agentIdMatch = prompt.match(/agent\s*(?:#|id[:\s#]*)\s*(\d+)/i);
+      const parsedAgentId = agentIdMatch ? agentIdMatch[1] : '';
+
       const isUnresolved = unresolvedFields.length > 0;
-      const riskScore = isWildcard ? 'Caution' : isUnresolved ? 'Elevated' : 'Strict';
+      const riskScore = isUnresolved ? 'Elevated' : isWildcard ? 'Caution' : 'Strict';
 
       setDraft({
         summary: `Authorized ${isWildcard ? 'wildcard' : selectorName || 'call'} on ${target ? `${target.slice(0, 6)}...` : 'target'} up to ${maxPerTx || '?'} MON/tx`,
         agentAddress: agent,
-        agentId: '42',
+        agentId: parsedAgentId,
         targetAddress: target,
         selector,
         selectorName,
@@ -176,6 +181,11 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
       return;
     }
 
+    if (!/^\d+$/.test(draft.agentId.trim())) {
+      setApprovalError('The ERC-8004 agent ID was not stated in the prompt. Enter it under Bound Agent (say "agent #7" in the prompt to fill it in).');
+      return;
+    }
+
     if (!draft.selector || !draft.selector.startsWith('0x') || draft.selector.length !== 10) {
       setApprovalError('Valid 4-byte selector (e.g. 0xa9059cbb or 0x00000000) is required.');
       return;
@@ -199,7 +209,7 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
 
     const params: CreateMandateParams = {
       agentAddress: draft.agentAddress as Address,
-      agentId: BigInt(draft.agentId || '0'),
+      agentId: BigInt(draft.agentId.trim()),
       targets: [
         {
           target: draft.targetAddress as Address,
@@ -325,8 +335,16 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
                 <span style={{ fontSize: '0.725rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                   Structured Policy Boundary
                 </span>
-                <span className={`badge ${draft.riskScore === 'Strict' ? 'badge-emerald' : 'badge-amber'}`}>
-                  {draft.riskScore === 'Strict' ? 'Strict Scope' : 'Caution: Wildcard'}
+                <span
+                  className={`badge ${
+                    draft.riskScore === 'Strict' ? 'badge-emerald' : draft.riskScore === 'Elevated' ? 'badge-rose' : 'badge-amber'
+                  }`}
+                >
+                  {draft.riskScore === 'Strict'
+                    ? 'Strict Scope'
+                    : draft.riskScore === 'Elevated'
+                    ? 'Incomplete: unresolved fields'
+                    : 'Caution: Wildcard'}
                 </span>
               </div>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.2rem' }}>
@@ -420,9 +438,12 @@ export function AiPolicyCopilot({ onDraftApproved }: AiPolicyCopilotProps) {
                   style={{ fontSize: '0.75rem', padding: '0.2rem 0.45rem', width: '90px', display: 'inline-block' }}
                   value={draft.agentId}
                   onChange={(e) => setDraft({ ...draft, agentId: e.target.value })}
-                  placeholder="42"
+                  placeholder="required"
                   aria-label="ERC-8004 Registry Agent ID"
                 />
+                {!draft.agentId && (
+                  <span style={{ color: 'var(--accent-amber)', marginLeft: '0.4rem' }}>Not stated in prompt, enter it here</span>
+                )}
               </div>
             </div>
 

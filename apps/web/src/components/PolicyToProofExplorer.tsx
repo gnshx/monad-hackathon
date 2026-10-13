@@ -27,7 +27,14 @@ import {
 } from 'lucide-react';
 import { parseEther, formatEther, isAddress, type Address, type Hex } from 'viem';
 import type { CreateMandateParams } from '@agenttrust/sdk';
-import { DEFAULT_MANDATE_MANAGER_ADDRESS } from '../lib/contracts';
+import {
+  DEFAULT_MANDATE_MANAGER_ADDRESS,
+  DEFAULT_MOCK_TARGET_ADDRESS,
+  DO_SOMETHING_SELECTOR,
+  DO_SOMETHING_SIGNATURE,
+} from '../lib/contracts';
+import { evaluateV1Execute, type V1ExecuteError } from './AttackLab';
+import type { MandateItem } from './MandateCard';
 
 interface PolicyToProofExplorerProps {
   onAuthorizeMandate: (params: CreateMandateParams) => void;
@@ -74,16 +81,16 @@ export function PolicyToProofExplorer({
   networkMode = 'MONAD_TESTNET',
   isJudgeMode = false,
 }: PolicyToProofExplorerProps) {
-  // Preset 1: Canonical payable MockTarget Router scenario matching the on-chain MandateManager implementation
+  // Preset 1: the deployed v1 MockTarget and its doSomething(uint256) selector (0xa6b206bf)
   const presets = [
     {
       id: 'canonical-payable-router',
-      label: '01. Payable Execution Router (Judge Default)',
-      prompt: 'Authorize agent 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 to call payable contract 0x3333333333333333333333333333333333333333 with selector 0x50824e4f (doSomething) transferring up to 0.2 MON native value per call for 1 hour.',
-      target: '0x3333333333333333333333333333333333333333',
-      targetLabel: 'Payable MockTarget Router',
-      selector: '0x50824e4f',
-      selectorName: 'doSomething(uint256)',
+      label: '01. Payable MockTarget (default)',
+      prompt: `Authorize agent 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 to call payable contract ${DEFAULT_MOCK_TARGET_ADDRESS} with selector ${DO_SOMETHING_SELECTOR} (doSomething) transferring up to 0.2 MON native value per call for 1 hour.`,
+      target: DEFAULT_MOCK_TARGET_ADDRESS as string,
+      targetLabel: 'Payable MockTarget (deployed v1 demo target)',
+      selector: DO_SOMETHING_SELECTOR as string,
+      selectorName: DO_SOMETHING_SIGNATURE,
       perTxCap: '0.2',
       totalBudget: '1.0',
       durationHours: '1',
@@ -221,7 +228,7 @@ export function PolicyToProofExplorer({
     linterFindings.push({
       level: 'error',
       field: 'Method Selector',
-      message: 'Selector must be a 4-byte hex string (e.g. 0x50824e4f or 0x00000000 for wildcard).',
+      message: `Selector must be a 4-byte hex string (e.g. ${DO_SOMETHING_SELECTOR} or 0x00000000 for wildcard).`,
       actionableHint: 'Provide an exact 10-character hex string starting with 0x.',
       isBlocking: true,
     });
@@ -230,7 +237,7 @@ export function PolicyToProofExplorer({
       level: 'warning',
       field: 'Method Selector',
       message: 'Wildcard selector (0x00000000) permits calling ANY function on the allowlisted target.',
-      actionableHint: 'Constrain to a 4-byte selector (e.g. 0x50824e4f) unless building a generic relayer.',
+      actionableHint: `Constrain to a 4-byte selector (e.g. ${DO_SOMETHING_SELECTOR}) unless building a generic relayer.`,
     });
   } else {
     linterFindings.push({
@@ -313,53 +320,98 @@ export function PolicyToProofExplorer({
   const blockingErrors = linterFindings.filter((f) => f.level === 'error');
   const isAuthorizationBlocked = blockingErrors.length > 0;
 
-  // Execute Security Invariant Tests against this exact policy (Browser Simulation)
+  // Run three attempted calls through a JavaScript copy of MandateManager.execute()'s checks,
+  // using this exact policy. Simulated in the browser: nothing is sent to any chain.
   const handleRunInvariantTests = () => {
+    if (isAuthorizationBlocked) return;
     setIsRunningTests(true);
 
-    const safeSpendVal = (Math.max(0.01, (parseFloat(policy.perTxCap || '0.2') * 0.5))).toFixed(3);
-    const excessSpendVal = (Math.max(0.5, (parseFloat(policy.perTxCap || '0.2') * 3.0))).toFixed(3);
-
     setTimeout(() => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const perTx = parseEther(policy.perTxCap);
+      const total = parseEther(policy.totalBudget);
+      const hrs = parseInt(policy.durationHours, 10);
+      // Same shape the Authorize step creates: vault deposit = total budget, nothing spent yet.
+      const simulatedMandate: MandateItem = {
+        id: 0n,
+        owner: '0x0000000000000000000000000000000000000001',
+        agentAddress: policy.agentAddress,
+        agentId: BigInt(policy.agentId),
+        maxValuePerTx: perTx,
+        maxTotalValue: total,
+        spentValue: 0n,
+        balance: total,
+        expiresAt: hrs > 0 ? BigInt(nowSec + hrs * 3600) : 0n,
+        nonce: 0n,
+        revoked: false,
+        targets: [{ target: policy.targetAddress, selector: policy.selector }],
+      };
+      const callSelector = policy.selector === '0x00000000' ? DO_SOMETHING_SELECTOR : policy.selector;
+      const safeValue = perTx / 2n;
+      const excessValue = perTx * 3n;
+      const rogue = '0xDeadDeAdDeADdeAdDeaddeadDEADdeAdDeadbEEf';
+
+      const run = (
+        base: Omit<InvariantTestResult, 'actualStatus' | 'actualObserved'>,
+        action: { target: string; value: bigint }
+      ): InvariantTestResult => {
+        const error: V1ExecuteError | null = evaluateV1Execute(
+          simulatedMandate,
+          { caller: policy.agentAddress, callerLabel: 'Bound agent', target: action.target, selector: callSelector, value: action.value },
+          nowSec
+        );
+        const expected = base.expectedRevertError ?? null;
+        return {
+          ...base,
+          actualStatus: error === expected ? 'passed' : 'failed',
+          actualObserved: error
+            ? `Simulated check returns ${error}. The vault would be unchanged.`
+            : `Simulated check allows the call (target and selector allowlisted, ${formatEther(action.value)} <= ${policy.perTxCap} MON per call).`,
+        };
+      };
+
       const generatedResults: InvariantTestResult[] = [
-        {
-          id: 'test-1-permitted',
-          name: '1. Permitted Action (Compliant Call)',
-          category: 'Allowed Path',
-          attemptedAction: `Agent executes ${policy.selectorName} with ${safeSpendVal} MON msg.value against ${policy.targetLabel}`,
-          expectedResult: 'Success',
-          actualStatus: 'passed',
-          actualObserved: `Complies with mandate bounds (Target matched, Selector valid, ${safeSpendVal} <= ${policy.perTxCap} MON native ceiling)`,
-          invariantDescription: 'Permitted execution preserves agent utility while verifying all on-chain invariants.',
-        },
-        {
-          id: 'test-2-rogue-target',
-          name: '2. Rogue Destination Attack (Prompt Injection)',
-          category: 'Policy Boundary',
-          attemptedAction: `Prompt injection redirects ${safeSpendVal} MON to attacker wallet 0xDeadDeAdDeADdeAdDeaddeadDEADdeAdDeadbEEf`,
-          expectedResult: 'Reverts',
-          expectedRevertError: 'TargetNotAllowed()',
-          actualStatus: 'passed',
-          actualObserved: 'Smart contract reverts with TargetNotAllowed(). Vault balance unchanged.',
-          invariantDescription: 'Calldata target must strictly exist in the authorized target allowlist.',
-        },
-        {
-          id: 'test-3-ceiling-breach',
-          name: '3. Ceiling Breach Attack (Over-Budget Action)',
-          category: 'Accounting Limit',
-          attemptedAction: `Agent attempts urgent trade transmitting ${excessSpendVal} MON native value (exceeds ${policy.perTxCap} MON per-tx limit)`,
-          expectedResult: 'Reverts',
-          expectedRevertError: 'ExceedsPerTxLimit()',
-          actualStatus: 'passed',
-          actualObserved: `Smart contract reverts with ExceedsPerTxLimit(). Requested ${excessSpendVal} MON exceeds ${policy.perTxCap} MON ceiling.`,
-          invariantDescription: 'Runtime transaction native msg.value is clamped to maxValuePerTx at the EVM contract boundary.',
-        },
+        run(
+          {
+            id: 'test-1-permitted',
+            name: '1. Permitted Action (Compliant Call)',
+            category: 'Allowed Path',
+            attemptedAction: `Agent calls ${policy.selectorName} on ${policy.targetLabel} with ${formatEther(safeValue)} MON msg.value`,
+            expectedResult: 'Success',
+            invariantDescription: 'A call inside every bound goes through.',
+          },
+          { target: policy.targetAddress, value: safeValue }
+        ),
+        run(
+          {
+            id: 'test-2-rogue-target',
+            name: '2. Rogue Destination Attack (Prompt Injection)',
+            category: 'Policy Boundary',
+            attemptedAction: `Prompt injection redirects ${formatEther(safeValue)} MON to attacker address ${rogue}`,
+            expectedResult: 'Reverts',
+            expectedRevertError: 'TargetNotAllowed()',
+            invariantDescription: 'The call target must be on the allowlist.',
+          },
+          { target: rogue, value: safeValue }
+        ),
+        run(
+          {
+            id: 'test-3-ceiling-breach',
+            name: '3. Ceiling Breach Attack (Over-Budget Action)',
+            category: 'Accounting Limit',
+            attemptedAction: `Agent sends ${formatEther(excessValue)} MON msg.value (over the ${policy.perTxCap} MON per-call cap)`,
+            expectedResult: 'Reverts',
+            expectedRevertError: 'ExceedsPerTxLimit()',
+            invariantDescription: 'msg.value per call is capped at maxValuePerTx.',
+          },
+          { target: policy.targetAddress, value: excessValue }
+        ),
       ];
 
       setTestResults(generatedResults);
       setIsRunningTests(false);
       setTestsCompleted(true);
-    }, 450);
+    }, 300);
   };
 
   // Export Proof Bundle Dossier (honest client preflight simulation schema)
@@ -373,7 +425,7 @@ export function PolicyToProofExplorer({
         chain: networkMode === 'MONAD_TESTNET' ? 'Monad Testnet' : 'Local Sandbox',
         chainId: networkMode === 'MONAD_TESTNET' ? 10143 : 31337,
         configuredContract: DEFAULT_MANDATE_MANAGER_ADDRESS,
-        simulationSource: 'Browser Preflight Simulation (Client-side validation of contract require() checks)',
+        simulationSource: "Browser simulation: a JavaScript copy of MandateManager.execute()'s checks run against this policy. Not an on-chain result.",
         reproducibleLocalChainProof: 'Run `npx tsx scripts/run-demo.ts` on local Anvil (Chain ID 31337) to inspect mined transactions.',
       },
       policyParameters: {
@@ -400,10 +452,11 @@ export function PolicyToProofExplorer({
         attemptedAction: t.attemptedAction,
         expected: t.expectedResult,
         observedSimulatedOutcome: t.actualObserved,
-        evaluationType: 'client_preflight_simulation',
+        simulatedCheck: t.actualStatus,
+        evaluationType: 'browser_simulation',
       })),
       disclaimer:
-        'These test outcomes were evaluated locally in browser code as a preflight simulator. To independently audit mined on-chain receipts, query transaction hashes against Monad RPC using the Receipt Inspector.',
+        'These outcomes were computed in browser code by a JavaScript copy of the contract checks. Nothing was sent on-chain and this file is not a proof. To audit mined receipts, use the Receipts page or the recorded testnet transactions on Evidence & Proofs.',
     };
   };
 
@@ -467,14 +520,11 @@ export function PolicyToProofExplorer({
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.25rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-              <span className="badge badge-monad" style={{ fontSize: '0.75rem' }}>
-                Centerpiece Feature
-              </span>
               <span className="badge badge-neutral" style={{ fontSize: '0.75rem' }}>
-                Guided Judge Tour
+                Lab · legacy v1 prototype
               </span>
               <span className="badge badge-simulation" style={{ fontSize: '0.75rem' }}>
-                Browser Preflight Simulation
+                Simulated in your browser
               </span>
             </div>
             <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.025em' }}>
@@ -561,7 +611,7 @@ export function PolicyToProofExplorer({
                 "{customPrompt}"
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                Parsed with deterministic in-browser rules · Zero external cloud latency · Discloses exact EVM parameters
+                Preset scenario: the fields below are this preset's values, shown next to the plain-English intent
               </div>
             </div>
           </div>
@@ -756,18 +806,19 @@ export function PolicyToProofExplorer({
                 03
               </span>
               <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                SECURITY INVARIANT TESTS — Browser Preflight Simulation
+                SECURITY INVARIANT TESTS: simulated in your browser
               </h2>
             </div>
             
             <button
               className="btn-primary"
               onClick={handleRunInvariantTests}
-              disabled={isRunningTests}
+              disabled={isRunningTests || isAuthorizationBlocked}
+              title={isAuthorizationBlocked ? 'Fix the blocking linter errors first' : undefined}
               style={{ fontSize: '0.825rem', padding: '0.5rem 1rem' }}
             >
               <Play size={14} />
-              {isRunningTests ? 'Evaluating Simulated Invariants...' : 'Run Invariant Tests Against This Policy'}
+              {isRunningTests ? 'Running simulated checks...' : 'Run Simulated Checks Against This Policy'}
             </button>
           </div>
 
@@ -782,7 +833,7 @@ export function PolicyToProofExplorer({
               color: 'var(--text-secondary)',
             }}
           >
-            <strong>🧪 Browser Preflight Mode:</strong> These tests evaluate the contract's <code>require()</code> statements client-side as a preflight simulation. For true on-chain EVM enforcement, run <code>npx tsx scripts/run-demo.ts</code> on local Anvil (Chain ID 31337).
+            <strong>Simulated, not on-chain:</strong> each attempted call goes through a JavaScript copy of the checks in <code>MandateManager.execute()</code>, using this policy. Nothing is sent to any chain. Real reverts for the same checks are recorded on Monad Testnet (see Evidence &amp; Proofs), and <code>npx tsx scripts/run-demo.ts</code> replays them on local Anvil (chain 31337).
           </div>
 
           {/* Test Cards */}
@@ -800,7 +851,7 @@ export function PolicyToProofExplorer({
                 Awaiting Invariant Test Execution
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                Click "Run Invariant Tests Against This Policy" above to evaluate compliant vs adversarial scenarios.
+                Click "Run Simulated Checks Against This Policy" above to check a compliant call and two attacks against this policy.
               </p>
             </div>
           ) : (
@@ -829,8 +880,8 @@ export function PolicyToProofExplorer({
                         </span>
                         <span className="badge badge-neutral">{test.category}</span>
                       </div>
-                      <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>
-                        Expected Simulated Outcome
+                      <span className={`badge ${test.actualStatus === 'passed' ? 'badge-emerald' : 'badge-rose'}`} style={{ fontSize: '0.7rem' }}>
+                        {test.actualStatus === 'passed' ? 'Simulated check: as expected' : 'Simulated check: unexpected result'}
                       </span>
                     </div>
 
@@ -848,7 +899,7 @@ export function PolicyToProofExplorer({
                         fontFamily: 'var(--font-mono)',
                       }}
                     >
-                      <strong>Simulated Preflight Result:</strong> {test.actualObserved}
+                      <strong>Simulated result:</strong> {test.actualObserved}
                     </div>
                   </div>
                 );
@@ -878,7 +929,7 @@ export function PolicyToProofExplorer({
                 04
               </span>
               <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                EVIDENCE — Verifiable On-Chain Proof Dossier
+                EVIDENCE: policy dossier (JSON export, simulated)
               </h2>
             </div>
 
@@ -959,7 +1010,7 @@ export function PolicyToProofExplorer({
               <span style={{ fontSize: '0.785rem', color: isAuthorizationBlocked ? 'var(--accent-rose)' : 'var(--text-secondary)' }}>
                 {isAuthorizationBlocked
                   ? `Fix ${blockingErrors.length} blocking linter error(s) above before signing with hardware passkey.`
-                  : 'Bind these verified limits to your hardware passkey (TouchID / FaceID) on Monad.'}
+                  : 'Opens the v1 create form with these limits. For the live passkey flow, use Passkey Mandates.'}
               </span>
             </div>
 

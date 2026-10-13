@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Home,
   LayoutDashboard,
@@ -17,6 +17,7 @@ import {
   X,
   ChevronDown,
   Play,
+  Activity,
 } from 'lucide-react';
 
 export type NavTab =
@@ -66,7 +67,11 @@ const PRODUCT: Item[] = [
 
 export function Sidebar({ activeTab, onSelectTab, activeMandatesCount, blockedCount }: SidebarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [labOpen, setLabOpen] = useState(true);
+  // Legacy v1 prototypes stay folded away unless the visitor opens them or lands on one (e.g. via /#attack-lab).
+  const [labOpen, setLabOpen] = useState(false);
+  useEffect(() => {
+    if (LAB_TABS.includes(activeTab)) setLabOpen(true);
+  }, [activeTab]);
 
   const lab: Item[] = [
     { id: 'overview', label: 'Policy Overview', icon: LayoutDashboard },
@@ -75,6 +80,7 @@ export function Sidebar({ activeTab, onSelectTab, activeMandatesCount, blockedCo
     { id: 'attack-lab', label: 'Attack Lab', icon: Shield, pill: blockedCount > 0 ? String(blockedCount) : null },
     { id: 'inspector', label: 'Receipts', icon: SearchCode },
     { id: 'evidence', label: 'Evidence & Proofs', icon: ShieldCheck },
+    { id: 'activity', label: 'Security Activity', icon: Activity },
   ];
 
   const go = (id: NavTab) => {
@@ -86,8 +92,7 @@ export function Sidebar({ activeTab, onSelectTab, activeMandatesCount, blockedCo
     const Icon = item.icon;
     const isActive =
       activeTab === item.id ||
-      (item.id === 'mandates' && activeTab === 'copilot') ||
-      (item.id === 'inspector' && activeTab === 'activity');
+      (item.id === 'mandates' && activeTab === 'copilot');
     return (
       <button
         key={item.id}
@@ -133,8 +138,13 @@ export function Sidebar({ activeTab, onSelectTab, activeMandatesCount, blockedCo
           <div className="nav-group-label">Product</div>
           {PRODUCT.map(renderItem)}
 
-          <button className="nav-group-label" onClick={() => setLabOpen((v) => !v)} aria-expanded={labOpen}>
-            <span>Lab · v1 wallet mandates</span>
+          <button
+            className="nav-group-label"
+            onClick={() => setLabOpen((v) => !v)}
+            aria-expanded={labOpen}
+            title="Older v1 wallet-mandate prototypes, kept for reference. Some views are simulated."
+          >
+            <span>Legacy v1 prototypes (Lab)</span>
             <ChevronDown size={13} style={{ transform: labOpen ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
           </button>
           {labOpen && lab.map(renderItem)}

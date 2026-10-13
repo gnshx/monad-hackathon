@@ -34,7 +34,8 @@ export function LegacyNote({ onGo }: { onGo: () => void }) {
   return (
     <div className="legacy-note">
       <span>
-        Lab view: these tools use the v1 wallet-owned <code>MandateManager</code>. The passkey-native product is{' '}
+        Legacy v1 prototype: these Lab views use the older wallet-owned <code>MandateManager</code>, and several run as
+        simulations in your browser. The live passkey product is
       </span>
       <button onClick={onGo}>Passkey Mandates →</button>
     </div>

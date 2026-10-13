@@ -105,8 +105,8 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
           <div className="empty-state-title">No Activity Recorded</div>
           <p className="empty-state-desc">
             {networkMode === 'MONAD_TESTNET'
-              ? 'No live on-chain Monad Testnet events recorded for this filter in the current session.'
-              : `No events match the selected "${filter}" filter. Trigger a transaction in the Attack Lab to generate real-time sandbox proofs.`}
+              ? 'No Monad Testnet events from this browser session match this filter.'
+              : `No events match the selected "${filter}" filter. Run Attack Lab scenarios or create a sandbox mandate to add simulated events.`}
           </p>
         </div>
       )}
@@ -118,6 +118,7 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
             const isExecuted = item.type === 'executed';
             const isBlocked = item.type === 'blocked';
             const isRevoked = item.type === 'revoked';
+            const isCreated = item.type === 'created';
             const isCopied = copiedId === item.id;
             const isRealOnChain = networkMode === 'MONAD_TESTNET' && !item.id.startsWith('sim-');
 
@@ -171,6 +172,8 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
                           ? `Approved Action · Mandate #${item.mandateId?.toString() || '0'}`
                           : isBlocked
                           ? `Security Revert · Mandate #${item.mandateId?.toString() || '0'}`
+                          : isCreated
+                          ? `Mandate Created · #${item.mandateId?.toString() || '0'}`
                           : `Mandate Revoked · #${item.mandateId?.toString() || '0'}`}
                       </strong>
 
@@ -180,7 +183,7 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
                         }`}
                         style={{ fontSize: '0.68rem' }}
                       >
-                        {isExecuted ? 'Allowed' : isBlocked ? 'Contract Blocked' : 'Revoked'}
+                        {isExecuted ? 'Allowed' : isBlocked ? (isRealOnChain ? 'Contract Blocked' : 'Blocked (simulated)') : isCreated ? 'Created' : 'Revoked'}
                       </span>
 
                       <span
@@ -197,13 +200,18 @@ export function SecurityActivityFeed({ activities, networkMode = 'MONAD_TESTNET'
 
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
                       {isExecuted && item.value && (
-                        <>Executed {formatEther(item.value)} MON transfer to allowlisted target {item.target?.slice(0, 8)}...</>
+                        <>
+                          {isRealOnChain ? 'Executed' : 'Simulated'} {formatEther(item.value)} MON call to allowlisted target {item.target?.slice(0, 8)}...
+                        </>
                       )}
                       {isBlocked && (
                         <span style={{ color: 'var(--accent-rose)', fontWeight: 500 }}>{item.reason || 'Smart contract halted policy violation'}</span>
                       )}
+                      {isCreated && (
+                        <>Mandate created with {formatEther(item.value ?? 0n)} MON deposited into its vault. No agent action yet.</>
+                      )}
                       {isRevoked && (
-                        <>Human owner revoked passkey mandate authority on Monad contract</>
+                        <>{isRealOnChain ? 'Owner revoked the mandate on the Monad contract' : 'Owner revoked the mandate in the local sandbox'}</>
                       )}
                     </p>
                   </div>
