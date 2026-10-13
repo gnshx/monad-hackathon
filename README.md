@@ -61,7 +61,7 @@ Requirements: Node 20+, [Foundry](https://getfoundry.sh).
 ```bash
 git clone https://github.com/gnshx/monad-hackathon.git && cd monad-hackathon
 npm install
-cd contracts && forge build && forge test && cd ..   # 70 tests; the AgentMandates suite uses real P-256 signatures
+cd contracts && forge build && forge test && cd ..   # 72 tests; the AgentMandates suite uses real P-256 signatures
 npm run e2e                                          # full lifecycle on a local chain with the P-256 precompile
 ```
 
@@ -155,7 +155,7 @@ Each digest commits to chain id, contract address, owner key and a per-owner non
 ```
 contracts/src/AgentMandates.sol        the primitive
 contracts/src/lib/WebAuthnP256.sol     strict WebAuthn verification on the P-256 precompile
-contracts/test/AgentMandates.t.sol     39 tests with real P-256 signatures + fuzzing
+contracts/test/AgentMandates.t.sol     41 tests with real P-256 signatures + fuzzing
 contracts/test/DigestVector.t.sol      digest vectors shared with the SDK tests
 packages/sdk                           @agenttrust/sdk: client, digests, WebAuthn helpers
 packages/mcp                           @agenttrust/mcp: MCP server for AI agents
@@ -168,7 +168,7 @@ contracts/src/MandateManager.sol       v1 (wallet-owned mandates), kept for its 
 
 | | Status |
 |---|---|
-| AgentMandates contract, WebAuthn library | Implemented, 39 Foundry tests with real P-256 signatures, fuzzed budget invariant, digest vectors pinned in both Solidity and the SDK |
+| AgentMandates contract, WebAuthn library | Implemented, 41 Foundry tests with real P-256 signatures, fuzzed budget invariant, digest vectors pinned in both Solidity and the SDK |
 | Passkey flow in the browser | Implemented. Verified in Chromium with a WebAuthn virtual authenticator against a local chain |
 | Relayer | Implemented (`apps/web/src/app/api/relay`). Forwards only owner actions and simulates before sending |
 | MCP server | Implemented, exercised by a real MCP client (`npm run mcp:smoke`) |

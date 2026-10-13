@@ -320,7 +320,6 @@ contract AgentMandates is ReentrancyGuard {
     {
         Mandate storage m = _existing(mandateId);
         if (msg.sender != m.agent) revert NotAgent();
-        if (isVaultToken[target]) revert TargetIsVaultToken();
 
         bytes4 reason = _check(mandateId, m, target, data, value);
         if (reason != bytes4(0)) _revertWith(reason);
@@ -486,6 +485,9 @@ contract AgentMandates is ReentrancyGuard {
     {
         if (!_isLive(m)) return MandateInactive.selector;
         if (!_agentIdentityHolds(m.agent, m.agentId)) return AgentIdentityMismatch.selector;
+        // Never let a generic call reach custodied tokens or this contract (e.g. deposit() into another mandate).
+        if (isVaultToken[target]) return TargetIsVaultToken.selector;
+        if (target == address(this)) return PermissionDenied.selector;
         if (!_isPermitted(mandateId, target, _selectorOf(data))) return PermissionDenied.selector;
         if (value > m.maxPerCall) return ExceedsPerCallLimit.selector;
         if (m.spent + value > m.budget) return ExceedsBudget.selector;
@@ -502,7 +504,7 @@ contract AgentMandates is ReentrancyGuard {
         if (!_agentIdentityHolds(m.agent, m.agentId)) return AgentIdentityMismatch.selector;
         TokenAllowance storage ta = _tokens[mandateId][token];
         if (!ta.enabled) return TokenNotAllowed.selector;
-        if (!_isPermitted(mandateId, to, bytes4(0))) return PermissionDenied.selector;
+        if (to == address(this) || !_isPermitted(mandateId, to, bytes4(0))) return PermissionDenied.selector;
         if (amount > ta.maxPerCall) return ExceedsPerCallLimit.selector;
         if (ta.spent + amount > ta.budget) return ExceedsBudget.selector;
         if (amount > ta.balance) return InsufficientBalance.selector;

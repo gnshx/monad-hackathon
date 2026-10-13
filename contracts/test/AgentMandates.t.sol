@@ -472,6 +472,29 @@ contract AgentMandatesTest is Test {
         am.execute(b, address(usdc), abi.encodeWithSignature("transfer(address,uint256)", agent, 50e6), 0);
     }
 
+    function test_execute_cannotCallMandatesContract() public {
+        AgentMandates.MandateTerms memory t = _terms();
+        t.permissions[0] = AgentMandates.Permission(address(am), bytes4(0));
+        uint256 id = am.createMandate{value: 1 ether}(_passkey(), t, _sign(am.createDigest(ownerKey, t, am.nonces(ownerKey))));
+        (bool ok, bytes4 why) = am.checkAction(id, agent, address(am), abi.encodeCall(am.deposit, (id)), 0.5 ether);
+        assertFalse(ok);
+        assertEq(why, AgentMandates.PermissionDenied.selector);
+        vm.prank(agent);
+        vm.expectRevert(AgentMandates.PermissionDenied.selector);
+        am.execute(id, address(am), abi.encodeCall(am.deposit, (id)), 0.5 ether);
+    }
+
+    function test_token_checkActionFlagsVaultToken() public {
+        MockERC20 usdc = new MockERC20();
+        AgentMandates.MandateTerms memory t = _terms();
+        t.permissions[0] = AgentMandates.Permission(address(usdc), bytes4(0));
+        uint256 b = am.createMandate(_passkey(), t, _sign(am.createDigest(ownerKey, t, am.nonces(ownerKey))));
+        _createWithToken(usdc, 1e6);
+        (bool ok, bytes4 why) = am.checkAction(b, agent, address(usdc), "", 0);
+        assertFalse(ok);
+        assertEq(why, AgentMandates.TargetIsVaultToken.selector);
+    }
+
     function test_token_noReturnTokenAndWithdraw() public {
         MockERC20 usdt = new MockERC20();
         usdt.setNoReturn(true);

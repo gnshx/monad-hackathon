@@ -17,7 +17,7 @@ AgentMandates protects a human's funds from their own AI agent. The agent's key 
 | G9 | The owner can stop everything at once | `revokeAll` bumps the owner's epoch; mandates from older epochs fail `_isLive` |
 | G10 | No reentrancy into accounting | Checks-effects-interactions and `nonReentrant` on every function that moves funds |
 | G11 | ERC-20 spending is capped and isolated | `payToken` checks a signed per-token cap and budget, an allowlisted payee and a per-mandate token balance. Deposits credit the amount actually received |
-| G12 | No mandate can move another mandate's tokens | Tokens the contract custodies are flagged `isVaultToken`, and `execute()` refuses to call them (`TargetIsVaultToken`) |
+| G12 | No mandate can move another mandate's funds | Tokens the contract custodies are flagged `isVaultToken`, and `execute()` refuses to call them (`TargetIsVaultToken`) or the AgentMandates contract itself. `checkAction` reports the same |
 
 ## WebAuthn verification
 
