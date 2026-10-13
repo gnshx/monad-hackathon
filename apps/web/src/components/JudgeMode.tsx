@@ -33,6 +33,8 @@ interface JudgeStatus {
     mandateManager: string;
     mockTarget: string;
   };
+  version?: 'v1' | 'v2';
+  agentMandates?: string;
   relayerAddress?: string;
   relayerBalance?: string;
   requiredBalance?: string;
@@ -44,12 +46,12 @@ interface JudgeStatus {
 
 /** The fixed scenario the server runs, in order (see lib/judge-mode-runner.ts). */
 const PLAN = [
-  { icon: FileSignature, name: 'Create mandate', text: 'P-256 WebAuthn-signed mandate: 0.0001 MON per call, MockTarget only, 1 hour', expect: 'success' },
-  { icon: Bot, name: 'Allowed call', text: 'Agent spends 0.00005 MON on the allowed function', expect: 'success' },
-  { icon: Ban, name: 'Overspend', text: 'Agent tries 0.001 MON, 10x the per-call cap', expect: 'reverted' },
-  { icon: Crosshair, name: 'Rogue target', text: 'Agent calls a contract that is not on the allowlist', expect: 'reverted' },
-  { icon: Undo2, name: 'Owner revokes', text: 'The human pulls the mandate on-chain', expect: 'success' },
-  { icon: ShieldAlert, name: 'Call after revoke', text: 'Agent tries again on the dead mandate', expect: 'reverted' },
+  { icon: FileSignature, name: 'Create mandate', text: "A fresh P-256 passkey signs a WebAuthn mandate and Monad's precompile verifies it: 0.0001 MON per call, one function, 1 hour", expect: 'success' },
+  { icon: Bot, name: 'Allowed call', text: 'The ERC-8004 agent spends 0.00005 MON on the one function it was granted', expect: 'success' },
+  { icon: Ban, name: 'Overspend', text: 'The agent tries 0.001 MON, 10x the per-call cap', expect: 'reverted' },
+  { icon: Crosshair, name: 'Rogue target', text: 'The agent calls a contract the passkey never granted', expect: 'reverted' },
+  { icon: Undo2, name: 'Owner revokes', text: 'The same passkey signs a revoke and the relayer submits it', expect: 'success' },
+  { icon: ShieldAlert, name: 'Call after revoke', text: 'The agent retries the call that worked in step 2', expect: 'reverted' },
 ] as const;
 
 function fmtBalance(b?: string) {
@@ -64,6 +66,7 @@ export function JudgeMode() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [steps, setSteps] = useState<JudgeStepResult[]>([]);
+  const [runInfo, setRunInfo] = useState<{ mandateId?: string; agentId?: string; setupTx?: string } | null>(null);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState<number>(0);
   const [pulse, setPulse] = useState(0);
@@ -110,6 +113,7 @@ export function JudgeMode() {
     setRunning(true);
     setError(null);
     setSteps([]);
+    setRunInfo(null);
 
     try {
       const res = await fetch('/api/judge-mode', {
@@ -125,6 +129,7 @@ export function JudgeMode() {
       }
 
       setSteps(data.steps || []);
+      setRunInfo(data.version === 'v2' ? { mandateId: data.mandateId, agentId: data.agentId, setupTx: data.setupTx } : null);
       setCooldown(120); // 2-minute cooldown
       fetchStatus();
     } catch (err: any) {
@@ -205,8 +210,8 @@ export function JudgeMode() {
           <div className={j.alertBad}>
             <AlertCircle size={16} />
             <span>
-              <strong>Contracts not found on chain {status.chainId || 10143}.</strong> Judge Mode needs the deployed MandateManager
-              and MockTarget. The passkey console and Verify page use AgentMandates and still work.
+              <strong>Contracts not found on chain {status.chainId || 10143}.</strong> Judge Mode needs the deployed{' '}
+              {status.version === 'v1' ? 'MandateManager' : 'AgentMandates'} and its demo target contract.
             </span>
           </div>
         )}
@@ -246,7 +251,8 @@ export function JudgeMode() {
               <span className={j.scoreLabel}>exactly as expected</span>
             </div>
             <div className={j.scoreBadge}>
-              <ShieldCheck size={16} /> Verified on chain {status?.chainId || 10143}
+              <ShieldCheck size={16} />
+              {runInfo?.mandateId ? `Mandate #${runInfo.mandateId} · agent ERC-8004 #${runInfo.agentId}` : `Verified on chain ${status?.chainId || 10143}`}
             </div>
           </div>
         )}
@@ -302,8 +308,27 @@ export function JudgeMode() {
       </section>
 
       <p className={j.foot}>
-        Judge Mode drives the v1 <code>MandateManager</code> with a server-held test passkey so it can run unattended. To sign
-        with your own device&apos;s passkey, use <a href="#passkey">Passkey Mandates</a>.
+        {status?.version === 'v1' ? (
+          <>
+            Judge Mode is pinned to the v1 <code>MandateManager</code> with a server-held test passkey.
+          </>
+        ) : (
+          <>
+            Judge Mode runs <code>AgentMandates</code>, the same contract as the passkey console. The passkey is a software
+            authenticator the server holds for one run, so it can run unattended, and the relayer acts as the agent with its own
+            ERC-8004 identity.
+            {runInfo?.setupTx && (
+              <>
+                {' '}This run first registered that identity:{' '}
+                <a href={`https://testnet.monadexplorer.com/tx/${runInfo.setupTx}`} target="_blank" rel="noopener noreferrer">
+                  registration tx
+                </a>
+                .
+              </>
+            )}
+          </>
+        )}{' '}
+        To sign with your own device&apos;s passkey, use <a href="#passkey">Passkey Mandates</a>.
       </p>
     </div>
   );

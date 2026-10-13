@@ -38,7 +38,10 @@ In the Vercel project settings, under Environment Variables:
 | `NEXT_PUBLIC_DEMO_TOKEN` | `contracts.testUsdc` (prefills the stablecoin budget) |
 | `NEXT_PUBLIC_DEMO_PAYEE` | `merchant` (the payee allowed to receive the token) |
 | `NEXT_PUBLIC_DEMO_MANDATE_ID` | a **live** (not revoked) mandate ID for the Verify page; the e2e run revokes its own mandate at the end, so grant a fresh one in the console. Visitors who grant their own mandate see theirs instead |
-| `NEXT_PUBLIC_MOCK_TARGET_ADDRESS` | optional, overrides the v1 MockTarget that Judge Mode calls (defaults to the recorded testnet one) |
+| `JUDGE_AGENT_ID` | optional, the relayer's ERC-8004 agent ID for Judge Mode. If unset, the first run registers one (one extra transaction) and logs `set JUDGE_AGENT_ID=<id>` in the function logs; set it to skip that step |
+| `JUDGE_TARGET` | optional, the contract Judge Mode's agent may call (defaults to the MockTarget in `deployments.mandates.json`, or `NEXT_PUBLIC_DEMO_TARGET`) |
+| `JUDGE_MODE_VERSION` | optional, set to `v1` to run Judge Mode against the old MandateManager instead of AgentMandates |
+| `NEXT_PUBLIC_MOCK_TARGET_ADDRESS` | optional, overrides the v1 MockTarget used by the Lab pages and `JUDGE_MODE_VERSION=v1` |
 | `NEXT_PUBLIC_SITE_URL` | optional, the public URL used for social preview images |
 | `RELAYER_PRIVATE_KEY` | a **separate**, lightly funded key that pays gas for passkey users (server-side only) |
 | `RELAYER_SPONSOR_MAX_WEI` | optional demo vault funding per mandate, e.g. `10000000000000000` (0.01 MON); `0` to disable |

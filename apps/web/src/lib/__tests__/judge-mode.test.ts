@@ -122,3 +122,44 @@ test('Judge Mode Runner & Status Tests', async (t) => {
     assert.equal(explainRelayerError(new Error('boom\nstack')), 'boom');
   });
 });
+
+test('Judge Mode v2 (AgentMandates) helpers', async (t) => {
+  const { judgeV2RunCost, identityHolds, JUDGE_V2_RUN_GAS, VAULT_FUNDING, ALLOWED_VALUE, MAX_PER_CALL, OVERSPEND_VALUE } =
+    await import('../judge-v2-runner.js');
+  const AGENT = '0x5B71688146B44e9eEcCbca1847F43D9420909B0B' as Address;
+  const REGISTRY = '0x8004A818BFB912233c491871b3d84c89A494BD9e' as Address;
+
+  await t.test('run cost scales with the live gas price (Monad bills the gas limit)', async () => {
+    const cost = await judgeV2RunCost({ getGasPrice: async () => 102_000_000_000n } as any);
+    assert.equal(cost, (102_000_000_000n * JUDGE_V2_RUN_GAS * 6n) / 5n + VAULT_FUNDING);
+    assert.ok(cost > parseEther('0.1'), 'a run at ~100 gwei needs more than 0.1 MON');
+  });
+
+  await t.test('run cost falls back to the floor when the RPC has no gas price', async () => {
+    const cost = await judgeV2RunCost({ getGasPrice: async () => { throw new Error('rpc down'); } } as any);
+    assert.equal(cost, parseEther('0.005'));
+  });
+
+  await t.test('scenario amounts: the allowed call spends exactly the vault, the overspend breaks the per-call cap', () => {
+    assert.equal(VAULT_FUNDING, ALLOWED_VALUE);
+    assert.ok(ALLOWED_VALUE <= MAX_PER_CALL);
+    assert.ok(OVERSPEND_VALUE > MAX_PER_CALL);
+  });
+
+  await t.test('identityHolds mirrors the contract: wallet first, then owner, fails closed', async () => {
+    const client = (wallet: string | Error, owner: string | Error) =>
+      ({
+        readContract: async ({ functionName }: any) => {
+          const v = functionName === 'getAgentWallet' ? wallet : owner;
+          if (v instanceof Error) throw v;
+          return v;
+        },
+      }) as any;
+    const zero = '0x0000000000000000000000000000000000000000';
+    assert.equal(await identityHolds(client(AGENT.toLowerCase(), zero), REGISTRY, AGENT, 1n), true);
+    assert.equal(await identityHolds(client(zero, AGENT), REGISTRY, AGENT, 1n), true);
+    assert.equal(await identityHolds(client(zero, new Error('ERC721NonexistentToken')), REGISTRY, AGENT, 1n), false);
+    assert.equal(await identityHolds(client(new Error('x'), zero), REGISTRY, AGENT, 1n), false);
+    assert.equal(await identityHolds(client(new Error('x'), new Error('y')), zero as Address, AGENT, 1n), true);
+  });
+});
