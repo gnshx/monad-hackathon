@@ -2,7 +2,7 @@
 
 **Theme:** Give your AI agent a mandate, not unlimited power.  
 **Audience:** Technical Judges, Security Auditors, Protocol Engineers  
-**Target Execution Environment:** Monad (10,000 TPS, 1-second finality, native P-256 precompile)
+**Target Execution Environment:** Monad (RIP-7212 native P-256 precompile at `0x0100`, ERC-8004 Agent Identity Registry)
 
 ---
 
@@ -98,8 +98,8 @@
 
 ### Q7: "Why Monad specifically?"
 > **Answer:** "Two concrete architectural reasons:
-> 1. **Native P-256 Precompile**: Monad provides the RIP-7212 precompile at address `0x0100`, allowing native WebAuthn Secp256r1 signature verification in ~3,450 gas, compared to ~300,000+ gas on standard Ethereum where P-256 must be verified in user-space bytecode.
-> 2. **High Throughput & Sub-Second Finality**: AI agents generate bursts of programmatic micro-transactions. Monad's 10,000 TPS and 1-second finality allow realtime agent decision loops without clogging the mempool or incurring prohibitive gas fees."
+> 1. **Native P-256 Precompile**: Monad provides the RIP-7212 precompile at address `0x0100`, allowing native WebAuthn Secp256r1 signature verification in 6,900 gas per Monad's docs, compared to ~350,000 gas on standard Ethereum where P-256 must be verified in user-space bytecode (roughly 50x cheaper).
+> 2. **Low-Latency Synchronous Gating & ERC-8004 Composability**: AI agents execute frequent tool calls requiring synchronous verification. Monad enables immediate on-chain policy verification with instant receipts and composes natively with the on-chain ERC-8004 Agent Identity Registry (`0x8004A818...`)."
 
 ### Q8: "Who would use this first? What is your realistic target customer?"
 > **Answer:** "Our first users are developers building transaction-capable autonomous agents—such as autonomous DeFi rebalancers, DAO automated treasury runners, and automated game players. These developers currently face a binary choice: grant their agent a hot private key with full wallet drain risk, or keep a human in the loop for every micro-transaction. AgentTrust gives them an SDK to grant scoped, autonomous operational freedom with guaranteed financial downside bounds."

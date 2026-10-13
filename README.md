@@ -125,12 +125,12 @@ AgentTrust is purpose-built for Monad because high-frequency autonomous agent se
 
 1. **Native RIP-7212 P-256 Precompile at `0x0100`:**
    - Standard EVM chains require ~350,000 gas to verify a Secp256r1 WebAuthn signature in Solidity bytecode.
-   - Monad's native precompile executes verification in **~3,450 gas (100x cost reduction)**, making passkey hardware delegation cheaper than centralized key-management servers or ERC-4337 bundlers.
+   - Monad's native precompile executes verification in **6,900 gas per Monad's docs, roughly 50x cheaper than a Solidity verifier**, making passkey hardware delegation cheaper than centralized key-management servers or ERC-4337 bundlers.
    - Cryptographically proven live on Monad Testnet: `npm run verify:p256`.
 
-2. **10,000 TPS Throughput & 1-Second Finality:**
-   - Autonomous AI agents cannot tolerate 12–15 second confirmation delays between API and on-chain tool executions.
-   - Monad enables **synchronous tool-call gating**: an agent's tool execution can be checked and confirmed on-chain in under 1 second with instant cryptographic receipts.
+2. **Synchronous Tool-Call Execution & Low Latency:**
+   - Autonomous AI agents require immediate policy enforcement between API and on-chain tool executions.
+   - Monad enables **synchronous tool-call gating**: an agent's tool execution can be checked and confirmed on-chain with instant cryptographic receipts.
 
 3. **Composable ERC-8004 Agent Identity Ecosystem:**
    - Monad Testnet hosts the canonical ERC-8004 Agent Identity Registry (`0x8004A818BFB912233c491871b3d84c89A494BD9e`).

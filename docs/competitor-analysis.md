@@ -31,4 +31,4 @@ AgentTrust positions itself in the emerging **delegated authority and policy-gov
    The `@agenttrust/sdk` contains a standalone receipt auditor that runs in any browser, CLI, or microservice without requiring backend infrastructure. Anyone can take a transaction hash and cryptographically verify that it complied with the authorized mandate.
 
 4. **Monad Execution Alignment:**
-   Designed specifically to capitalize on Monad's high-throughput 10,000 TPS, 1-second finality, and native RIP-7212 precompile (`0x0100`), enabling sub-second policy enforcement at negligible gas overhead.
+   Designed specifically to capitalize on Monad's native RIP-7212 precompile (`0x0100`) and low-latency execution, enabling rapid policy enforcement at negligible gas overhead.

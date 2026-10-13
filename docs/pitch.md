@@ -23,9 +23,9 @@ AgentTrust translates this into an immutable smart contract mandate on Monad. Th
 
 ### [00:55 - 01:25] Why Monad? (The Architectural Moat)
 "Monad provides the decisive technological primitives that make this possible:
-1. **Native P-256 Precompile (RIP-7212 at `0x0100`):** We have verified Monad's native precompile live on testnet—executing WebAuthn passkey verification in ~3,450 gas, 100x cheaper than standard EVM rollups.
+1. **Native P-256 Precompile (RIP-7212 at `0x0100`):** We have verified Monad's native precompile live on testnet—executing WebAuthn passkey verification in 6,900 gas per Monad's docs, roughly 50x cheaper than a Solidity verifier.
 2. **ERC-8004 Identity Registry (`0x8004A818...`):** We bind mandates directly to Monad's on-chain agent identities, ensuring only designated agent wallets can transact.
-3. **10,000 TPS Throughput & Sub-Second Finality:** Enables high-frequency autonomous execution without latency."
+3. **Low-Latency Execution:** Enables high-frequency autonomous agent tool calls with instant receipt verification."
 
 ### [01:25 - 01:55] Radical Honesty & Traction Roadmap
 "We differentiate through radical transparency: our smart contracts strictly enforce native MON spend limits, allowlisted selectors, and vault isolation today with 29 passing Foundry tests and 25 passing SDK tests.

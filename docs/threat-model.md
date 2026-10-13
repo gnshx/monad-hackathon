@@ -6,7 +6,7 @@ AgentTrust solves the problem of granting autonomous AI agents execution authori
 The system relies on four strict trust boundaries:
 1. **Human Root of Trust:** Hardware Passkey Authenticator (Secure Enclave / TPM / FIDO2) generating SECP256R1 (P-256) signatures.
 2. **On-Chain Policy Enforcer:** `MandateManager.sol` deployed on Monad, verifying passkey authorizations and gating every agent call.
-3. **Execution Environment:** Monad Blockchain (10,000 TPS, 1s finality, RIP-7212 P-256 precompile at `0x0100`).
+3. **Execution Environment:** Monad Blockchain (RIP-7212 P-256 precompile at `0x0100`, ERC-8004 Agent Identity Registry).
 4. **Independent Auditor:** Portable `@agenttrust/sdk` cryptographic receipt verifier.
 
 ---
