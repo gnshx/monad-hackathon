@@ -1,21 +1,49 @@
 {
   "name": "@agenttrust/sdk",
   "version": "0.1.0",
-  "description": "TypeScript SDK for AgentTrust on-chain mandate management",
+  "description": "TypeScript SDK for AgentMandates: passkey-owned, on-chain spending mandates for AI agents on Monad",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "viem": "^2.21.0"
+    "viem": "^2.21.0",
+    "@noble/curves": "^1.9.1",
+    "@noble/hashes": "^1.8.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "keywords": [
+    "monad",
+    "webauthn",
+    "passkey",
+    "p256",
+    "erc-8004",
+    "ai-agents",
+    "mandates"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gnshx/monad-hackathon.git",
+    "directory": "packages/sdk"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   }
 }

@@ -8,6 +8,7 @@ import { AiPolicyCopilot } from '../components/AiPolicyCopilot';
 import { AttackLab, type AttackScenario } from '../components/AttackLab';
 import { ReceiptInspector } from '../components/ReceiptInspector';
 import { EvidenceHub } from '../components/EvidenceHub';
+import { PasskeyConsole } from '../components/PasskeyConsole';
 import { SecurityActivityFeed } from '../components/SecurityActivityFeed';
 import { CreateMandateModal } from '../components/CreateMandateModal';
 import type { MandateItem } from '../components/MandateCard';
@@ -65,7 +66,7 @@ import {
 } from 'lucide-react';
 
 export default function SecurityConsoleDashboard() {
-  const [activeTab, setActiveTab] = useState<NavTab>('overview');
+  const [activeTab, setActiveTab] = useState<NavTab>('passkey');
 
   // Persisted runtime mode (LOCAL_SIMULATION | MONAD_TESTNET)
   const [networkMode, setNetworkMode] = useState<'LOCAL_SIMULATION' | 'MONAD_TESTNET'>(() => {
@@ -553,7 +554,9 @@ export default function SecurityConsoleDashboard() {
   };
 
   const breadcrumbTitle =
-    activeTab === 'overview'
+    activeTab === 'passkey'
+      ? 'PASSKEY MANDATES'
+      : activeTab === 'overview'
       ? 'OVERVIEW'
       : activeTab === 'policy-to-proof'
       ? 'POLICY-TO-PROOF EXPLORER'
@@ -566,7 +569,7 @@ export default function SecurityConsoleDashboard() {
       : activeTab === 'docs'
       ? 'DOCUMENTATION'
       : activeTab === 'copilot'
-      ? 'AI POLICY COPILOT'
+      ? 'POLICY BUILDER'
       : 'SECURITY ACTIVITY';
 
   return (
@@ -593,7 +596,7 @@ export default function SecurityConsoleDashboard() {
         {/* Top Header matching reference image */}
         <header className="top-bar">
           {/* Breadcrumb Left */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="top-bar-crumbs" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span
               style={{
                 fontSize: '0.75rem',
@@ -620,7 +623,26 @@ export default function SecurityConsoleDashboard() {
           </div>
 
           {/* Controls Right */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div className="top-bar-controls" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            {activeTab === 'passkey' ? (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-full)',
+                  padding: '0.4rem 0.8rem',
+                }}
+              >
+                <KeyRound size={14} /> Monad Testnet · no wallet needed
+              </span>
+            ) : (
+            <>
             {/* Network Selector Pill Dropdown */}
             <div style={{ position: 'relative' }} ref={dropdownRef}>
               <button
@@ -754,6 +776,8 @@ export default function SecurityConsoleDashboard() {
                   : 'Connect wallet'}
               </span>
             </button>
+            </>
+            )}
           </div>
         </header>
 
@@ -811,6 +835,8 @@ export default function SecurityConsoleDashboard() {
 
         {/* Main Content Area */}
         <main className="page-container">
+          {activeTab === 'passkey' && <PasskeyConsole />}
+
           {/* TAB: OVERVIEW */}
           {activeTab === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -1394,7 +1420,7 @@ export default function SecurityConsoleDashboard() {
                     style={{ fontSize: '0.85rem' }}
                   >
                     <Sparkles size={14} color="#4f46e5" />
-                    AI Copilot Draft
+                    Policy Builder Draft
                   </button>
                   <button
                     className="btn-primary"
@@ -1560,7 +1586,7 @@ export default function SecurityConsoleDashboard() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div>
                 <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>
-                  AI Policy Copilot
+                  Policy Builder (rule-based parser)
                 </h1>
                 <p style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.25rem' }}>
                   Translate plain English agent permissions into deterministic on-chain mandate parameters.

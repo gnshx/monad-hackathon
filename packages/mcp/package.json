@@ -1,0 +1,43 @@
+{
+  "name": "@agenttrust/mcp",
+  "version": "0.1.0",
+  "description": "MCP server that gives any AI agent a passkey-bounded wallet on Monad via AgentMandates",
+  "type": "module",
+  "bin": {
+    "agenttrust-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@agenttrust/sdk": "*",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "viem": "^2.21.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "monad",
+    "ai-agents",
+    "passkey",
+    "erc-8004"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gnshx/monad-hackathon.git",
+    "directory": "packages/mcp"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

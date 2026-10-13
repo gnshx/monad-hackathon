@@ -666,8 +666,22 @@ body {
     flex-direction: column;
   }
   .top-bar {
-    padding: 0 1rem;
+    padding: 0.5rem 1rem;
     min-height: 56px;
+  }
+  .top-bar-crumbs {
+    display: none !important;
+  }
+  .top-bar-controls {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.5rem !important;
+  }
+  .top-bar-controls > * {
+    white-space: nowrap;
+  }
+  body {
+    overflow-x: hidden;
   }
   .page-container {
     padding: 1.25rem 1rem;

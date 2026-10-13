@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Contracts
+        run: cd contracts && forge test
+      - name: SDK
+        run: npm run build:sdk && npm run test:sdk
+      - name: MCP server
+        run: npm run build:mcp
+      - name: End-to-end (local chain with the P-256 precompile)
+        run: npx -y tsx scripts/mandates-e2e.ts
+      - name: Web console
+        run: npm run build:web

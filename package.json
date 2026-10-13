@@ -8,9 +8,9 @@
   ],
   "scripts": {
     "build:sdk": "npm run --workspace=@agenttrust/sdk build",
-    "test:sdk": "npm run --workspace=@agenttrust/sdk test",
-    "build:agent": "npm run --workspace=@agenttrust/demo-agent build",
-    "build:web": "npm run --workspace=@agenttrust/web build",
+    "test:sdk": "npm run build:sdk && npm run --workspace=@agenttrust/sdk test",
+    "build:agent": "npm run build:sdk && npm run --workspace=@agenttrust/demo-agent build",
+    "build:web": "npm run build:sdk && npm run --workspace=@agenttrust/web build",
     "demo": "npx -y tsx scripts/run-demo.ts",
     "verify:p256": "npx -y tsx scripts/verify-p256-testnet.ts",
     "verify:erc8004": "npx -y tsx scripts/verify-erc8004-testnet.ts",
@@ -18,6 +18,12 @@
     "verify:all": "npx -y tsx scripts/verify-all-testnet.ts",
     "deploy:testnet": "npx -y tsx scripts/deploy-and-run-testnet.ts",
     "test:auditor": "npx tsx --test scripts/verify-all-testnet.test.ts",
-    "start:web": "npm run --workspace=@agenttrust/web start"
+    "start:web": "npm run --workspace=@agenttrust/web start",
+    "e2e": "npm run build:sdk && npx -y tsx scripts/mandates-e2e.ts",
+    "test:contracts": "cd contracts && forge test",
+    "build:mcp": "npm run build:sdk && npm run --workspace=@agenttrust/mcp build",
+    "e2e:serve": "npm run build:sdk && npx -y tsx scripts/mandates-e2e.ts --serve",
+    "mcp:smoke": "npm run build:mcp && node scripts/mcp-smoke.mjs",
+    "example:paid-api": "npm run build:sdk && npx -y tsx examples/paid-api.ts"
   }
 }

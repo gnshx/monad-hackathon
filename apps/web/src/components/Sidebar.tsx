@@ -9,11 +9,13 @@ import {
   SearchCode,
   ShieldCheck,
   BookOpen,
+  Fingerprint,
   Menu,
   X,
 } from 'lucide-react';
 
 export type NavTab =
+  | 'passkey'
   | 'overview'
   | 'policy-to-proof'
   | 'mandates'
@@ -46,6 +48,12 @@ export function Sidebar({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = [
+    {
+      id: 'passkey' as NavTab,
+      label: 'Passkey Mandates',
+      icon: Fingerprint,
+      badge: 'No wallet',
+    },
     {
       id: 'overview' as NavTab,
       label: 'Overview',
@@ -99,7 +107,7 @@ export function Sidebar({
             cursor: 'pointer',
           }}
           onClick={() => {
-            onSelectTab('overview');
+            onSelectTab('passkey');
             setIsMobileMenuOpen(false);
           }}
         >
@@ -164,8 +172,22 @@ export function Sidebar({
               (item.id === 'inspector' && activeTab === 'activity');
 
             return (
+              <React.Fragment key={item.id}>
+              {item.id === 'overview' && (
+                <div
+                  style={{
+                    fontSize: '0.66rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: 'var(--text-faint)',
+                    padding: '0.9rem 0.75rem 0.25rem',
+                  }}
+                >
+                  v1 · wallet-owned mandates
+                </div>
+              )}
               <button
-                key={item.id}
                 className={`nav-item ${isActive ? 'active' : ''}`}
                 onClick={() => {
                   onSelectTab(item.id);
@@ -195,6 +217,7 @@ export function Sidebar({
                   </span>
                 )}
               </button>
+              </React.Fragment>
             );
           })}
         </nav>
