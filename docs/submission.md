@@ -34,7 +34,7 @@ Nothing to install. You need no wallet, no MON and no login. Passkeys are create
 1. Open https://monad-hackathon-amber.vercel.app/#passkey and click **Create passkey**. Confirm with Touch ID, Face ID, Windows Hello or a security key.
 2. The form is prefilled with a demo agent registered in ERC-8004. Read the **You are signing** summary, then click **Sign with passkey & create**. The mandate appears under **Your mandates** with a link to the transaction.
 3. Open **Verify an Agent** (`/#verify`). It loads the mandate you just created. Click **Run all 5 checks**: the normal call is ALLOWED, and the overspend, rogue target, wrong function and impostor agent are BLOCKED, each with the contract's reason.
-4. Back on **Passkey Mandates**, click **Revoke** (one more passkey tap). Run Verify again and every check now says `MandateInactive`.
+4. Back on **Passkey Mandates**, click **Revoke** (one more passkey tap). Run Verify again and every check is now BLOCKED; the normal call says `MandateInactive`.
 5. **Developers** (`/#docs`) has the MCP config, the SDK and a Solidity snippet, plus the deployed addresses.
 6. To reproduce from source with no keys: `npm install && cd contracts && forge build && cd .. && npm run e2e`.
 
@@ -47,7 +47,7 @@ Nothing to install. You need no wallet, no MON and no login. Passkeys are create
 - [x] Testnet deployment recorded in `deployments.mandates.json` (AgentMandates `0xc911e902…237c`)
 - [ ] Repository public, with access for metropolis@hackathon.monad.xyz
 - [ ] Vercel env vars imported (see `docs/deploy.md`) and the console redeployed
-- [ ] Relayer funded with testnet MON. Judge Mode needs at least 0.005 MON per run, and the passkey relayer also pays gas for every grant and revoke
+- [ ] Relayer funded with testnet MON: send at least 1 MON. Monad bills the gas limit, so one Judge Mode run costs roughly 0.06 to 0.1 MON and each passkey grant or revoke a few hundredths. The Judge Mode page shows the exact amount one run needs at the current gas price
 - [ ] `NEXT_PUBLIC_DEMO_MANDATE_ID` set to a live mandate: grant one in the console, then copy its number. The e2e run revokes mandate #1
 - [ ] Smoke test on the live URL: `/#judge` run is green, `/#passkey` create + grant + revoke works, `/#verify` shows 5/5
 - [ ] Demo video recorded (script: `docs/demo-and-pitch.md`)
