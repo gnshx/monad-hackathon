@@ -1,6 +1,7 @@
 import {
   encodeFunctionData,
   formatEther,
+  formatUnits,
   isAddress,
   parseAbiItem,
   parseEther,
@@ -8,7 +9,11 @@ import {
   type Address,
   type Hex,
 } from 'viem';
-import { AgentMandates, MandateDeniedError } from './client.js';
+import { AgentMandates, MandateCallFailedError, MandateDeniedError } from './client.js';
+
+const ERC20_DECIMALS_ABI = [
+  { type: 'function', name: 'decimals', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
+] as const;
 
 /** A tool in the JSON-Schema shape used by Claude, OpenAI and most agent frameworks. */
 export interface AgentTool {
@@ -52,8 +57,33 @@ export function mandateTools(mandates: AgentMandates, mandateId: bigint): AgentT
       return { ok: true, transactionHash: (await fn()).hash };
     } catch (e) {
       if (e instanceof MandateDeniedError) return { ok: false, blockedBy: e.reason };
+      if (e instanceof MandateCallFailedError) {
+        return {
+          ok: false,
+          failed: e.reason,
+          ...(e.targetReason ? { targetReason: e.targetReason } : {}),
+          note: 'The mandate allows this, but it would revert, so nothing was sent. Check the arguments.',
+        };
+      }
       throw e;
     }
+  };
+
+  // decimals() read from the token itself, never from the model. Only successful reads are cached.
+  const decimalsCache = new Map<string, number>();
+  const tokenDecimals = async (token: Address): Promise<number> => {
+    const hit = decimalsCache.get(token.toLowerCase());
+    if (hit !== undefined) return hit;
+    let decimals: number;
+    try {
+      decimals = Number(
+        await mandates.publicClient.readContract({ address: token, abi: ERC20_DECIMALS_ABI, functionName: 'decimals' })
+      );
+    } catch (e: any) {
+      throw new Error(`Could not read decimals() of token ${token}, so the amount cannot be scaled safely: ${e?.shortMessage ?? e?.message ?? e}`);
+    }
+    decimalsCache.set(token.toLowerCase(), decimals);
+    return decimals;
   };
 
   return [
@@ -70,8 +100,23 @@ export function mandateTools(mandates: AgentMandates, mandateId: bigint): AgentT
         ]);
         const tokenBudgets = await Promise.all(
           tokens.map(async (token) => {
-            const t = await mandates.getTokenAllowance(mandateId, token);
-            return { token, maxPerCall: t.maxPerCall.toString(), remaining: (t.budget - t.spent).toString(), vault: t.balance.toString() };
+            const [t, decimals] = await Promise.all([
+              mandates.getTokenAllowance(mandateId, token),
+              tokenDecimals(token).catch(() => undefined),
+            ]);
+            const units = { maxPerCall: t.maxPerCall.toString(), remaining: (t.budget - t.spent).toString(), vault: t.balance.toString() };
+            if (decimals === undefined) {
+              return { token, decimals: null, units, note: "decimals() could not be read; amounts are in base units and pay_token will refuse this token" };
+            }
+            // Whole tokens, the same unit pay_token's `amount` takes.
+            return {
+              token,
+              decimals,
+              maxPerCall: formatUnits(t.maxPerCall, decimals),
+              remaining: formatUnits(t.budget - t.spent, decimals),
+              vault: formatUnits(t.balance, decimals),
+              units,
+            };
           })
         );
         return {
@@ -105,20 +150,23 @@ export function mandateTools(mandates: AgentMandates, mandateId: bigint): AgentT
     },
     {
       name: 'pay_token',
-      description: "Pay an allowed payee in an ERC-20 from the mandate's token vault, within the signed per-token caps.",
+      description:
+        "Pay an allowed payee in an ERC-20 from the mandate's token vault, within the signed per-token caps. " +
+        "The token's decimals are read on-chain.",
       input_schema: {
         type: 'object',
         properties: {
           token: { type: 'string' },
           to: { type: 'string' },
           amount: { type: 'string', description: 'Whole tokens, e.g. "2.5"' },
-          decimals: { type: 'number', description: 'Token decimals, e.g. 6 for USDC' },
         },
-        required: ['token', 'to', 'amount', 'decimals'],
+        required: ['token', 'to', 'amount'],
       },
-      async run({ token, to, amount, decimals }) {
+      // A `decimals` input from older callers is ignored: the token contract is the only source.
+      async run({ token, to, amount }) {
         if (!isAddress(token) || !isAddress(to)) throw new Error('token and to must be addresses');
-        return guarded(() => mandates.payToken(mandateId, token, to, parseUnits(String(amount), Number(decimals))));
+        const units = parseUnits(String(amount), await tokenDecimals(token));
+        return guarded(() => mandates.payToken(mandateId, token, to, units));
       },
     },
   ];

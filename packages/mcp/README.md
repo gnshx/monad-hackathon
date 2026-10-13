@@ -8,13 +8,27 @@ The key this server holds is only as powerful as the mandate behind it: allowlis
 
 | Tool | What it does |
 |---|---|
-| `agenttrust_check_mandate(mandateId)` | Returns the mandate's limits, expiry, vault balances, and revoked status read from chain |
-| `agenttrust_execute(target, selector, callData, value)` | Runs the call through SDK guard; returns the tx hash on success or a typed denial reason (`ExceedsPerCallLimit`, `PermissionDenied`, `MandateInactive`) |
-| `agenttrust_verify_receipt(txHash)` | Returns the same checks as `npm run verify:tx` (receipt status, block number, gas used, emitted action) |
+| `agenttrust_check_mandate(mandateId)` / `mandate_status` | Returns the mandate's limits, expiry, vault balances and status read from chain (`active`, `revoked`, `revokedAll`, `expired` or `notFound`) |
+| `agenttrust_execute(target, selector?, callData? \| functionSignature + args?, value)` / `execute_action` | Runs the call through the mandate; returns the tx hash on success or a typed denial reason (`ExceedsPerCallLimit`, `PermissionDenied`, `MandateInactive`). A call the target would revert is not sent either. |
+| `agenttrust_verify_receipt(txHash, mandateId?)` | Checks the receipt succeeded and AgentMandates emitted `ActionExecuted` or `TokenPaid` for the mandate |
 | `check_action(target, ...)` | Preflight dry-run check: `{ allowed: true }` or `{ allowed: false, reason: "..." }` |
-| `pay_token(token, to, amount)` | Pays an allowed payee in an ERC-20 token (e.g. stablecoin) from the mandate's isolated token vault |
+| `pay_token(token, to, amount)` | Pays an allowed payee in an ERC-20 token (e.g. stablecoin) from the mandate's isolated token vault; decimals are read from the token |
 
-## MCP Client Configuration (10 lines)
+## Install
+
+This package is not published to npm. Build it from the repo:
+
+```bash
+git clone https://github.com/gnshx/monad-hackathon.git
+cd monad-hackathon
+npm install && npm run build:mcp
+```
+
+The server is then `node packages/mcp/dist/index.js`. Use the absolute path in client configs.
+
+## MCP Client Configuration
+
+`AGENTTRUST_CONTRACT` is the AgentMandates (v2) contract, `0xc911e902bf3b3f532bffc1a988e2d00969a1237c` on Monad testnet (see `deployments.mandates.json`). The legacy v1 MandateManager address does not work with this server.
 
 Add this snippet to your MCP client configuration (`claude_desktop_config.json`, Cursor, etc.):
 
@@ -23,9 +37,9 @@ Add this snippet to your MCP client configuration (`claude_desktop_config.json`,
   "mcpServers": {
     "agenttrust": {
       "command": "node",
-      "args": ["packages/mcp/dist/index.js"],
+      "args": ["/absolute/path/to/monad-hackathon/packages/mcp/dist/index.js"],
       "env": {
-        "AGENTTRUST_CONTRACT": "0x3550f9fc84640a9cfd7c51330615a1e05cb948be",
+        "AGENTTRUST_CONTRACT": "0xc911e902bf3b3f532bffc1a988e2d00969a1237c",
         "AGENTTRUST_MANDATE_ID": "1",
         "AGENT_PRIVATE_KEY": "0x<the-agent-private-key>",
         "AGENTTRUST_RPC_URL": "https://testnet-rpc.monad.xyz"
@@ -37,12 +51,12 @@ Add this snippet to your MCP client configuration (`claude_desktop_config.json`,
 
 For Claude Code CLI:
 ```bash
-claude mcp add agenttrust -e AGENTTRUST_CONTRACT=0x3550f9fc84640a9cfd7c51330615a1e05cb948be -e AGENTTRUST_MANDATE_ID=1 -e AGENT_PRIVATE_KEY=0x<key> -- node packages/mcp/dist/index.js
+claude mcp add agenttrust -e AGENTTRUST_CONTRACT=0xc911e902bf3b3f532bffc1a988e2d00969a1237c -e AGENTTRUST_MANDATE_ID=1 -e AGENT_PRIVATE_KEY=0x<key> -- node /absolute/path/to/monad-hackathon/packages/mcp/dist/index.js
 ```
 
 ## Running Tests
 
-Test all denial paths (over limit, wrong target, revoked/inactive mandate) with in-memory MCP clients:
+Test all denial paths (over limit, wrong target, revoked/inactive mandate) with in-memory MCP clients (Node 20+; run `npm run build:sdk` first so the SDK's `dist` exists):
 ```bash
 npm run test:mcp
 ```

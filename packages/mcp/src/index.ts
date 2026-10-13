@@ -14,6 +14,8 @@
  *   AGENT_PRIVATE_KEY     the agent's hot key (the mandate's `agent`)
  *   AGENTTRUST_RPC_URL    defaults to Monad testnet
  */
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -35,7 +37,32 @@ import {
   type WalletClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { AgentMandates, MandateDeniedError, verifyReceipt } from '@agenttrust/sdk';
+import {
+  AgentMandates,
+  MandateCallFailedError,
+  MandateDeniedError,
+  verifyMandatesReceipt,
+  verifyReceipt,
+} from '@agenttrust/sdk';
+
+const ERC20_META_ABI = [
+  { type: 'function', name: 'decimals', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
+  { type: 'function', name: 'symbol', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
+] as const;
+
+const CALL_FAILED_NOTE =
+  'The mandate allows this call, but the target would revert it, so nothing was sent and no gas was spent. Check the arguments.';
+
+/** The tool result for a call the mandate allowed but the target would reject. */
+function callFailed(e: MandateCallFailedError) {
+  return {
+    ok: false,
+    failed: e.reason,
+    ...(e.targetReason ? { targetReason: e.targetReason } : {}),
+    ...(e.returnData !== '0x' ? { returnData: e.returnData } : {}),
+    note: CALL_FAILED_NOTE,
+  };
+}
 
 export interface McpServerConfig {
   contractAddress: Address;
@@ -68,20 +95,21 @@ export function createAgentTrustMcpServer(config: McpServerConfig): McpServer {
     content: [{ type: 'text' as const, text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }],
   });
 
+  // Token decimals and symbol. decimals() must come from the chain: if it can't be read this
+  // throws (pay_token then refuses) rather than guessing. Only complete reads are cached, so a
+  // transient RPC failure is retried on the next call instead of sticking for the process's life.
   const metaCache = new Map<string, { symbol: string; decimals: number }>();
   async function tokenMeta(token: Address) {
-    const hit = metaCache.get(token);
+    const hit = metaCache.get(token.toLowerCase());
     if (hit) return hit;
-    const abi = [
-      { type: 'function', name: 'decimals', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
-      { type: 'function', name: 'symbol', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
-    ] as const;
     const [decimals, symbol] = await Promise.all([
-      publicClient.readContract({ address: token, abi, functionName: 'decimals' }).catch(() => 18),
-      publicClient.readContract({ address: token, abi, functionName: 'symbol' }).catch(() => 'TOKEN'),
+      publicClient.readContract({ address: token, abi: ERC20_META_ABI, functionName: 'decimals' }).catch((e: any) => {
+        throw new Error(`Could not read decimals() of token ${token}: ${e?.shortMessage ?? e?.message ?? e}`);
+      }),
+      publicClient.readContract({ address: token, abi: ERC20_META_ABI, functionName: 'symbol' }).catch(() => undefined),
     ]);
-    const meta = { symbol, decimals: Number(decimals) };
-    metaCache.set(token, meta);
+    const meta = { symbol: symbol ?? 'TOKEN', decimals: Number(decimals) };
+    if (symbol !== undefined) metaCache.set(token.toLowerCase(), meta);
     return meta;
   }
 
@@ -93,12 +121,40 @@ export function createAgentTrustMcpServer(config: McpServerConfig): McpServer {
       mandates.isActive(id),
       mandates.getTokens(id),
     ]);
+    if (BigInt(m.ownerKey) === 0n) {
+      return {
+        mandateId: id.toString(),
+        found: false,
+        active: false,
+        status: 'notFound',
+        error: `Mandate #${id} not found on AgentMandates at ${contractAddress}`,
+      };
+    }
+    // isActive() is false when the mandate was revoked, ended by the owner's revokeAll(), or has
+    // expired. Report which, instead of calling every inactive mandate "revoked".
+    const revokedAll = !active && (await mandates.epoch(m.ownerKey)) !== m.epoch;
+    const expired =
+      !active &&
+      m.expiresAt !== 0n &&
+      (BigInt(Math.floor(Date.now() / 1000)) > m.expiresAt || (!m.revoked && !revokedAll));
+    const status = active ? 'active' : m.revoked ? 'revoked' : revokedAll ? 'revokedAll' : expired ? 'expired' : 'inactive';
     const tokenBudgets = await Promise.all(
       tokens.map(async (token) => {
-        const [ta, meta] = await Promise.all([mandates.getTokenAllowance(id, token), tokenMeta(token)]);
+        const [ta, meta] = await Promise.all([mandates.getTokenAllowance(id, token), tokenMeta(token).catch(() => undefined)]);
+        if (!meta) {
+          return {
+            token,
+            decimals: 'unknown',
+            maxPerCallBaseUnits: ta.maxPerCall.toString(),
+            remainingBudgetBaseUnits: (ta.budget - ta.spent).toString(),
+            vaultBalanceBaseUnits: ta.balance.toString(),
+            note: "Couldn't read this token's decimals(); amounts are in base units and pay_token will refuse it until they can be read.",
+          };
+        }
         return {
           token,
           symbol: meta.symbol,
+          decimals: meta.decimals,
           maxPerCall: formatUnits(ta.maxPerCall, meta.decimals),
           remainingBudget: formatUnits(ta.budget - ta.spent, meta.decimals),
           vaultBalance: formatUnits(ta.balance, meta.decimals),
@@ -107,8 +163,12 @@ export function createAgentTrustMcpServer(config: McpServerConfig): McpServer {
     );
     return {
       mandateId: id.toString(),
+      found: true,
       active,
-      revoked: m.revoked || !active,
+      status,
+      revoked: m.revoked,
+      revokedAll,
+      expired,
       agent: m.agent,
       agentId: m.agentId.toString(),
       limits: {
@@ -132,8 +192,11 @@ export function createAgentTrustMcpServer(config: McpServerConfig): McpServer {
 
   const callShape = {
     target: z.string().describe('Contract or address to call (0x...)'),
-    selector: z.string().optional().describe('4-byte function selector (e.g. 0xa6b206bf)'),
-    callData: z.string().optional().describe('Raw calldata hex (0x...)'),
+    selector: z
+      .string()
+      .optional()
+      .describe('4-byte function selector (e.g. 0xa6b206bf). Alone, it calls a function with no arguments; with callData or functionSignature it must match them.'),
+    callData: z.string().optional().describe('Raw calldata hex (0x...), instead of functionSignature + args'),
     functionSignature: z
       .string()
       .optional()
@@ -155,27 +218,54 @@ export function createAgentTrustMcpServer(config: McpServerConfig): McpServer {
     valueMON?: string;
   }) {
     if (!isAddress(input.target)) throw new Error(`Invalid target address: ${input.target}`);
-    let data: Hex = '0x';
-    if (input.callData) {
-      if (!isHex(input.callData)) throw new Error('callData must be 0x-prefixed hex');
-      data = input.callData;
-    } else if (input.data) {
-      if (!isHex(input.data)) throw new Error('data must be 0x-prefixed hex');
-      data = input.data;
-    } else if (input.selector && isHex(input.selector)) {
-      data = input.selector as Hex;
-    } else if (input.functionSignature) {
-      const item = parseAbiItem(`function ${input.functionSignature}`) as any;
-      data = encodeFunctionData({ abi: [item], functionName: item.name, args: input.args ?? [] });
+    // Blank strings count as absent; conflicting fields are rejected, never silently dropped.
+    const given = (x?: string) => (x === undefined || x.trim() === '' ? undefined : x.trim());
+    const selector = given(input.selector);
+    const callData = given(input.callData);
+    const rawData = given(input.data);
+    const signature = given(input.functionSignature);
+
+    if (selector !== undefined && !/^0x[0-9a-fA-F]{8}$/.test(selector)) {
+      throw new Error(`selector must be 4 bytes of 0x-prefixed hex, e.g. 0xa9059cbb (got "${selector}")`);
     }
-    const valStr = input.value ?? input.valueMON ?? '0';
+    if (callData !== undefined && rawData !== undefined && callData.toLowerCase() !== rawData.toLowerCase()) {
+      throw new Error('callData and data are the same field: pass one of them');
+    }
+    const raw = callData ?? rawData;
+    if (raw !== undefined && !isHex(raw)) throw new Error('callData must be 0x-prefixed hex');
+    if (raw !== undefined && signature !== undefined) {
+      throw new Error('Pass either raw callData or functionSignature + args, not both');
+    }
+    if (input.args?.length && signature === undefined) {
+      throw new Error('args need a functionSignature to be encoded');
+    }
+
+    let data: Hex = '0x';
+    if (raw !== undefined) {
+      data = raw as Hex;
+    } else if (signature !== undefined) {
+      const item = parseAbiItem(`function ${signature}`) as any;
+      data = encodeFunctionData({ abi: [item], functionName: item.name, args: input.args ?? [] });
+    } else if (selector !== undefined) {
+      data = selector.toLowerCase() as Hex;
+    }
+    if (selector !== undefined && data.slice(0, 10).toLowerCase() !== selector.toLowerCase()) {
+      throw new Error(`selector ${selector} does not match the calldata, which starts with ${data.slice(0, 10)}`);
+    }
+
+    const value = given(input.value);
+    const valueMON = given(input.valueMON);
+    if (value !== undefined && valueMON !== undefined && value !== valueMON) {
+      throw new Error('value and valueMON are the same field: pass one of them');
+    }
+    const valStr = value ?? valueMON ?? '0';
     return { target: input.target as Address, data, value: parseEther(valStr), valStr };
   }
 
   // 1. Prompt 2 Primary Tool: agenttrust_check_mandate
   server.tool(
     'agenttrust_check_mandate',
-    "Returns the mandate's limits, expiry, and revoked status read from chain.",
+    "Returns the mandate's limits, expiry and status read from chain: active, revoked, revokedAll (the owner revoked all their mandates), expired, or notFound.",
     {
       mandateId: z.string().optional().describe('Mandate ID (defaults to configured AGENTTRUST_MANDATE_ID)'),
     },
@@ -230,6 +320,7 @@ export function createAgentTrustMcpServer(config: McpServerConfig): McpServer {
             note: 'The human owner did not authorize this action. On-chain policy prevented execution.',
           });
         }
+        if (e instanceof MandateCallFailedError) return text(callFailed(e));
         return text({
           ok: false,
           error: e?.shortMessage || e?.message || String(e),
@@ -260,6 +351,7 @@ export function createAgentTrustMcpServer(config: McpServerConfig): McpServer {
             note: 'The human owner did not authorize this. Do not retry with variations.',
           });
         }
+        if (e instanceof MandateCallFailedError) return text(callFailed(e));
         throw e;
       }
     }
@@ -276,7 +368,13 @@ export function createAgentTrustMcpServer(config: McpServerConfig): McpServer {
     },
     async ({ token, to, amount }) => {
       if (!isAddress(token) || !isAddress(to)) throw new Error('token and to must be addresses');
-      const units = parseUnits(amount, (await tokenMeta(token)).decimals);
+      let decimals: number;
+      try {
+        decimals = (await tokenMeta(token)).decimals;
+      } catch (e: any) {
+        return text({ ok: false, error: `${e?.message ?? e}. Refusing to pay with guessed decimals; nothing was sent.` });
+      }
+      const units = parseUnits(amount, decimals);
       try {
         const { hash } = await mandates.payToken(mandateId, token, to, units);
         return text({
@@ -292,6 +390,7 @@ export function createAgentTrustMcpServer(config: McpServerConfig): McpServer {
             note: 'The human owner did not authorize this. Do not retry with variations.',
           });
         }
+        if (e instanceof MandateCallFailedError) return text(callFailed(e));
         throw e;
       }
     }
@@ -300,29 +399,79 @@ export function createAgentTrustMcpServer(config: McpServerConfig): McpServer {
   // 5. Prompt 2 Primary Tool: agenttrust_verify_receipt
   server.tool(
     'agenttrust_verify_receipt',
-    'Verifies a transaction receipt against on-chain MandateManager / AgentMandates execution policies (matching npm run verify:tx).',
+    'Verifies a transaction against the AgentMandates contract: it succeeded and emitted ActionExecuted (execute) or TokenPaid (pay_token) for the mandate.',
     {
       txHash: z.string().describe('Transaction hash to verify (0x...)'),
+      mandateId: z
+        .string()
+        .optional()
+        .describe('Mandate the receipt must belong to (defaults to the configured AGENTTRUST_MANDATE_ID)'),
     },
-    async ({ txHash }) => {
+    async ({ txHash, mandateId: customId }) => {
       if (!isHex(txHash) || txHash.length !== 66) {
         throw new Error(`Invalid txHash format: ${txHash}. Must be 66-character 0x-prefixed hex.`);
       }
-      const result = await verifyReceipt(publicClient, contractAddress, txHash, {
+      const expectedMandateId = customId ? BigInt(customId) : mandateId;
+      const explorerLink = chainId === 10143 ? `${explorer}/tx/${txHash}` : undefined;
+      const r = await verifyMandatesReceipt(publicClient, contractAddress, txHash, {
         expectedChainId: chainId,
+        expectedMandateId,
       });
-      return text({
-        verified: result.verified,
-        status: result.status,
-        blockNumber: result.blockNumber ? result.blockNumber.toString() : '0',
-        gasUsed: result.gasUsed ? result.gasUsed.toString() : undefined,
-        mandateId: result.mandateId !== undefined ? result.mandateId.toString() : undefined,
-        target: result.target,
-        selector: result.selector,
-        valueMON: result.value !== undefined ? formatEther(result.value) : undefined,
-        revertReason: result.revertReason,
-        explorer: chainId === 10143 ? `${explorer}/tx/${txHash}` : undefined,
-      });
+      const common = {
+        verified: r.verified,
+        status: r.status,
+        blockNumber: r.blockNumber ? r.blockNumber.toString() : '0',
+        gasUsed: r.gasUsed !== undefined ? r.gasUsed.toString() : undefined,
+        mandateId: r.mandateId !== undefined ? r.mandateId.toString() : undefined,
+      };
+
+      if (r.kind === 'tokenPayment') {
+        const meta = await tokenMeta(r.token!).catch(() => undefined);
+        return text({
+          ...common,
+          kind: r.kind,
+          token: r.token,
+          symbol: meta?.symbol,
+          to: r.to,
+          amount: meta ? formatUnits(r.amount!, meta.decimals) : undefined,
+          amountBaseUnits: r.amount!.toString(),
+          tokenSpent: meta ? formatUnits(r.spent!, meta.decimals) : undefined,
+          revertReason: r.revertReason,
+          explorer: explorerLink,
+        });
+      }
+      if (r.kind === 'action') {
+        return text({
+          ...common,
+          kind: r.kind,
+          agent: r.agent,
+          target: r.target,
+          selector: r.selector,
+          valueMON: formatEther(r.value!),
+          spentMON: formatEther(r.spent!),
+          callDataHash: r.callDataHash,
+          revertReason: r.revertReason,
+          explorer: explorerLink,
+        });
+      }
+
+      // No v2 event: if the server points at a legacy v1 MandateManager, its receipts still verify.
+      if (r.status === 'success' && r.mandateId === undefined) {
+        const v1 = await verifyReceipt(publicClient, contractAddress, txHash).catch(() => undefined);
+        if (v1?.verified) {
+          return text({
+            ...common,
+            verified: true,
+            contract: 'MandateManager (v1)',
+            mandateId: v1.mandateId?.toString(),
+            target: v1.target,
+            selector: v1.selector,
+            valueMON: v1.value !== undefined ? formatEther(v1.value) : undefined,
+            explorer: explorerLink,
+          });
+        }
+      }
+      return text({ ...common, revertReason: r.revertReason, explorer: explorerLink });
     }
   );
 
@@ -360,12 +509,20 @@ async function runCli() {
   console.error(`agenttrust-mcp ready: mandate #${mandateId} on chain ${chainId} as ${account.address}`);
 }
 
-const isMain =
-  typeof process !== 'undefined' &&
-  process.argv[1] &&
-  (process.argv[1].endsWith('index.js') || process.argv[1].endsWith('index.ts'));
+/**
+ * Whether `moduleUrl` is the script node was started with. Compares real paths, because a bin
+ * installed by npm (npx, `npm i -g`, `npm link`) is a symlink and node leaves argv[1] as the link.
+ */
+export function isMainModule(argv1: string | undefined, moduleUrl: string): boolean {
+  if (!argv1) return false;
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
+  }
+}
 
-if (isMain) {
+if (typeof process !== 'undefined' && isMainModule(process.argv[1], import.meta.url)) {
   runCli().catch((err) => {
     console.error('agenttrust-mcp fatal error:', err);
     process.exit(1);

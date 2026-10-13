@@ -18,7 +18,9 @@ import {
 | `encode.createMandate / revoke / revokeAll / withdraw` | Calldata any relayer can submit |
 | `createDigest`, `revokeDigest`, … | Off-chain mirrors of the contract's digests |
 | `mandateTools(mandates, id)` | Framework-agnostic LLM tools (`mandate_status`, `check_action`, `execute_action`, `pay_token`) with JSON-Schema inputs |
-| `MandateDeniedError` | Thrown by `execute()` with the contract's reason before any gas is spent |
+| `MandateDeniedError` | Thrown by `execute()`, `payToken()` and `relay()` with the contract's reason before any gas is spent |
+| `MandateCallFailedError` | Thrown before sending when the mandate allows a call but the target would revert it (`CallFailed`, with the target's reason when it has one) |
+| `verifyMandatesReceipt(publicClient, address, txHash, { expectedMandateId })` | Checks a receipt emitted `ActionExecuted` or `TokenPaid` from AgentMandates |
 
 ```ts
 const mandates = new AgentMandates(address, publicClient, agentWallet);
@@ -75,11 +77,15 @@ console.log('Action verified on Monad:', receipt.verified);
 
 ## Installation
 
+The SDK is not published to npm. (`@agenttrust/sdk` on npm is an unrelated package; do not install it.) Build it from this repo:
+
 ```bash
-npm install @agenttrust/sdk
-# or install from GitHub Release:
-npm install https://github.com/gnshx/monad-hackathon/releases/download/v0.1.0/agenttrust-sdk-0.1.0.tgz
+git clone https://github.com/gnshx/monad-hackathon.git
+cd monad-hackathon
+npm install && npm run build:sdk
 ```
+
+Code inside the monorepo's workspaces imports it as `@agenttrust/sdk`. From another project on the same machine, install the built folder by path: `npm install /path/to/monad-hackathon/packages/sdk`.
 
 ## Testing
 

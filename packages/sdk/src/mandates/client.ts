@@ -1,6 +1,8 @@
 import {
+  decodeErrorResult,
   encodeAbiParameters,
   encodeFunctionData,
+  isHex,
   keccak256,
   toFunctionSelector,
   toHex,
@@ -16,7 +18,7 @@ export const ANY_SELECTOR: Hex = '0x00000000';
 
 export interface Permission {
   target: Address;
-  /** 4-byte selector, or ANY_SELECTOR for any call (including plain transfers) to target. */
+  /** 4-byte selector, or ANY_SELECTOR for any call (including plain transfers) to target, except the allowance calls the contract always refuses (approve, transferFrom, ...). */
   selector: Hex;
 }
 
@@ -67,9 +69,15 @@ export interface OnchainMandate {
   revoked: boolean;
 }
 
-/** Revert reasons execute() can raise, keyed by their 4-byte selector. */
+/**
+ * AgentMandates custom errors, keyed by their 4-byte selector (lowercase hex). The selector is
+ * taken over the full signature, so `CallFailed(bytes)` maps from 0xa5fa8d2b.
+ */
 export const MANDATE_ERRORS: Record<string, string> = Object.fromEntries(
-  AgentMandatesABI.filter((x) => x.type === 'error').map((e) => [toFunctionSelector(`${e.name}()`), e.name])
+  AgentMandatesABI.filter((x) => x.type === 'error').map((e) => [
+    toFunctionSelector(`${e.name}(${e.inputs.map((i) => i.type).join(',')})`),
+    e.name,
+  ])
 );
 
 const TYPEHASH = {
@@ -239,6 +247,13 @@ export class AgentMandates {
     });
   }
 
+  /** The owner's current epoch. A mandate whose `epoch` differs was ended by revokeAll(). */
+  async epoch(ownerKey: Hex): Promise<bigint> {
+    return this.publicClient.readContract({
+      address: this.address, abi: AgentMandatesABI, functionName: 'epochs', args: [ownerKey],
+    });
+  }
+
   /** Ask the contract whether `agent` may make this call right now. Same checks as execute(). */
   async checkAction(mandateId: bigint, agent: Address, target: Address, data: Hex, value: bigint): Promise<CheckResult> {
     const [allowed, reason] = await this.publicClient.readContract({
@@ -295,7 +310,11 @@ export class AgentMandates {
     return withdrawDigest(await this.domain(), key, mandateId, to, amount, await this.nonce(key));
   }
 
-  /** Submit a signed owner action from this client's wallet (acting as relayer). */
+  /**
+   * Submit a signed owner action from this client's wallet (acting as relayer). If the contract
+   * would reject it (stale nonce, bad signature, invalid terms...), this throws
+   * MandateDeniedError with the contract's reason and sends nothing.
+   */
   async relay(data: Hex, value = 0n): Promise<Hex> {
     const wallet = this.requireWallet();
     const hash = await wallet.sendTransaction({
@@ -309,7 +328,8 @@ export class AgentMandates {
 
   /**
    * Run a call as the agent. Pre-checks with checkAction() so a disallowed call fails here with
-   * a readable reason instead of burning gas on a revert.
+   * a readable reason instead of burning gas on a revert. A call the mandate allows but the
+   * target would reject throws MandateCallFailedError, also before anything is sent.
    */
   async execute(mandateId: bigint, target: Address, data: Hex, value = 0n): Promise<{ hash: Hex }> {
     const wallet = this.requireWallet();
@@ -355,16 +375,32 @@ export class AgentMandates {
   /** Fund a mandate's token vault from this wallet (approves, then deposits). */
   async depositToken(mandateId: bigint, token: Address, amount: bigint): Promise<{ hash: Hex }> {
     const wallet = this.requireWallet();
+    const from = wallet.account!.address;
+    const approveArgs = [this.address, amount] as const;
     const approve = await wallet.writeContract({
       account: wallet.account!, chain: wallet.chain, address: token, abi: ERC20_APPROVE_ABI,
-      functionName: 'approve', args: [this.address, amount],
-      gas: 100_000n,
+      functionName: 'approve', args: approveArgs,
+      gas: await this.gasFor(
+        from,
+        encodeFunctionData({ abi: ERC20_APPROVE_ABI, functionName: 'approve', args: approveArgs }),
+        0n,
+        100_000n,
+        token
+      ),
     });
-    await this.publicClient.waitForTransactionReceipt({ hash: approve });
+    const approveReceipt = await this.publicClient.waitForTransactionReceipt({ hash: approve });
+    if (approveReceipt.status !== 'success') throw new Error(`approve reverted, deposit not sent: ${approve}`);
+    // Estimated only now: before the approval lands, depositToken would revert on the allowance.
+    const args = [mandateId, token, amount] as const;
     const hash = await wallet.writeContract({
       account: wallet.account!, chain: wallet.chain, address: this.address, abi: AgentMandatesABI,
-      functionName: 'depositToken', args: [mandateId, token, amount],
-      gas: 300_000n,
+      functionName: 'depositToken', args,
+      gas: await this.gasFor(
+        from,
+        encodeFunctionData({ abi: AgentMandatesABI, functionName: 'depositToken', args }),
+        0n,
+        300_000n
+      ),
     });
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== 'success') throw new Error(`depositToken reverted: ${hash}`);
@@ -373,16 +409,25 @@ export class AgentMandates {
 
   /**
    * Gas limit from an estimate plus 25% headroom, capped at `ceiling`. Monad bills the gas limit,
-   * not the gas used, so a flat ceiling would overcharge every call. Falls back to the ceiling.
+   * not the gas used, so a flat ceiling would overcharge every call.
+   *
+   * If the estimate fails because the transaction would revert, this throws instead of sending a
+   * known-failing transaction (billed at the full limit): MandateDeniedError or
+   * MandateCallFailedError when the revert decodes as an AgentMandates error, otherwise the
+   * original error. Only transport/RPC failures (timeouts, rate limits, HTTP errors) fall back to
+   * the ceiling.
    */
-  private async gasFor(from: Address, data: Hex, value: bigint, ceiling: bigint): Promise<bigint> {
+  private async gasFor(from: Address, data: Hex, value: bigint, ceiling: bigint, to: Address = this.address): Promise<bigint> {
+    let estimate: bigint;
     try {
-      const estimate = await this.publicClient.estimateGas({ account: from, to: this.address, data, value });
-      const padded = (estimate * 5n) / 4n;
-      return padded < ceiling ? padded : ceiling;
-    } catch {
-      return ceiling;
+      estimate = await this.publicClient.estimateGas({ account: from, to, data, value });
+    } catch (err) {
+      const revert = revertOf(err);
+      if (!revert) return ceiling;
+      throw (to === this.address ? decodeMandateRevert(revert.data) : undefined) ?? err;
     }
+    const padded = (estimate * 5n) / 4n;
+    return padded < ceiling ? padded : ceiling;
   }
 
   private requireWallet(): WalletClient {
@@ -396,6 +441,83 @@ export class MandateDeniedError extends Error {
     super(`AgentMandates denied the call: ${reason}`);
     this.name = 'MandateDeniedError';
   }
+}
+
+/**
+ * The mandate allows the call, but it would revert anyway: the target rejected it (`CallFailed`,
+ * with the target's revert data) or a token transfer failed (`TransferFailed`). Thrown before
+ * anything is sent, so no gas is spent. Unlike MandateDeniedError this is not a policy denial.
+ */
+export class MandateCallFailedError extends Error {
+  /** The target's own revert reason, when its revert data is an Error(string) or Panic(uint256). */
+  readonly targetReason?: string;
+
+  constructor(readonly reason: 'CallFailed' | 'TransferFailed', readonly returnData: Hex = '0x') {
+    const targetReason = describeRevert(returnData);
+    super(
+      reason === 'CallFailed'
+        ? `The target rejected the call${targetReason ? `: ${targetReason}` : returnData !== '0x' ? ` (revert data ${returnData})` : ''}`
+        : 'The token transfer failed (TransferFailed)'
+    );
+    this.name = 'MandateCallFailedError';
+    this.targetReason = targetReason;
+  }
+}
+
+/**
+ * Turn AgentMandates revert data into the matching typed error: MandateCallFailedError for
+ * CallFailed/TransferFailed, MandateDeniedError for any other contract error. Undefined when the
+ * data is missing or is not an AgentMandates error.
+ */
+export function decodeMandateRevert(data: Hex | undefined): MandateDeniedError | MandateCallFailedError | undefined {
+  if (!data || !isHex(data) || data.length < 10) return undefined;
+  try {
+    const decoded = decodeErrorResult({ abi: AgentMandatesABI, data });
+    // viem also matches the built-in Error(string) / Panic(uint256), which are not mandate errors.
+    const errorName: string = decoded.errorName;
+    if (errorName === 'CallFailed') return new MandateCallFailedError('CallFailed', (decoded.args as readonly [Hex])[0]);
+    if (errorName === 'TransferFailed') return new MandateCallFailedError('TransferFailed');
+    if (errorName === 'Error' || errorName === 'Panic') return undefined;
+    return new MandateDeniedError(errorName);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Error(string) / Panic(uint256) revert data as text, or undefined. */
+function describeRevert(data: Hex): string | undefined {
+  if (!isHex(data) || data.length < 10) return undefined;
+  try {
+    const { errorName, args } = decodeErrorResult({ abi: [], data });
+    if (errorName === 'Error') return String(args?.[0]);
+    if (errorName === 'Panic') return `Panic(0x${BigInt(args?.[0] as bigint).toString(16)})`;
+  } catch {
+    // custom error of the target: keep the raw data
+  }
+  return undefined;
+}
+
+/**
+ * Whether an estimateGas error means "this transaction would revert", and its revert data if the
+ * node returned any. Undefined for transport/RPC failures. Duck-typed over the cause chain so it
+ * works whatever viem copy built the client.
+ */
+function revertOf(err: unknown): { data?: Hex } | undefined {
+  let reverted = false;
+  let data: Hex | undefined;
+  const seen = new Set<unknown>();
+  for (let e: any = err; e && typeof e === 'object' && !seen.has(e); e = e.cause) {
+    seen.add(e);
+    const text = [e.details, e.shortMessage, e.shortMessage === undefined ? e.message : undefined]
+      .filter((x) => typeof x === 'string')
+      .join(' ');
+    if (e.name === 'ExecutionRevertedError' || e.name === 'ContractFunctionRevertedError' || e.code === 3 || /revert/i.test(text)) {
+      reverted = true;
+    }
+    const d = typeof e.data === 'string' ? e.data : typeof e.data?.data === 'string' ? e.data.data : undefined;
+    if (!data && d && isHex(d) && d.length >= 10) data = d as Hex;
+  }
+  return reverted || data ? { data } : undefined;
 }
 
 const ERC20_APPROVE_ABI = [

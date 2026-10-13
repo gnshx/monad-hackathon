@@ -9,7 +9,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "test": "npx tsx --test test/**/*.test.ts",
+    "test": "npx -y tsx --test test/mcp.test.ts",
     "start": "node dist/index.js",
     "prepublishOnly": "npm run build"
   },
