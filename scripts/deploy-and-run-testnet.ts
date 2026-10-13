@@ -19,17 +19,35 @@ import {
   verifyReceipt,
 } from '@agenttrust/sdk';
 
+import { generatePrivateKey } from 'viem/accounts';
+
+// Load .env file safely if present
+const envFilePath = path.resolve(__dirname, '../.env');
+if (fs.existsSync(envFilePath)) {
+  const envContent = fs.readFileSync(envFilePath, 'utf8');
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const idx = trimmed.indexOf('=');
+      if (idx !== -1) {
+        const key = trimmed.slice(0, idx).trim();
+        const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  }
+}
+
 const RPC_URL = process.env.MONAD_RPC_URL || 'https://testnet-rpc.monad.xyz';
-const DEPLOYER_PRIVATE_KEY = (process.env.DEPLOYER_PRIVATE_KEY ||
-  '0xe1266696129990342445d58455406f66b07fd9010512dcd4f5ac6157f44feafd') as Hex;
+const DEPLOYER_PRIVATE_KEY = (process.env.DEPLOYER_PRIVATE_KEY || process.env.PRIVATE_KEY) as Hex | undefined;
 
-// Secondary agent account for designated execution
-const AGENT_PRIVATE_KEY = (process.env.AGENT_PRIVATE_KEY ||
-  '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d') as Hex;
+// Secondary agent account for designated execution (dynamic if not provided)
+const AGENT_PRIVATE_KEY = (process.env.AGENT_PRIVATE_KEY as Hex) || generatePrivateKey();
 
-// Stranger account for unauthorized caller test
-const STRANGER_PRIVATE_KEY =
-  '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a' as Hex;
+// Stranger account for unauthorized caller test (always dynamically generated)
+const STRANGER_PRIVATE_KEY = generatePrivateKey();
 
 const TARGET_ABI = [
   {
@@ -89,8 +107,14 @@ async function main() {
   console.log('   🚀 AGENTTRUST FULL MONAD TESTNET DEPLOYMENT & VERIFICATION');
   console.log('================================================================\n');
 
-  const publicClient = createPublicClient({ transport: http(RPC_URL) });
-  const chainId = await publicClient.getChainId();
+  if (!DEPLOYER_PRIVATE_KEY) {
+    console.error('❌ Error: DEPLOYER_PRIVATE_KEY is not defined.');
+    console.error('👉 Please configure DEPLOYER_PRIVATE_KEY in your .env file or environment:');
+    console.error('   echo "DEPLOYER_PRIVATE_KEY=0x..." >> .env');
+    console.error('💡 Deployer address to fund (1.5–2 MON): 0x48A45675aB0fd9B89e9Ce2c0e3F14c7140eD1258');
+    console.error('🌐 Monad Faucet: https://faucet.monad.xyz\n');
+    process.exit(1);
+  }
 
   const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY);
   const agentAccount = privateKeyToAccount(AGENT_PRIVATE_KEY);
@@ -108,6 +132,9 @@ async function main() {
     account: strangerAccount,
     transport: http(RPC_URL),
   });
+
+  const publicClient = createPublicClient({ transport: http(RPC_URL) });
+  const chainId = await publicClient.getChainId();
 
   console.log(`🌐 Connected to Monad Testnet (Chain ID: ${chainId})`);
   console.log(`👤 Deployer Address: ${deployerAccount.address}`);
@@ -160,6 +187,19 @@ async function main() {
   const mandateManagerAddress = mmReceipt.contractAddress!;
   console.log(`   ✓ MandateManager Deployed at: ${mandateManagerAddress}`);
   console.log(`   Explorer: https://testnet.monadexplorer.com/address/${mandateManagerAddress}`);
+
+  // Sponsoring agent account for execution gas
+  const agentBal = await publicClient.getBalance({ address: agentAccount.address });
+  if (agentBal < parseEther('0.02')) {
+    console.log(`\n--- STEP 2B: SPONSORING AGENT GAS (0.05 MON) ---`);
+    const fundAgentTx = await deployerWallet.sendTransaction({
+      to: agentAccount.address,
+      value: parseEther('0.05'),
+    });
+    console.log(`   Tx Submitted: ${fundAgentTx}`);
+    await publicClient.waitForTransactionReceipt({ hash: fundAgentTx });
+    console.log(`   ✓ Transferred 0.05 MON to Agent account (${agentAccount.address})`);
+  }
 
   // Initialize SDK client
   const sdk = new AgentTrustClient({
@@ -340,6 +380,34 @@ async function main() {
   console.log(`Creation Tx: https://testnet.monadexplorer.com/tx/${createMandateHash}`);
   console.log(`Execution Tx: https://testnet.monadexplorer.com/tx/${execTxHash}`);
   console.log(`Revocation Tx: https://testnet.monadexplorer.com/tx/${revokeTxHash}`);
+
+  const deploymentData = {
+    network: 'Monad Testnet',
+    chainId: 10143,
+    timestamp: new Date().toISOString(),
+    contracts: {
+      mandateManager: mandateManagerAddress,
+      mockTarget: targetAddress,
+      erc8004Registry: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
+      p256Precompile: '0x0000000000000000000000000000000000000100',
+    },
+    transactions: {
+      mockTargetDeploy: targetDeployHash,
+      mandateManagerDeploy: mmDeployHash,
+      credentialRegistration: regCredHash,
+      mandateCreation: createMandateHash,
+      allowedExecution: execTxHash,
+      mandateRevocation: revokeTxHash,
+    },
+    explorerUrls: {
+      mandateManager: `https://testnet.monadexplorer.com/address/${mandateManagerAddress}`,
+      mandateCreation: `https://testnet.monadexplorer.com/tx/${createMandateHash}`,
+      allowedExecution: `https://testnet.monadexplorer.com/tx/${execTxHash}`,
+      mandateRevocation: `https://testnet.monadexplorer.com/tx/${revokeTxHash}`,
+    },
+  };
+  fs.writeFileSync(path.resolve(__dirname, '../deployments.json'), JSON.stringify(deploymentData, null, 2));
+  console.log('\n💾 Saved deployment record to deployments.json');
 }
 
 main().catch((err) => {

@@ -28,14 +28,14 @@ contracts/broadcast/
 *.bin
 
 # Environment & Secrets (Zero Key Leak Protocol)
-.env
-.env*.local
-.env.production
-.env.development
+.env*
+!.env.example
 credentials.json
 token.json
 *.pem
 *.key
+private_key*
+*private_key*
 
 # IDE & OS
 .DS_Store

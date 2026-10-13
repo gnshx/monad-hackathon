@@ -117,35 +117,90 @@ console.log(result.value); // 100000000000000000n (0.1 MON)
 
 ### 2. Run Local Security Enforcement Demo
 
-```bash
-# Clone and run local end-to-end demo
-git clone https://github.com/gnshx/monad-hackathon.git
-cd monad-hackathon
-npm install
-npm run demo
-```
+---
 
-Expected terminal output:
-```text
-================================================================
-       🛡️  AGENTTRUST LIVE DEMO — ON-CHAIN SECURITY PROOF  🛡️    
-================================================================
-⚡ [MODE: LOCAL ANVIL SANDBOX (Chain 31337)]
-   ✓ Fresh MandateManager initialized: 0x7bc06c482dead17c0e297afbc32f6e63d3846650
-   ✓ Fresh MockTarget initialized:     0x7969c5ed335650692bc04293b07f5bf2e7a673c0
+## ⚡ Why Monad? (The Architectural Moat)
 
-🟢 [SCENARIO 1] Agent Executes Allowed Action within Policy         --> ✅ EXECUTED (0.1 MON)
-🔴 [SCENARIO 2] Adversarial Attack: Rogue Target Call (Prompt Injection) --> 🛑 BLOCKED (TargetNotAllowed)
-🔴 [SCENARIO 3] Adversarial Attack: Over-Limit Spend Attempt         --> 🛑 BLOCKED (ExceedsPerTxLimit)
-🔴 [SCENARIO 4] Adversarial Attack: Unauthorized Caller Hijack       --> 🛑 BLOCKED (CallerNotAuthorized)
-🟡 [SCENARIO 5] Human Owner Revokes Mandate & Recovers Vault Funds   --> ✅ 100% RECOVERED (MandateIsRevoked)
-🔍 [SCENARIO 6] Independent Auditor Verifies On-Chain Receipt Logs    --> ✅ VERIFIED (Raw Event Log Proof)
-================================================================
- 🎉  ALL 6 DEMO SCENARIOS PASSED WITH LOCAL ANVIL CONSENSUS!  🎉 
-================================================================
-```
+AgentTrust is purpose-built for Monad because high-frequency autonomous agent security requires primitives that only Monad provides:
+
+1. **Native RIP-7212 P-256 Precompile at `0x0100`:**
+   - Standard EVM chains require ~350,000 gas to verify a Secp256r1 WebAuthn signature in Solidity bytecode.
+   - Monad's native precompile executes verification in **~3,450 gas (100x cost reduction)**, making passkey hardware delegation cheaper than centralized key-management servers or ERC-4337 bundlers.
+   - Cryptographically proven live on Monad Testnet: `npm run verify:p256`.
+
+2. **10,000 TPS Throughput & 1-Second Finality:**
+   - Autonomous AI agents cannot tolerate 12–15 second confirmation delays between API and on-chain tool executions.
+   - Monad enables **synchronous tool-call gating**: an agent's tool execution can be checked and confirmed on-chain in under 1 second with instant cryptographic receipts.
+
+3. **Composable ERC-8004 Agent Identity Ecosystem:**
+   - Monad Testnet hosts the canonical ERC-8004 Agent Identity Registry (`0x8004A818BFB912233c491871b3d84c89A494BD9e`).
+   - AgentTrust anchors human hardware mandates directly to on-chain agent identities, ensuring only verified agent wallets can trigger delegated actions.
 
 ---
+
+## 🔌 15-Minute Integrator Quickstart: Drop-in `guard()` Middleware
+
+External agent builders (LangChain, AutoGPT, Eliza, CrewAI) can guard their tools in under 15 minutes without modifying smart contracts:
+
+```typescript
+import { createAgentGuard } from '@agenttrust/sdk';
+
+// 1. Initialize guard with human owner's on-chain mandate
+const guard = createAgentGuard({
+  contractAddress: '0xa5754E89745eC4eB9d7F31f0C34eB267773531b7',
+  mandateId: 0n,
+  agentId: 1n,
+  publicClient,
+  walletClient,
+});
+
+// 2. Wrap tool execution — fail-closed on spend caps or rogue targets
+const result = await guard.execute({
+  target: '0x1234567890123456789012345678901234567890',
+  selector: '0xa9059cbb', // transfer(address,uint256)
+  callData: '0x...',
+  value: parseEther('0.05'),
+});
+
+console.log(`✓ Guarded Tx Broadcasted: ${result.transactionHash}`);
+console.log(`✓ Receipt Verified: ${result.receipt.verified}`);
+```
+
+*See full runnable example in [`examples/integrator-guard-example.ts`](examples/integrator-guard-example.ts) and outreach guide in [`docs/integrator-quickstart.md`](docs/integrator-quickstart.md).*
+
+---
+
+## 🔒 Six-Scenario On-Chain Security Execution Matrix
+
+| # | Scenario | Tested Security Invariant | Result | Verification Command |
+| :-: | :--- | :--- | :--- | :--- |
+| **1** | **Mandate Creation** | WebAuthn P-256 Passkey Assertion verified via precompile | **SUCCESS** | `npm run verify:p256` |
+| **2** | **Allowed Execution** | Designated agent executes 0.1 MON payable router call | **SUCCESS** | `npm run demo` (Scenario 1) |
+| **3** | **Rogue Target Call** | Prompt injection: agent attempts call to unallowlisted address | **REVERT** (`TargetNotAllowed`) | `npm run demo` (Scenario 2) |
+| **4** | **Over-Limit Spend** | Agent requests spend exceeding per-tx native MON limit | **REVERT** (`ExceedsPerTxLimit`) | `npm run demo` (Scenario 3) |
+| **5** | **Stranger Hijack** | Unauthorized stranger EOA attempts to trigger execution | **REVERT** (`CallerNotAuthorized`) | `npm run demo` (Scenario 4) |
+| **6** | **Owner Revocation** | Human owner revokes mandate and recovers unspent vault balance | **SUCCESS** (`MandateRevoked`) | `npm run demo` (Scenario 5) |
+
+*Full judge evidence dossier and Monad Explorer reference links: [`docs/evidence.md`](docs/evidence.md).*
+
+---
+
+## 👨‍⚖️ Zero-Gas Judge Access Instructions
+
+Judges **do not need testnet MON or wallet funds** to evaluate AgentTrust:
+
+1. **Interactive In-Browser Evidence Testing (Zero Gas):**
+   - Open **[https://6bfd9aa4a2a198.lhr.life](https://6bfd9aa4a2a198.lhr.life)**.
+   - Navigate to the **"Evidence & Proofs"** tab in the sidebar.
+   - Click **"Run Live Precompile Verification Test"** to witness an interactive `eth_call` to Monad Testnet's native precompile (`0x0100`) returning `0x01` in real-time.
+   - Query live agent identities on the Monad ERC-8004 Registry (`0x8004A818...`).
+
+2. **Zero-Gas Relayer Mandate Creation:**
+   - In production evaluation, judges tap TouchID/FaceID to produce a WebAuthn passkey assertion. The mandate transaction is submitted via our sponsored agent relayer without consuming judge funds.
+
+3. **Receipt Auditor Tool:**
+   - Click the **"Receipts"** tab in the console.
+   - Paste any Monad testnet or local transaction hash to verify contract bytecode, log topics, and policy compliance directly against the RPC.
 
 ## 🏗️ System Architecture
 
