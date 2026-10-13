@@ -114,6 +114,8 @@ contract AgentMandates is ReentrancyGuard {
     mapping(uint256 => address[]) internal _tokenList;
     /// Tokens this contract custodies. execute() may never call them, so no mandate can move
     /// pooled tokens through a generic call; token spending goes through payToken() only.
+    /// Set when a mandate is granted a limit for an ERC-20 and again on every deposit.
+    /// execute() also refuses allowance primitives on every target (see _isAllowanceCall).
     mapping(address => bool) public isVaultToken;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -227,6 +229,9 @@ contract AgentMandates is ReentrancyGuard {
             ta.budget = tl.budget;
             ta.enabled = true;
             _tokenList[mandateId].push(tl.token);
+            // Flag the token now, not only on its first deposit. Only addresses that answer ERC-20
+            // allowance() are flagged, so a grant cannot block execute() on an arbitrary target.
+            if (_isErc20(tl.token)) isVaultToken[tl.token] = true;
         }
 
         emit MandateCreated(
@@ -488,7 +493,12 @@ contract AgentMandates is ReentrancyGuard {
         // Never let a generic call reach custodied tokens or this contract (e.g. deposit() into another mandate).
         if (isVaultToken[target]) return TargetIsVaultToken.selector;
         if (target == address(this)) return PermissionDenied.selector;
-        if (!_isPermitted(mandateId, target, _selectorOf(data))) return PermissionDenied.selector;
+        bytes4 selector = _selectorOf(data);
+        // This contract is msg.sender of the call and holds every token vault, so an allowance it grants
+        // or holds is shared by all mandates. Refuse those primitives on any target, flagged or not,
+        // even under a bytes4(0) wildcard.
+        if (_isAllowanceCall(selector)) return PermissionDenied.selector;
+        if (!_isPermitted(mandateId, target, selector)) return PermissionDenied.selector;
         if (value > m.maxPerCall) return ExceedsPerCallLimit.selector;
         if (m.spent + value > m.budget) return ExceedsBudget.selector;
         if (value > m.balance) return InsufficientBalance.selector;
@@ -532,6 +542,36 @@ contract AgentMandates is ReentrancyGuard {
 
     function _selectorOf(bytes calldata data) internal pure returns (bytes4) {
         return data.length >= 4 ? bytes4(data[:4]) : bytes4(0);
+    }
+
+    /// @dev Calls that make this contract grant an allowance, or spend one granted to it (such as a
+    ///      depositor's approval before depositToken). transfer() is not listed: this contract holds
+    ///      no tokens outside the flagged vaults, and wildcard permissions keep covering it.
+    function _isAllowanceCall(bytes4 s) internal pure returns (bool r) {
+        assembly {
+            switch shr(224, s)
+            case 0x095ea7b3 { r := 1 } // approve(address,uint256), ERC-20 and ERC-721
+            case 0x39509351 { r := 1 } // increaseAllowance(address,uint256)
+            case 0xd73dd623 { r := 1 } // increaseApproval(address,uint256)
+            case 0x3177029f { r := 1 } // approveAndCall(address,uint256), ERC-1363
+            case 0xcae9ca51 { r := 1 } // approveAndCall(address,uint256,bytes), ERC-1363 and MiniMe
+            case 0xa22cb465 { r := 1 } // setApprovalForAll(address,bool), ERC-721 and ERC-1155
+            case 0x959b8c3f { r := 1 } // authorizeOperator(address), ERC-777
+            case 0x23b872dd { r := 1 } // transferFrom(address,address,uint256), ERC-20 and ERC-721
+            case 0xd8fbe994 { r := 1 } // transferFromAndCall(address,address,uint256), ERC-1363
+            case 0xc1d34b89 { r := 1 } // transferFromAndCall(address,address,uint256,bytes), ERC-1363
+            case 0x79cc6790 { r := 1 } // burnFrom(address,uint256)
+        }
+    }
+
+    /// @dev True if `token` answers ERC-20 allowance(address,address) with at least 32 bytes.
+    ///      Never reverts, so it cannot change which grants createMandate accepts.
+    function _isErc20(address token) internal view returns (bool ok) {
+        bytes memory probe = abi.encodeWithSelector(0xdd62ed3e, address(this), address(this)); // allowance
+        assembly {
+            let success := staticcall(50000, token, add(probe, 32), mload(probe), 0, 0)
+            ok := and(success, gt(returndatasize(), 31))
+        }
     }
 
     function _registerPasskey(Passkey calldata pk) internal returns (bytes32 ownerKey) {

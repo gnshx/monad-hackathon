@@ -400,15 +400,19 @@ contract AgentMandatesTest is Test {
 
     address internal payee = makeAddr("apiMerchant");
 
-    function _createWithToken(MockERC20 token, uint256 deposit) internal returns (uint256 id) {
+    function _grantToken(address token) internal returns (uint256 id) {
         AgentMandates.MandateTerms memory t = _terms();
         t.permissions = new AgentMandates.Permission[](2);
         t.permissions[0] = AgentMandates.Permission(address(target), MockTarget.doSomething.selector);
         t.permissions[1] = AgentMandates.Permission(payee, bytes4(0));
         t.tokenLimits = new AgentMandates.TokenLimit[](1);
-        t.tokenLimits[0] = AgentMandates.TokenLimit(address(token), 10e6, 25e6); // 10 USDC per call, 25 total
+        t.tokenLimits[0] = AgentMandates.TokenLimit(token, 10e6, 25e6); // 10 USDC per call, 25 total
         WebAuthnP256.Assertion memory a = _sign(am.createDigest(ownerKey, t, am.nonces(ownerKey)));
         id = am.createMandate(_passkey(), t, a);
+    }
+
+    function _createWithToken(MockERC20 token, uint256 deposit) internal returns (uint256 id) {
+        id = _grantToken(address(token));
         token.mint(relayer, deposit);
         vm.startPrank(relayer);
         token.approve(address(am), deposit);
@@ -493,6 +497,138 @@ contract AgentMandatesTest is Test {
         (bool ok, bytes4 why) = am.checkAction(b, agent, address(usdc), "", 0);
         assertFalse(ok);
         assertEq(why, AgentMandates.TargetIsVaultToken.selector);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Allowances through execute(): AgentMandates is msg.sender and holds every token vault
+    // ─────────────────────────────────────────────────────────────────────────
+
+    address internal attackerAgent = makeAddr("attackerAgent");
+    address internal attacker = makeAddr("attacker");
+    uint256 internal constant ATTACKER_AGENT_ID = 66;
+
+    /// @dev What anyone can set up for free: their own ERC-8004 agent, their own passkey, and a
+    ///      mandate allowing any function on `token` with zero MON caps.
+    function _attackerMandateOn(address token) internal returns (uint256 id) {
+        registry.set(ATTACKER_AGENT_ID, attackerAgent, attackerAgent);
+        (uint256 x, uint256 y) = vm.publicKeyP256(ATTACKER_PK);
+        AgentMandates.Passkey memory pk = AgentMandates.Passkey(bytes32(x), bytes32(y));
+        bytes32 key = am.ownerKeyOf(pk.x, pk.y);
+        AgentMandates.MandateTerms memory t;
+        t.agent = attackerAgent;
+        t.agentId = ATTACKER_AGENT_ID;
+        t.permissions = new AgentMandates.Permission[](1);
+        t.permissions[0] = AgentMandates.Permission(token, bytes4(0));
+        id = am.createMandate(pk, t, _assert(ATTACKER_PK, am.createDigest(key, t, 0), FLAGS_UP_UV, "webauthn.get"));
+    }
+
+    /// Order 1: approve() on a token nobody has budgeted or deposited yet, then an honest deposit.
+    function test_token_approveBeforeFirstDepositIsDenied() public {
+        MockERC20 usdc = new MockERC20();
+        uint256 evil = _attackerMandateOn(address(usdc));
+        assertFalse(am.isVaultToken(address(usdc))); // the vault-token guard does not apply yet
+        bytes memory approveAll = abi.encodeWithSignature("approve(address,uint256)", attacker, type(uint256).max);
+
+        (bool ok, bytes4 why) = am.checkAction(evil, attackerAgent, address(usdc), approveAll, 0);
+        assertFalse(ok);
+        assertEq(why, AgentMandates.PermissionDenied.selector);
+        vm.prank(attackerAgent);
+        vm.expectRevert(AgentMandates.PermissionDenied.selector);
+        am.execute(evil, address(usdc), approveAll, 0);
+
+        // An honest owner budgets and funds the token later. There is no allowance to drain it with.
+        uint256 victim = _createWithToken(usdc, 100e6);
+        assertEq(usdc.allowance(address(am), attacker), 0);
+        vm.prank(attacker);
+        vm.expectRevert();
+        usdc.transferFrom(address(am), attacker, 1);
+        assertEq(usdc.balanceOf(address(am)), 100e6);
+        assertEq(am.getTokenAllowance(victim, address(usdc)).balance, 100e6);
+    }
+
+    /// Order 2: a depositor approves AgentMandates (the SDK mines approve before depositToken), and
+    /// another mandate tries to pull that approval with transferFrom before the first deposit.
+    function test_token_pullDepositorApprovalBeforeDepositIsDenied() public {
+        MockERC20 usdc = new MockERC20();
+        uint256 evil = _attackerMandateOn(address(usdc));
+        address depositor = makeAddr("depositor");
+        usdc.mint(depositor, 100e6);
+        vm.prank(depositor);
+        usdc.approve(address(am), 100e6);
+        bytes memory pull = abi.encodeWithSignature("transferFrom(address,address,uint256)", depositor, attacker, 100e6);
+
+        // Not budgeted anywhere yet: the selector guard refuses it.
+        assertFalse(am.isVaultToken(address(usdc)));
+        vm.prank(attackerAgent);
+        vm.expectRevert(AgentMandates.PermissionDenied.selector);
+        am.execute(evil, address(usdc), pull, 0);
+
+        // Budgeted by a grant: the token is flagged before its first deposit, so the target guard applies too.
+        uint256 victim = _grantToken(address(usdc));
+        assertTrue(am.isVaultToken(address(usdc)));
+        vm.prank(attackerAgent);
+        vm.expectRevert(AgentMandates.TargetIsVaultToken.selector);
+        am.execute(evil, address(usdc), pull, 0);
+
+        vm.prank(depositor);
+        am.depositToken(victim, address(usdc), 100e6);
+        assertEq(usdc.balanceOf(attacker), 0);
+        assertEq(am.getTokenAllowance(victim, address(usdc)).balance, 100e6);
+    }
+
+    /// Every allowance primitive is refused on any target, even under a bytes4(0) wildcard. Other
+    /// functions (transfer() included) and plain value transfers stay covered by the wildcard.
+    function test_execute_wildcardNeverCoversAllowanceCalls() public {
+        AgentMandates.MandateTerms memory t = _terms();
+        t.permissions[0] = AgentMandates.Permission(address(target), bytes4(0));
+        uint256 id = am.createMandate{value: 1 ether}(_passkey(), t, _sign(am.createDigest(ownerKey, t, am.nonces(ownerKey))));
+        bytes[11] memory denied = [
+            abi.encodeWithSignature("approve(address,uint256)", attacker, 1),
+            abi.encodeWithSignature("increaseAllowance(address,uint256)", attacker, 1),
+            abi.encodeWithSignature("increaseApproval(address,uint256)", attacker, 1),
+            abi.encodeWithSignature("approveAndCall(address,uint256)", attacker, 1),
+            abi.encodeWithSignature("approveAndCall(address,uint256,bytes)", attacker, 1, ""),
+            abi.encodeWithSignature("setApprovalForAll(address,bool)", attacker, true),
+            abi.encodeWithSignature("authorizeOperator(address)", attacker),
+            abi.encodeWithSignature("transferFrom(address,address,uint256)", stranger, attacker, 1),
+            abi.encodeWithSignature("transferFromAndCall(address,address,uint256)", stranger, attacker, 1),
+            abi.encodeWithSignature("transferFromAndCall(address,address,uint256,bytes)", stranger, attacker, 1, ""),
+            abi.encodeWithSignature("burnFrom(address,uint256)", stranger, 1)
+        ];
+        for (uint256 i; i < denied.length; ++i) {
+            (bool ok, bytes4 why) = am.checkAction(id, agent, address(target), denied[i], 0);
+            assertFalse(ok);
+            assertEq(why, AgentMandates.PermissionDenied.selector);
+            vm.prank(agent);
+            vm.expectRevert(AgentMandates.PermissionDenied.selector);
+            am.execute(id, address(target), denied[i], 0);
+        }
+
+        (bool allowed,) =
+            am.checkAction(id, agent, address(target), abi.encodeWithSignature("transfer(address,uint256)", stranger, 1), 0);
+        assertTrue(allowed);
+        vm.startPrank(agent);
+        am.execute(id, address(target), _call(1), 0.1 ether);
+        am.execute(id, address(target), "", 0.1 ether);
+        vm.stopPrank();
+        assertEq(address(target).balance, 0.2 ether);
+    }
+
+    /// A grant flags the ERC-20s it budgets at once. Listing a call target or an EOA as a "token"
+    /// flags nothing, so a grant cannot block execute() on somebody else's target.
+    function test_create_flagsOnlyErc20TokenLimits() public {
+        MockERC20 usdc = new MockERC20();
+        AgentMandates.MandateTerms memory t = _terms();
+        t.tokenLimits = new AgentMandates.TokenLimit[](3);
+        t.tokenLimits[0] = AgentMandates.TokenLimit(address(usdc), 1, 1);
+        t.tokenLimits[1] = AgentMandates.TokenLimit(address(target), 1, 1);
+        t.tokenLimits[2] = AgentMandates.TokenLimit(payee, 1, 1);
+        uint256 id = am.createMandate{value: 1 ether}(_passkey(), t, _sign(am.createDigest(ownerKey, t, am.nonces(ownerKey))));
+        assertTrue(am.isVaultToken(address(usdc)));
+        assertFalse(am.isVaultToken(address(target)));
+        assertFalse(am.isVaultToken(payee));
+        vm.prank(agent);
+        am.execute(id, address(target), _call(1), 0.1 ether);
     }
 
     function test_token_noReturnTokenAndWithdraw() public {
