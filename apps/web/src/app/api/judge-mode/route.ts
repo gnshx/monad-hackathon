@@ -9,6 +9,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   checkJudgeStatus,
+  explainRelayerError,
   runJudgeModeSequence,
 } from '@/lib/judge-mode-runner';
 import { checkRateLimit, recordExecution } from '@/lib/rate-limit';
@@ -25,6 +26,15 @@ function getRelayerKey(): Hex | undefined {
     (process.env.DEPLOYER_PRIVATE_KEY as Hex) ||
     (process.env.PRIVATE_KEY as Hex)
   );
+}
+
+function relayerAddressOrUndefined(): Address | undefined {
+  const key = getRelayerKey();
+  try {
+    return key ? privateKeyToAccount(key).address : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function getClientIp(req: NextRequest): string {
@@ -118,7 +128,7 @@ export async function POST(req: NextRequest) {
     if (status.lowFunds) {
       return NextResponse.json(
         {
-          error: 'Server relayer low on funds. Please fund the relayer account with MON before testing.',
+          error: `Relayer low on funds: it has ${status.relayerBalance} and one run needs about ${status.requiredBalance}. Send testnet MON to ${status.relayerAddress}.`,
           lowFunds: true,
           relayerAddress: status.relayerAddress,
         },
@@ -153,8 +163,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return NextResponse.json(
       {
-        error: err.message || 'Failed to execute Judge Mode sequence',
-        details: String(err),
+        error: explainRelayerError(err, relayerAddressOrUndefined()),
       },
       { status: 500 }
     );

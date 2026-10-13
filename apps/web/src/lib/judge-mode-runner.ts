@@ -39,8 +39,43 @@ export interface JudgeStatusResult {
   };
   relayerAddress?: Address;
   relayerBalance?: string;
+  /** MON the relayer needs on hand to send one full run at the current gas price. */
+  requiredBalance?: string;
   lowFunds: boolean;
   message?: string;
+}
+
+/**
+ * Gas limit budget for one full run (two credential registrations, create, five executions/revoke),
+ * measured on a local chain at ~1.03M and padded. Monad charges the gas limit, not the gas used.
+ */
+export const JUDGE_RUN_GAS = 1_200_000n;
+const JUDGE_VAULT_FUNDING = parseEther('0.0003');
+const JUDGE_MIN_BALANCE = parseEther('0.005');
+
+/** MON needed for one full run at the current gas price, with headroom for the fee cap. */
+export async function judgeRunCost(publicClient: PublicClient): Promise<bigint> {
+  try {
+    const gasPrice = await publicClient.getGasPrice();
+    const cost = (gasPrice * JUDGE_RUN_GAS * 3n) / 2n + JUDGE_VAULT_FUNDING;
+    return cost > JUDGE_MIN_BALANCE ? cost : JUDGE_MIN_BALANCE;
+  } catch {
+    return JUDGE_MIN_BALANCE;
+  }
+}
+
+/** Turns an RPC rejection for an underfunded relayer into something a visitor can act on. */
+export function explainRelayerError(err: any, relayer?: Address): string {
+  const raw = String(err?.details || '') + ' ' + String(err?.shortMessage || '') + ' ' + String(err?.message || err);
+  const lower = raw.toLowerCase();
+  const underfunded =
+    lower.includes('insufficient funds') ||
+    lower.includes('insufficient balance') ||
+    (lower.includes('missing or invalid parameters') && lower.includes('sendrawtransaction'));
+  if (underfunded) {
+    return `The relayer${relayer ? ` (${relayer})` : ''} ran out of testnet MON for gas. Fund it and run again.`;
+  }
+  return String(err?.shortMessage || err?.message || err).split('\n')[0].slice(0, 300);
 }
 
 export const TARGET_ABI = [
@@ -170,7 +205,8 @@ export async function checkJudgeStatus(
 
   const relayerAccount = privateKeyToAccount(relayerPrivateKey);
   const balance = await publicClient.getBalance({ address: relayerAccount.address });
-  const lowFunds = balance < parseEther('0.005');
+  const required = await judgeRunCost(publicClient);
+  const lowFunds = balance < required;
 
   return {
     deployed: true,
@@ -178,6 +214,7 @@ export async function checkJudgeStatus(
     contracts: { mandateManager: mandateManagerAddress, mockTarget: mockTargetAddress },
     relayerAddress: relayerAccount.address,
     relayerBalance: `${formatEther(balance)} MON`,
+    requiredBalance: `${formatEther(required)} MON`,
     lowFunds,
     message: lowFunds ? 'Relayer low on funds' : 'Ready for Judge Mode execution',
   };
@@ -204,8 +241,11 @@ export async function runJudgeModeSequence(
   if (!account) throw new Error('Relayer wallet client has no account');
 
   const relayerBal = await publicClient.getBalance({ address: account.address });
-  if (relayerBal < parseEther('0.005')) {
-    throw new Error(`Relayer low on funds (${formatEther(relayerBal)} MON). Please fund relayer.`);
+  const required = await judgeRunCost(publicClient);
+  if (relayerBal < required) {
+    throw new Error(
+      `Relayer low on funds: it has ${formatEther(relayerBal)} MON and one run needs about ${formatEther(required)} MON.`
+    );
   }
 
   const steps: JudgeStepResult[] = [];

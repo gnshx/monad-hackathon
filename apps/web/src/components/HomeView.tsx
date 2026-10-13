@@ -39,7 +39,7 @@ function short(a: string, n = 4) {
 
 export function HomeView({ onNavigate }: { onNavigate: (tab: NavTab) => void }) {
   const [tick, setTick] = useState(0);
-  const [relay, setRelay] = useState<{ enabled: boolean; balanceWei?: string } | null>(null);
+  const [relay, setRelay] = useState<{ enabled: boolean; balanceWei?: string; lowFunds?: boolean } | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 1800);
@@ -270,7 +270,7 @@ export function HomeView({ onNavigate }: { onNavigate: (tab: NavTab) => void }) 
             {relay === null
               ? 'checking…'
               : relay.enabled
-              ? `online · ${Number(formatEther(BigInt(relay.balanceWei || '0'))).toLocaleString(undefined, { maximumFractionDigits: 3 })} MON`
+              ? `${relay.lowFunds ? 'low on MON' : 'online'} · ${Number(formatEther(BigInt(relay.balanceWei || '0'))).toLocaleString(undefined, { maximumFractionDigits: 3 })} MON`
               : 'off · any wallet can submit'}
           </span>
         </div>

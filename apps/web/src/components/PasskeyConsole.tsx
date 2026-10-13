@@ -68,6 +68,23 @@ interface RelayInfo {
   relayer?: Address;
   balanceWei?: string;
   sponsorMaxWei?: string;
+  /** Gas the relayer needs for a grant plus a revoke at the current gas price. */
+  neededWei?: string;
+  lowFunds?: boolean;
+}
+
+function parseEtherSafe(v: string) {
+  try {
+    return parseEther(v || '0');
+  } catch {
+    return 0n;
+  }
+}
+
+/** Whether the relayer can pay gas and still fund the vault with `amount`. */
+function relayCanSponsor(relay: RelayInfo | null, amount: bigint) {
+  if (!relay?.enabled) return false;
+  return BigInt(relay.balanceWei || '0') >= BigInt(relay.neededWei || '0') + amount;
 }
 
 type Notice = { kind: 'ok' | 'err' | 'warn'; text: string; hash?: Hex } | null;
@@ -175,7 +192,8 @@ export function PasskeyConsole() {
         }))
       );
       setRows(loaded);
-      const newest = loaded.find((r) => r.active);
+      // Verify follows the visitor's newest live mandate, or their latest one so a revoke shows up there too.
+      const newest = loaded.find((r) => r.active) || loaded[0];
       if (newest) localStorage.setItem(LAST_MANDATE_KEY, JSON.stringify({ id: newest.id.toString() }));
       else localStorage.removeItem(LAST_MANDATE_KEY);
     } catch (e: any) {
@@ -289,12 +307,20 @@ export function PasskeyConsole() {
       const challenge = await client.createChallenge(passkey.publicKey, terms);
       const auth = await signWithBrowserPasskey(challenge, passkey.credentialId);
       const sponsorMax = BigInt(relay?.sponsorMaxWei || '0');
-      const sponsor = form.sponsor && relay?.enabled ? (terms.budget < sponsorMax ? terms.budget : sponsorMax) : 0n;
+      const wanted = form.sponsor && relay?.enabled ? (terms.budget < sponsorMax ? terms.budget : sponsorMax) : 0n;
+      // A low relayer still submits the grant; it just skips funding the vault.
+      const sponsor = wanted > 0n && relayCanSponsor(relay, wanted) ? wanted : 0n;
       const hash = await submit(encode.createMandate(passkey.publicKey, terms, auth), sponsor);
       return {
         kind: 'ok',
         hash,
-        text: `Mandate created and enforced on Monad${sponsor > 0n ? `, vault funded with ${formatEther(sponsor)} MON by the relayer` : ''}.`,
+        text: `Mandate created and enforced on Monad${
+          sponsor > 0n
+            ? `, vault funded with ${formatEther(sponsor)} MON by the relayer`
+            : wanted > 0n
+            ? '. The relayer was too low on MON to fund the vault, so deposit before the agent spends'
+            : ''
+        }.`,
       };
     });
 
@@ -391,11 +417,11 @@ export function PasskeyConsole() {
           )}
         </span>
         <span className={s.chip}>
-          <span className={relay?.enabled ? s.dotOk : s.dotOff} />
+          <span className={relay?.enabled ? (relay.lowFunds ? s.dotWarn : s.dotOk) : s.dotOff} />
           {relay === null
             ? 'Checking relayer…'
             : relay.enabled
-            ? `Gas relayer online · ${Number(formatEther(BigInt(relay.balanceWei || '0'))).toLocaleString(undefined, { maximumFractionDigits: 3 })} MON`
+            ? `${relay.lowFunds ? 'Gas relayer low on MON' : 'Gas relayer online'} · ${Number(formatEther(BigInt(relay.balanceWei || '0'))).toLocaleString(undefined, { maximumFractionDigits: 3 })} MON`
             : 'No relayer · submit with any wallet'}
         </span>
         <span className={s.chip}>
@@ -621,7 +647,9 @@ export function PasskeyConsole() {
                   <Zap size={15} /> Demo: relayer funds the vault
                 </span>
                 <span className={s.toggleText} style={{ display: 'block' }}>
-                  Up to {formatEther(BigInt(relay.sponsorMaxWei!))} MON, so the agent can act right away.
+                  {relayCanSponsor(relay, BigInt(relay.sponsorMaxWei!) < parseEtherSafe(form.budget) ? BigInt(relay.sponsorMaxWei!) : parseEtherSafe(form.budget))
+                    ? `Up to ${formatEther(BigInt(relay.sponsorMaxWei!))} MON, so the agent can act right away.`
+                    : 'The relayer is low on MON right now, so the vault starts empty. You can deposit after granting.'}
                 </span>
               </span>
               <span className={`${s.switch} ${form.sponsor ? s.switchOn : ''}`} />

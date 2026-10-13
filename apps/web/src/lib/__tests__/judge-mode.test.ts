@@ -3,6 +3,9 @@ import { test } from 'node:test';
 import {
   checkJudgeStatus,
   decodeCustomError,
+  explainRelayerError,
+  judgeRunCost,
+  JUDGE_RUN_GAS,
   signDigestP256,
   TARGET_SELECTOR,
 } from '../judge-mode-runner.js';
@@ -95,5 +98,27 @@ test('Judge Mode Runner & Status Tests', async (t) => {
   await t.test('verifies fixed target selector is doSomething(uint256)', () => {
     // toFunctionSelector('doSomething(uint256)') === '0xa6b206bf'
     assert.equal(TARGET_SELECTOR, '0xa6b206bf');
+  });
+
+  await t.test('gas-aware low funds: a balance that covers 0.005 MON but not a run at the live gas price is low', async () => {
+    const mockClient: any = {
+      getChainId: async () => 10143,
+      getBytecode: async () => '0x60806040',
+      getBalance: async () => parseEther('0.0128'),
+      getGasPrice: async () => 52_000_000_000n, // 52 gwei
+    };
+    const cost = await judgeRunCost(mockClient);
+    assert.equal(cost, (52_000_000_000n * JUDGE_RUN_GAS * 3n) / 2n + parseEther('0.0003'));
+    const result = await checkJudgeStatus(mockClient, MM_ADDRESS, TARGET_ADDRESS, DUMMY_KEY);
+    assert.equal(result.lowFunds, true);
+    assert.ok(result.requiredBalance?.endsWith(' MON'));
+  });
+
+  await t.test('explainRelayerError turns an underfunded sendRawTransaction into a funding hint', () => {
+    const relayer = '0x5B71688146B44e9eEcCbca1847F43D9420909B0B' as Address;
+    const err = { message: 'Missing or invalid parameters. URL: https://testnet-rpc.monad.xyz Request body: {"method":"eth_sendRawTransaction"}' };
+    assert.match(explainRelayerError(err, relayer), /ran out of testnet MON/);
+    assert.match(explainRelayerError({ shortMessage: 'insufficient funds for gas * price + value' }), /ran out of testnet MON/);
+    assert.equal(explainRelayerError(new Error('boom\nstack')), 'boom');
   });
 });

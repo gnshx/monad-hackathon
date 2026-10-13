@@ -35,6 +35,7 @@ interface JudgeStatus {
   };
   relayerAddress?: string;
   relayerBalance?: string;
+  requiredBalance?: string;
   lowFunds: boolean;
   isRateLimited?: boolean;
   retryAfterSeconds?: number;
@@ -213,7 +214,13 @@ export function JudgeMode() {
           <div className={j.alertWarn}>
             <AlertTriangle size={16} />
             <span>
-              <strong>Relayer low on funds.</strong> It needs at least 0.005 MON to send the six transactions.
+              <strong>Relayer low on funds.</strong> One run needs about {fmtBalance(status.requiredBalance) || '0.1 MON'} at the
+              current gas price{status.relayerBalance ? ` and it has ${fmtBalance(status.relayerBalance)}` : ''}.
+              {status.relayerAddress && (
+                <>
+                  {' '}Send MON to <code>{status.relayerAddress}</code>.
+                </>
+              )}
             </span>
           </div>
         )}

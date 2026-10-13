@@ -124,7 +124,7 @@ button.stepItem:hover { border-color: var(--border-hover); }
 .summaryFoot { font-size: 0.74rem; color: var(--text-muted); margin-top: 0.6rem; }
 
 /* Notices */
-.notice, .noticeOk, .noticeErr { border-radius: 12px; padding: 0.75rem 0.9rem; font-size: 0.83rem; line-height: 1.5;
+.notice, .noticeOk, .noticeErr { border-radius: 12px; padding: 0.75rem 0.9rem; font-size: 0.83rem; line-height: 1.5; overflow-wrap: anywhere;
   display: flex; gap: 0.55rem; align-items: flex-start; margin-top: 1rem; word-break: break-word; border: 1px solid; }
 .notice { background: var(--accent-amber-subtle); color: #FDE68A; border-color: var(--accent-amber-border); }
 .noticeOk { background: var(--accent-emerald-subtle); color: #A7F3D0; border-color: var(--accent-emerald-border); }
