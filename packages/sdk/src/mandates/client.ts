@@ -300,6 +300,7 @@ export class AgentMandates {
     const wallet = this.requireWallet();
     const hash = await wallet.sendTransaction({
       account: wallet.account!, chain: wallet.chain, to: this.address, data, value,
+      gas: 1_200_000n,
     });
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== 'success') throw new Error(`Relayed transaction reverted: ${hash}`);
@@ -317,6 +318,7 @@ export class AgentMandates {
     const hash = await wallet.writeContract({
       account: wallet.account!, chain: wallet.chain, address: this.address, abi: AgentMandatesABI,
       functionName: 'execute', args: [mandateId, target, data, value],
+      gas: 300_000n,
     });
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== 'success') throw new Error(`execute reverted: ${hash}`);
@@ -331,6 +333,7 @@ export class AgentMandates {
     const hash = await wallet.writeContract({
       account: wallet.account!, chain: wallet.chain, address: this.address, abi: AgentMandatesABI,
       functionName: 'payToken', args: [mandateId, token, to, amount],
+      gas: 300_000n,
     });
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== 'success') throw new Error(`payToken reverted: ${hash}`);
@@ -343,11 +346,13 @@ export class AgentMandates {
     const approve = await wallet.writeContract({
       account: wallet.account!, chain: wallet.chain, address: token, abi: ERC20_APPROVE_ABI,
       functionName: 'approve', args: [this.address, amount],
+      gas: 100_000n,
     });
     await this.publicClient.waitForTransactionReceipt({ hash: approve });
     const hash = await wallet.writeContract({
       account: wallet.account!, chain: wallet.chain, address: this.address, abi: AgentMandatesABI,
       functionName: 'depositToken', args: [mandateId, token, amount],
+      gas: 300_000n,
     });
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== 'success') throw new Error(`depositToken reverted: ${hash}`);

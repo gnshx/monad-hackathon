@@ -2,10 +2,10 @@
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "AgentTrust demo agent",
   "description": "Demo agent that acts on Monad only through a passkey-signed AgentMandates mandate: allowlisted calls, per-call and total caps, expiry, revocable in one tap.",
-  "image": "https://agenttrust.vercel.app/logo.jpg",
+  "image": "https://monad-hackathon-amber.vercel.app/logo.jpg",
   "services": [
     { "name": "MCP", "endpoint": "https://github.com/gnshx/monad-hackathon/tree/main/packages/mcp", "version": "2025-06-18" },
-    { "name": "web", "endpoint": "https://agenttrust.vercel.app" }
+    { "name": "web", "endpoint": "https://monad-hackathon-amber.vercel.app" }
   ],
   "active": true,
   "supportedTrust": ["agentmandates"]

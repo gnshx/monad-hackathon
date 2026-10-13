@@ -101,11 +101,25 @@ async function main() {
     log(`Test USDC      ${usdc}`);
 
     step('2/8', 'Give the agent gas and an ERC-8004 identity');
-    record.fundAgent = await relayer.sendTransaction({ to: agentAccount.address, value: parseEther(TESTNET ? '0.05' : '1') });
+    record.fundAgent = await relayer.sendTransaction({ to: agentAccount.address, value: parseEther(TESTNET ? '0.4' : '1') });
     await wait(record.fundAgent);
+    if (TESTNET) {
+      for (let i = 0; i < 20; i++) {
+        const bal = await publicClient.getBalance({ address: agentAccount.address });
+        if (bal >= parseEther('0.3')) break;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
     let agentId: bigint;
     if (TESTNET) {
-      record.registerAgent = await agent.writeContract({ address: registry, abi: ERC8004_IDENTITY_REGISTRY_ABI, functionName: 'register', args: ['https://agenttrust.vercel.app/agent.json'] });
+      record.registerAgent = await agent.writeContract({
+        address: registry,
+        abi: ERC8004_IDENTITY_REGISTRY_ABI,
+        functionName: 'register',
+        args: ['https://monad-hackathon-amber.vercel.app/agent.json'],
+        gas: 300_000n,
+      });
       const rcpt = await wait(record.registerAgent);
       const transfer = rcpt.logs.find((l) => l.address.toLowerCase() === registry.toLowerCase() && l.topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef');
       if (!transfer?.topics[3]) throw new Error('Could not read minted agentId from the ERC-8004 registry');
@@ -136,7 +150,7 @@ async function main() {
     record.createMandate = await ownerSdk.relay(encode.createMandate(passkey.publicKey, terms, createAuth), parseEther('0.03'));
     const mandateId = await publicClient.readContract({ address: mandatesAddress, abi: AgentMandatesABI, functionName: 'mandateCount' });
     log(`mandate #${mandateId}: 0.01 MON/call, 0.02 MON budget, doSomething() only; 10 USDC/call, 25 USDC budget to the merchant   ${link(record.createMandate)}`);
-    record.mintUsdc = await relayer.writeContract({ address: usdc, abi: MINT_ABI, functionName: 'mint', args: [relayer.account.address, 30_000_000n] });
+    record.mintUsdc = await relayer.writeContract({ address: usdc, abi: MINT_ABI, functionName: 'mint', args: [relayer.account.address, 30_000_000n], gas: 150_000n });
     await wait(record.mintUsdc);
     record.depositUsdc = (await ownerSdk.depositToken(mandateId, usdc, 30_000_000n)).hash;
     log(`funded token vault with 30 USDC   ${link(record.depositUsdc)}`);
@@ -161,8 +175,17 @@ async function main() {
       ['rogueTargetBlocked', agent, coldWallet, '0x', parseEther('0.005')],
       ['strangerBlocked', stranger, target, call(3), 0n],
     ];
-    if (!TESTNET) await relayer.sendTransaction({ to: stranger.account.address, value: parseEther('1') });
-    else await wait(await relayer.sendTransaction({ to: stranger.account.address, value: parseEther('0.02') }));
+    if (!TESTNET) {
+      await relayer.sendTransaction({ to: stranger.account.address, value: parseEther('1') });
+    } else {
+      await wait(await relayer.sendTransaction({ to: stranger.account.address, value: parseEther('0.1') }));
+      for (let i = 0; i < 20; i++) {
+        const bal = await publicClient.getBalance({ address: stranger.account.address });
+        if (bal >= parseEther('0.08')) break;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
     {
       const check = await agentSdk.checkPayment(mandateId, agentAccount.address, usdc, merchant, 15_000_000n);
       record.tokenOverLimitBlocked = await agent.writeContract({ address: mandatesAddress, abi: AgentMandatesABI, functionName: 'payToken', args: [mandateId, usdc, merchant, 15_000_000n], gas: 300_000n });
@@ -265,6 +288,6 @@ function loadDotEnv() {
 }
 
 main().catch((e) => {
-  console.error(`\n✗ ${e.shortMessage || e.message}`);
+  console.error(`\n✗ Error:`, e);
   process.exit(1);
 });

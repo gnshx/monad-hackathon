@@ -1,0 +1,37 @@
+{
+  "network": "Monad Testnet",
+  "chainId": 10143,
+  "timestamp": "2026-10-13T17:31:00.000Z",
+  "contracts": {
+    "agentMandates": "0xc911e902bf3b3f532bffc1a988e2d00969a1237c",
+    "erc8004IdentityRegistry": "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+    "mockTarget": "0xd856e20dbf9280299739efdc0082e431fa644e73",
+    "testUsdc": "0x540564511d46e74c0ed48a6d63de8c79e61a860a",
+    "p256Precompile": "0x0000000000000000000000000000000000000100"
+  },
+  "mandateId": 1,
+  "agentId": 2304,
+  "agent": "0x5C73471E4d45c2B474F98ca024b8853c2ef0d64C",
+  "ownerKey": "0xee26335544cd3f26bbcfcc05ebc0a9906eb8123f6894aa8f5d875c3af81bcfdd",
+  "transactions": {
+    "createMandate": "0xace2016fc9c0ba8d15699f156bc2ff8b2f0eb99e06ee5a706a7279b92f17cd6a",
+    "depositUsdc": "0x80118622f47f6ee7ee4f8b8e5dcbdb9325f3ad5855d265bdbb4b04d7902015c9",
+    "allowedCall": "0x0ad085cf472e5707b50e9be617b7d805aba9174743a409640dbbdd6c6849d08e",
+    "allowedPayment": "0x4e606cd56aef5d1b18c7554a48c87f422742c30bd3e07f3e23907e3c9eb55246",
+    "tokenOverLimitBlocked": "0x28590d24827efc880f7131fcfbb256a2cb73fa692fae2d5e8e48917b6f6c2377",
+    "overLimitBlocked": "0x0eaf10cfccaa40d7469e8a0c8c180ba39268802226dd12002b69da09cc347be1",
+    "rogueTargetBlocked": "0x7b7678d0ceaad66f72029c61ff375366a4812541110480d3fc6334af2a4cd5a3",
+    "strangerBlocked": "0x7798895e691a5923e3f2c6564a774543b853018483c798c0719949cd91c4945d"
+  },
+  "explorerUrls": {
+    "agentMandates": "https://testnet.monadexplorer.com/address/0xc911e902bf3b3f532bffc1a988e2d00969a1237c",
+    "createMandate": "https://testnet.monadexplorer.com/tx/0xace2016fc9c0ba8d15699f156bc2ff8b2f0eb99e06ee5a706a7279b92f17cd6a",
+    "depositUsdc": "https://testnet.monadexplorer.com/tx/0x80118622f47f6ee7ee4f8b8e5dcbdb9325f3ad5855d265bdbb4b04d7902015c9",
+    "allowedCall": "https://testnet.monadexplorer.com/tx/0x0ad085cf472e5707b50e9be617b7d805aba9174743a409640dbbdd6c6849d08e",
+    "allowedPayment": "https://testnet.monadexplorer.com/tx/0x4e606cd56aef5d1b18c7554a48c87f422742c30bd3e07f3e23907e3c9eb55246",
+    "tokenOverLimitBlocked": "https://testnet.monadexplorer.com/tx/0x28590d24827efc880f7131fcfbb256a2cb73fa692fae2d5e8e48917b6f6c2377",
+    "overLimitBlocked": "https://testnet.monadexplorer.com/tx/0x0eaf10cfccaa40d7469e8a0c8c180ba39268802226dd12002b69da09cc347be1",
+    "rogueTargetBlocked": "https://testnet.monadexplorer.com/tx/0x7b7678d0ceaad66f72029c61ff375366a4812541110480d3fc6334af2a4cd5a3",
+    "strangerBlocked": "https://testnet.monadexplorer.com/tx/0x7798895e691a5923e3f2c6564a774543b853018483c798c0719949cd91c4945d"
+  }
+}

@@ -18,13 +18,14 @@ AgentTrust is an open primitive for delegating spending authority to AI agents. 
 
 **Links**
 - Repo: https://github.com/gnshx/monad-hackathon (make sure metropolis@hackathon.monad.xyz has access)
-- Live console: https://agenttrust.vercel.app
-- AgentMandates on Monad testnet: `<address from deployments.mandates.json>`
+- Live console: https://monad-hackathon-amber.vercel.app
+- AgentMandates on Monad testnet: `0xc911e902bf3b3f532bffc1a988e2d00969a1237c`
+- MandateManager (v1) on Monad testnet: `0x3550f9fc84640a9cfd7c51330615a1e05cb948be`
 - Demo video (≤3 min): `<link>`
 - Pitch video (≤2 min): `<link>`
 
 **Judge access instructions**
-1. Open https://agenttrust.vercel.app. The **Passkey Mandates** tab is the default.
+1. Open https://monad-hackathon-amber.vercel.app. The **Passkey Mandates** tab is the default.
 2. Click **Create passkey** and confirm with Touch ID, Face ID, Windows Hello or a security key. No wallet, account or MON is needed.
 3. The form is prefilled with a demo agent registered in ERC-8004. Click **Sign with passkey & create**. The relayer submits it, and it appears under **Your mandates** with a link to the transaction.
 4. Click **Revoke** or **Revoke every mandate** (one more passkey tap), and watch the status change on-chain.
