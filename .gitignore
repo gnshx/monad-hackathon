@@ -50,3 +50,4 @@ private_key*
 
 # Local MCP demo config
 .mcp-local.env
+.vercel
