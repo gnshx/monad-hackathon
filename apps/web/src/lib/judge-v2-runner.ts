@@ -235,6 +235,23 @@ export async function ensureAgentIdentity(
   return { agentId: cachedAgentId, registrationTx: hash };
 }
 
+/**
+ * Monad's reserve-balance rule reverts a value transfer that takes a wallet under 10 MON while it has
+ * another transaction from the last few blocks in flight. The create step sends vault funding, so when
+ * this run just registered the relayer's identity, wait a few blocks before sending it.
+ */
+async function settleAfter(publicClient: PublicClient, hash: Hex, blocks = 5n, timeoutMs = 20_000) {
+  try {
+    const { blockNumber } = await publicClient.getTransactionReceipt({ hash });
+    const until = Date.now() + timeoutMs;
+    while (Date.now() < until && (await publicClient.getBlockNumber({ cacheTime: 0 })) < blockNumber + blocks) {
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  } catch {
+    await new Promise((r) => setTimeout(r, 3_000));
+  }
+}
+
 async function estimate(
   publicClient: PublicClient,
   from: Address,
@@ -293,6 +310,7 @@ export async function runJudgeModeV2(
   }
 
   const setup = await ensureAgentIdentity(publicClient, walletClient, config.mandates, config.agentId);
+  if (setup.registrationTx) await settleAfter(publicClient, setup.registrationTx);
   const sdk = new AgentMandates(config.mandates, publicClient, walletClient);
   const passkey = createSoftwarePasskey(undefined, ORIGIN);
   const steps: JudgeStepResult[] = [];
@@ -339,7 +357,20 @@ export async function runJudgeModeV2(
   const createData = encode.createMandate(passkey.publicKey, terms, createAuth);
   const create = await send(createData, VAULT_FUNDING, await estimate(publicClient, relayer, config.mandates, createData, VAULT_FUNDING, MAX_OWNER_GAS));
   if (create.receipt.status !== 'success') {
-    push(1, 'Create mandate', 'The passkey-signed mandate was rejected on-chain.', 'success', create);
+    // If the same call still simulates cleanly, the contract accepted the signature and terms, so the
+    // revert came from the network (Monad's reserve-balance rule for a relayer under 10 MON).
+    const contractOk = await publicClient
+      .call({ account: relayer, to: config.mandates, data: createData, value: VAULT_FUNDING })
+      .then(() => true, () => false);
+    push(
+      1,
+      'Create mandate',
+      contractOk
+        ? 'Monad reverted the funded create although the contract accepts it. This is likely its reserve-balance rule while the relayer holds under 10 MON. Run again, or top the relayer up above 10 MON.'
+        : 'The passkey-signed mandate was rejected on-chain.',
+      'success',
+      create
+    );
     return { steps, agentId: setup.agentId.toString(), mandateId: '', setupTx: setup.registrationTx };
   }
   // Read the ID from this transaction's MandateCreated event, not mandateCount (another grant
