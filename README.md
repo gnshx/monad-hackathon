@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="https://monad-hackathon-amber.vercel.app"><strong>Live Web Console</strong></a> •
+  <a href="JUDGES.md"><strong>⚖️ Judge Evaluation Guide</strong></a> •
   <a href="#technology-stack-specification"><strong>Technology Stack</strong></a> •
   <a href="#system-architecture--trust-boundary"><strong>System Architecture</strong></a> •
   <a href="#formal-protocol-specification"><strong>Protocol Spec</strong></a> •
@@ -27,6 +28,8 @@
   <a href="#developer-integration-guide"><strong>Integration Guide</strong></a> •
   <a href="#threat-model--security-engineering"><strong>Security Model</strong></a>
 </p>
+
+> ⚖️ **For Metropolis Hackathon Judges:** Reviewing AgentTrust? See [**`JUDGES.md`**](JUDGES.md) for a 60-second evaluation path, scoring criteria breakdown, and live testnet verification links with zero wallet or gas setup needed.
 
 
 ---
